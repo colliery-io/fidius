@@ -3,15 +3,16 @@ name = "fidius-cli"
 version = "0.0.0-alpha.1"
 edition = "2021"
 description = "CLI for the Fidius plugin framework"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
+repository = "https://github.com/colliery-io/fidius"
 
 [[bin]]
 name = "fidius"
 path = "src/main.rs"
 
 [dependencies]
-fidius-core = { path = "../fidius-core" }
-fidius-host = { path = "../fidius-host" }
+fidius-core = { path = "../fidius-core", version = "0.0.0-alpha.1" }
+fidius-host = { path = "../fidius-host", version = "0.0.0-alpha.1" }
 clap = { workspace = true }
 ed25519-dalek = { workspace = true }
 ureq = { workspace = true }
