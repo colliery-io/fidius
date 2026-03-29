@@ -4,14 +4,14 @@ level: initiative
 title: "fides-host — Loading and Calling"
 short_code: "FIDES-I-0003"
 created_at: 2026-03-29T00:26:18.756472+00:00
-updated_at: 2026-03-29T00:26:18.756472+00:00
+updated_at: 2026-03-29T11:25:34.695677+00:00
 parent: FIDES-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

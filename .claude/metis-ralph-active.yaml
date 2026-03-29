@@ -3,15 +3,14 @@
 project_path: "/Users/dstorey/Desktop/fides/.metis"
 mode: tasks
 tasks:
-  - "FIDES-T-0006"
-  - "FIDES-T-0007"
-  - "FIDES-T-0008"
-  - "FIDES-T-0009"
-  - "FIDES-T-0010"
-  - "FIDES-T-0011"
-  - "FIDES-T-0012"
+  - "FIDES-T-0013"
+  - "FIDES-T-0014"
+  - "FIDES-T-0015"
+  - "FIDES-T-0016"
+  - "FIDES-T-0017"
+  - "FIDES-T-0018"
 current_task_index: 0
 iteration: 1
 max_iterations: 0
 completion_promise: "ALL TASKS COMPLETE"
-started_at: "2026-03-29T00:57:39Z"
+started_at: "2026-03-29T11:18:29Z"

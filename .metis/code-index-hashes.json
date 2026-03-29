@@ -1,15 +1,30 @@
 {
   "files": {
     "fides-cli/src/main.rs": "87593233cb7faa6fe8a24dee1666ba0dbb8f8c1b9737e93f00b0023070bff13a",
-    "fides-core/src/descriptor.rs": "4fd4c2e991a2aa92a7e412004f9759796535f3b0ae6d918b13e6beb6c4bf68c1",
+    "fides-core/src/async_runtime.rs": "8e863613089ec4adb7332c6cf618a074436e38b3c0592e53a9359da40a3da781",
+    "fides-core/src/descriptor.rs": "cac13600221d6438ccd3b1459a96d1948091ec14b4c2fab8fe52a75d95b3d344",
     "fides-core/src/error.rs": "6da137ba348ecc2f70089c87b280fe8f42e483413d6838362b22138da61d1b49",
     "fides-core/src/hash.rs": "45d98c6ca8cd08a5cb160fd2b19cee67cce3758a16735617a232b9f604a85a2e",
-    "fides-core/src/lib.rs": "9b9b53a54958ffa5d635f8427302ace58f3c2034856e7815fd9fbce9577a40f4",
+    "fides-core/src/lib.rs": "ee24e56030d9275740ecb5d0f8bf2ce218ecffaf68522e1b03a71a65d8cc2aa4",
+    "fides-core/src/registry.rs": "f7d22e57f1931008fc382da97c0f9ca8e413b0fa712069aeea132424d617fb6a",
     "fides-core/src/status.rs": "886fd0250e85876b6eb524a185bdc1aec1cf0af58cd4c5058632af4088225080",
     "fides-core/src/wire.rs": "500d9522d68a0a824df5ebe5bd76d3d9f3f854b51136f7a623d6b44c0ae1c504",
     "fides-core/tests/layout_and_roundtrip.rs": "061b1d0d533fa1b03791ad618a54f745e5542d4745fef7dae57a3223465a9202",
     "fides-host/src/lib.rs": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
-    "fides-macro/src/lib.rs": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
-    "fides/src/lib.rs": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    "fides-macro/src/impl_macro.rs": "ccc1c1795f6606373bbd93f6d152dd23089f8539822977857576794f1d3d1fc6",
+    "fides-macro/src/interface.rs": "d071a27b72442e94c285eb0c19a0ef7a20e9fc5598aad0cdab781c183bb121aa",
+    "fides-macro/src/ir.rs": "ffc9197058bb2569f01a4775a3501d22584562dc33a7deae8fba062f04e07233",
+    "fides-macro/src/lib.rs": "9935aa05804b7c55f0815d1e3e6efa24a157a8d09f227c250a7752123659b3ac",
+    "fides-macro/tests/async_plugin.rs": "87c7ab88c831d2795cfbee2bb659f799204a8e2dcb7ad92b1241b43a6c59f532",
+    "fides-macro/tests/compile_fail/missing_version.rs": "30aa0c9d22e3e8b9d9b9d391764831e82ecb4b7c399b64ec5643b9ab20624166",
+    "fides-macro/tests/compile_fail/mut_self.rs": "928585d0168e78a9569537aff1fff3bbd3c466c9d3f4c5ffde12803b7ee72411",
+    "fides-macro/tests/compile_fail/unsupported_buffer.rs": "fccda7c1119ce9d9528dcfc3d82f86c8a2407d0eb9678d7c9df3d06341a392a1",
+    "fides-macro/tests/impl_basic.rs": "5524ccb9ad5a672bed9f0468eb94c6c91a738b49bd1a1223e17eb51491f3b108",
+    "fides-macro/tests/interface_basic.rs": "3b6ba7e55151baf9c9d7776d809dc629b409b09ed966983198dbacc5a9dc59e3",
+    "fides-macro/tests/multi_plugin.rs": "90f0626ad46ac78b40fe3a626904f5ac91ae9829ebb437eaa482f33f770c802b",
+    "fides-macro/tests/smoke_cdylib.rs": "f62f4be01f30293910347ca3b5fd8d53bfa5ce736981f1efc4ebcfeb78d017c1",
+    "fides-macro/tests/trybuild.rs": "d2e577fb1e5919180d37894762f46835c547eecfd0b88281a1fe5c1d743490ba",
+    "fides/src/lib.rs": "3784f96322cc4e80ea4b591d1d7b9c4780ba3f0038ebbb22759532d829668727",
+    "tests/test-plugin-smoke/src/lib.rs": "c5016166c91956af931a61b1e98b3e8f993060c8e4652721293e47880120d2f1"
   }
 }

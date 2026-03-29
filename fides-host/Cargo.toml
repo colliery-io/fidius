@@ -9,3 +9,9 @@ license = "MIT OR Apache-2.0"
 fides-core = { path = "../fides-core" }
 libloading = { workspace = true }
 ed25519-dalek = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
