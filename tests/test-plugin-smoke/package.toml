@@ -1,0 +1,9 @@
+[package]
+name = "test-calculator"
+version = "0.1.0"
+interface = "calculator-interface"
+interface_version = 1
+
+[metadata]
+category = "math"
+description = "Test calculator plugin for integration testing"

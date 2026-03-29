@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T12:57:35Z | 37 files | Rust
+> Generated: 2026-03-29T13:49:42Z | 37 files | Rust
 
 ## Project Structure
 
@@ -260,23 +260,23 @@
 
 #### fidius-host/src/host.rs
 
-- pub `PluginHost` struct L29-37 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
-- pub `PluginHostBuilder` struct L40-48 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
-- pub `search_path` function L64-67 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
-- pub `load_policy` function L70-73 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
-- pub `require_signature` function L76-79 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
-- pub `trusted_keys` function L82-85 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
-- pub `interface_hash` function L88-91 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
-- pub `wire_format` function L94-97 — `(mut self, format: WireFormat) -> Self` — Set the expected wire format for validation.
-- pub `buffer_strategy` function L100-103 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
-- pub `build` function L106-116 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
-- pub `builder` function L121-123 — `() -> PluginHostBuilder` — Create a new builder.
-- pub `discover` function L129-168 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
-- pub `load` function L174-216 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
--  `PluginHostBuilder` type L50-117 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
--  `new` function L51-61 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L119-217 — `= PluginHost` — PluginHost builder and plugin discovery.
--  `is_dylib` function L220-229 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+- pub `PluginHost` struct L28-36 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
+- pub `PluginHostBuilder` struct L39-47 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
+- pub `search_path` function L63-66 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
+- pub `load_policy` function L69-72 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
+- pub `require_signature` function L75-78 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
+- pub `trusted_keys` function L81-84 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
+- pub `interface_hash` function L87-90 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
+- pub `wire_format` function L93-96 — `(mut self, format: WireFormat) -> Self` — Set the expected wire format for validation.
+- pub `buffer_strategy` function L99-102 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
+- pub `build` function L105-115 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
+- pub `builder` function L120-122 — `() -> PluginHostBuilder` — Create a new builder.
+- pub `discover` function L128-167 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
+- pub `load` function L173-221 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+-  `PluginHostBuilder` type L49-116 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
+-  `new` function L50-60 — `() -> Self` — PluginHost builder and plugin discovery.
+-  `PluginHost` type L118-222 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L225-234 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### fidius-host/src/lib.rs
 
@@ -332,6 +332,8 @@
 -  `unsigned_plugin_loads_without_signature_requirement` function L134-159 — `()` — End-to-end validation tests: signing, negative cases.
 -  `AddInput` struct L148-151 — `{ a: i64, b: i64 }` — End-to-end validation tests: signing, negative cases.
 -  `AddOutput` struct L153-155 — `{ result: i64 }` — End-to-end validation tests: signing, negative cases.
+-  `lenient_policy_loads_unsigned_plugin_with_signature_required` function L162-180 — `()` — End-to-end validation tests: signing, negative cases.
+-  `lenient_policy_loads_with_wrong_key` function L183-205 — `()` — End-to-end validation tests: signing, negative cases.
 
 #### fidius-host/tests/integration.rs
 

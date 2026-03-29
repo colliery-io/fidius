@@ -4,14 +4,14 @@ level: initiative
 title: "Source Packages — Distributable Plugin Source with Schema Validation"
 short_code: "FIDIUS-I-0006"
 created_at: 2026-03-29T13:37:09.050544+00:00
-updated_at: 2026-03-29T13:37:09.050544+00:00
+updated_at: 2026-03-29T14:42:35.381973+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

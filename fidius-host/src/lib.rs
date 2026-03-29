@@ -17,6 +17,7 @@ pub mod error;
 pub mod handle;
 pub mod host;
 pub mod loader;
+pub mod package;
 pub mod signing;
 pub mod types;
 

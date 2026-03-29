@@ -86,6 +86,49 @@ enum Commands {
         /// Path to the dylib to inspect
         dylib: PathBuf,
     },
+    /// Package management commands
+    Package {
+        #[command(subcommand)]
+        command: PackageCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum PackageCommands {
+    /// Validate a package manifest
+    Validate {
+        /// Path to the package directory
+        dir: PathBuf,
+    },
+    /// Build a package (compile the cdylib)
+    Build {
+        /// Path to the package directory
+        dir: PathBuf,
+        /// Build in debug mode instead of release
+        #[arg(long)]
+        debug: bool,
+    },
+    /// Inspect a package manifest
+    Inspect {
+        /// Path to the package directory
+        dir: PathBuf,
+    },
+    /// Sign a package manifest
+    Sign {
+        /// Path to the secret key file
+        #[arg(long)]
+        key: PathBuf,
+        /// Path to the package directory
+        dir: PathBuf,
+    },
+    /// Verify a package manifest signature
+    Verify {
+        /// Path to the public key file
+        #[arg(long)]
+        key: PathBuf,
+        /// Path to the package directory
+        dir: PathBuf,
+    },
 }
 
 fn main() {
@@ -115,6 +158,13 @@ fn main() {
         Commands::Sign { key, dylib } => commands::sign(&key, &dylib),
         Commands::Verify { key, dylib } => commands::verify(&key, &dylib),
         Commands::Inspect { dylib } => commands::inspect(&dylib),
+        Commands::Package { command } => match command {
+            PackageCommands::Validate { dir } => commands::package_validate(&dir),
+            PackageCommands::Build { dir, debug } => commands::package_build(&dir, !debug),
+            PackageCommands::Inspect { dir } => commands::package_inspect(&dir),
+            PackageCommands::Sign { key, dir } => commands::package_sign(&key, &dir),
+            PackageCommands::Verify { key, dir } => commands::package_verify(&key, &dir),
+        },
     };
 
     if let Err(e) = result {
