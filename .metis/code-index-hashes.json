@@ -2,6 +2,7 @@
   "files": {
     "fides-cli/src/commands.rs": "00ba6be4ab138425cf90b8d971cfa25e98b97300773725bd55427776a96a5d2b",
     "fides-cli/src/main.rs": "95e893c139f6e330b60c82d4f6e9045029207d1fda4af1fe62ec1965b91bd663",
+    "fides-cli/tests/cli.rs": "0d426c6e0d34ca72eb4b69fa4f659fb661847f59f8e1fa46dfb1189c4ae1e681",
     "fides-core/src/async_runtime.rs": "8e863613089ec4adb7332c6cf618a074436e38b3c0592e53a9359da40a3da781",
     "fides-core/src/descriptor.rs": "cac13600221d6438ccd3b1459a96d1948091ec14b4c2fab8fe52a75d95b3d344",
     "fides-core/src/error.rs": "6da137ba348ecc2f70089c87b280fe8f42e483413d6838362b22138da61d1b49",

@@ -1,0 +1,25 @@
+[package]
+name = "fidius-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI for the Fidius plugin framework"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "fidius"
+path = "src/main.rs"
+
+[dependencies]
+fidius-core = { path = "../fidius-core" }
+fidius-host = { path = "../fidius-host" }
+clap = { workspace = true }
+ed25519-dalek = { workspace = true }
+ureq = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rand = "0.8"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"

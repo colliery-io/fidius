@@ -1,4 +1,4 @@
-use fides_macro::{plugin_impl, plugin_interface};
+use fidius_macro::{plugin_impl, plugin_interface};
 use serde::{Deserialize, Serialize};
 
 #[plugin_interface(version = 1, buffer = PluginAllocated)]
@@ -48,4 +48,4 @@ impl Calculator for BasicCalculator {
     }
 }
 
-fides_core::fides_plugin_registry!();
+fidius_core::fidius_plugin_registry!();

@@ -1,0 +1,13 @@
+[package]
+name = "fidius"
+version = "0.1.0"
+edition = "2021"
+description = "Fidius — a Rust plugin framework for trait-to-dylib plugin systems"
+license = "MIT OR Apache-2.0"
+
+[features]
+async = ["fidius-core/async"]
+
+[dependencies]
+fidius-core = { path = "../fidius-core" }
+fidius-macro = { path = "../fidius-macro" }

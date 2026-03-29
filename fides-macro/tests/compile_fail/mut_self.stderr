@@ -1,5 +1,0 @@
-error: fides plugins are stateless: methods must take `&self`, not `&mut self`
- --> tests/compile_fail/mut_self.rs:5:15
-  |
-5 |     fn mutate(&mut self);
-  |               ^

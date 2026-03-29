@@ -1,0 +1,165 @@
+//! PluginHandle — type-safe proxy for calling plugin methods via FFI.
+
+use std::ffi::c_void;
+use std::sync::Arc;
+
+use libloading::Library;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
+use fidius_core::status::*;
+use fidius_core::wire;
+use fidius_core::PluginError;
+
+use crate::error::CallError;
+use crate::types::PluginInfo;
+
+/// Type alias for the PluginAllocated FFI function pointer signature.
+type FfiFn = unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32;
+
+/// A handle to a loaded plugin, ready for calling methods.
+///
+/// Holds an `Arc<Library>` to keep the dylib loaded as long as any handle exists.
+/// Call methods via `call_method()` which handles serialization, FFI, and cleanup.
+pub struct PluginHandle {
+    /// Keeps the library alive.
+    _library: Arc<Library>,
+    /// Pointer to the `#[repr(C)]` vtable struct in the loaded library.
+    vtable: *const c_void,
+    /// Free function for plugin-allocated output buffers.
+    free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
+    /// Capability bitfield for optional method support.
+    capabilities: u64,
+    /// Owned plugin metadata.
+    info: PluginInfo,
+}
+
+// SAFETY: vtable and free_buffer point to static code/data in the loaded library.
+// Arc<Library> ensures the library stays loaded. All access is read-only.
+unsafe impl Send for PluginHandle {}
+unsafe impl Sync for PluginHandle {}
+
+impl PluginHandle {
+    /// Create a new PluginHandle from a loaded plugin.
+    pub fn new(
+        library: Arc<Library>,
+        vtable: *const c_void,
+        free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
+        capabilities: u64,
+        info: PluginInfo,
+    ) -> Self {
+        Self {
+            _library: library,
+            vtable,
+            free_buffer,
+            capabilities,
+            info,
+        }
+    }
+
+    /// Create a PluginHandle from a LoadedPlugin.
+    pub fn from_loaded(plugin: crate::loader::LoadedPlugin) -> Self {
+        Self {
+            _library: plugin.library,
+            vtable: plugin.vtable,
+            free_buffer: plugin.free_buffer,
+            capabilities: plugin.info.capabilities,
+            info: plugin.info,
+        }
+    }
+
+    /// Call a plugin method by vtable index.
+    ///
+    /// Serializes the input, calls the FFI function pointer at the given index,
+    /// checks the status code, deserializes the output, and frees the plugin-allocated buffer.
+    ///
+    /// # Arguments
+    /// * `index` - The method index in the vtable (0-based, in declaration order)
+    /// * `input` - The input argument to serialize and pass to the plugin
+    pub fn call_method<I: Serialize, O: DeserializeOwned>(
+        &self,
+        index: usize,
+        input: &I,
+    ) -> Result<O, CallError> {
+        // Serialize input
+        let input_bytes =
+            wire::serialize(input).map_err(|e| CallError::Serialization(e.to_string()))?;
+
+        // Get the function pointer from the vtable
+        let fn_ptr = unsafe {
+            let fn_ptrs = self.vtable as *const FfiFn;
+            *fn_ptrs.add(index)
+        };
+
+        // Call the FFI function
+        let mut out_ptr: *mut u8 = std::ptr::null_mut();
+        let mut out_len: u32 = 0;
+
+        let status = unsafe {
+            fn_ptr(
+                input_bytes.as_ptr(),
+                input_bytes.len() as u32,
+                &mut out_ptr,
+                &mut out_len,
+            )
+        };
+
+        // Handle status codes
+        match status {
+            STATUS_OK => {}
+            STATUS_BUFFER_TOO_SMALL => return Err(CallError::BufferTooSmall),
+            STATUS_SERIALIZATION_ERROR => {
+                return Err(CallError::Serialization("FFI serialization failed".into()))
+            }
+            STATUS_PLUGIN_ERROR => {
+                // Output buffer contains a serialized PluginError
+                if !out_ptr.is_null() && out_len > 0 {
+                    let output_slice =
+                        unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let plugin_err: PluginError = wire::deserialize(output_slice)
+                        .map_err(|e| CallError::Deserialization(e.to_string()))?;
+
+                    // Free the buffer
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+
+                    return Err(CallError::Plugin(plugin_err));
+                }
+                return Err(CallError::Plugin(PluginError::new(
+                    "UNKNOWN",
+                    "plugin returned error but no error data",
+                )));
+            }
+            STATUS_PANIC => return Err(CallError::Panic),
+            _ => {
+                return Err(CallError::Serialization(format!(
+                    "unknown status code: {status}"
+                )))
+            }
+        }
+
+        // Deserialize output
+        let output_slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+        let result: Result<O, CallError> =
+            wire::deserialize(output_slice).map_err(|e| CallError::Deserialization(e.to_string()));
+
+        // Free the plugin-allocated buffer
+        if let Some(free) = self.free_buffer {
+            unsafe { free(out_ptr, out_len as usize) };
+        }
+
+        result
+    }
+
+    /// Check if an optional method is supported (capability bit is set).
+    pub fn has_capability(&self, bit: u32) -> bool {
+        assert!(bit < 64, "capability bit must be < 64");
+        self.capabilities & (1u64 << bit) != 0
+    }
+
+    /// Access the plugin's owned metadata.
+    pub fn info(&self) -> &PluginInfo {
+        &self.info
+    }
+}
