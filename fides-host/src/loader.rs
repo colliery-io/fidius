@@ -35,6 +35,15 @@ pub struct LoadedPlugin {
 unsafe impl Send for LoadedPlugin {}
 unsafe impl Sync for LoadedPlugin {}
 
+impl std::fmt::Debug for LoadedPlugin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoadedPlugin")
+            .field("info", &self.info)
+            .field("vtable", &self.vtable)
+            .finish()
+    }
+}
+
 /// Load a plugin library from a path.
 ///
 /// Opens the dylib, calls `fides_get_registry()`, validates the registry

@@ -1,8 +1,4 @@
-/Users/dstorey/Desktop/fides/fides-host/src/error.rs
-/Users/dstorey/Desktop/fides/fides-host/src/types.rs
-/Users/dstorey/Desktop/fides/fides-host/src/lib.rs
-/Users/dstorey/Desktop/fides/fides-host/src/loader.rs
+/Users/dstorey/Desktop/fides/fides/src/lib.rs
 /Users/dstorey/Desktop/fides/fides-host/src/host.rs
-/Users/dstorey/Desktop/fides/fides-host/src/handle.rs
-/Users/dstorey/Desktop/fides/fides-host/src/signing.rs
-/Users/dstorey/Desktop/fides/fides-host/tests/integration.rs
+/Users/dstorey/Desktop/fides/fides-host/tests/e2e.rs
+/Users/dstorey/Desktop/fides/fides-host/src/loader.rs

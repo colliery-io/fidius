@@ -5,6 +5,9 @@ edition = "2021"
 description = "Fides — a Rust plugin framework for trait-to-dylib plugin systems"
 license = "MIT OR Apache-2.0"
 
+[features]
+async = ["fides-core/async"]
+
 [dependencies]
 fides-core = { path = "../fides-core" }
 fides-macro = { path = "../fides-macro" }

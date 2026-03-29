@@ -7,6 +7,7 @@ use fides_core::descriptor::{BufferStrategyKind, WireFormat};
 
 use crate::error::LoadError;
 use crate::loader::{self, LoadedPlugin};
+use crate::signing;
 use crate::types::{LoadPolicy, PluginInfo};
 
 /// Host for loading and managing plugins.
@@ -168,6 +169,11 @@ impl PluginHost {
 
                 if !is_dylib(&path) {
                     continue;
+                }
+
+                // Verify signature if required
+                if self.require_signature {
+                    signing::verify_signature(&path, &self.trusted_keys)?;
                 }
 
                 match loader::load_library(&path) {
