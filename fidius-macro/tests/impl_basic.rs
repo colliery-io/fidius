@@ -50,7 +50,7 @@ fn descriptor_fields_are_correct() {
     let reg = get_registry();
     let desc = unsafe { &**reg.descriptors };
     assert_eq!(desc.abi_version, 1);
-    assert_eq!(desc.interface_hash, Greeter_INTERFACE_HASH);
+    assert_eq!(desc.interface_hash, __fidius_Greeter::Greeter_INTERFACE_HASH);
     assert_eq!(desc.interface_version, 1);
     assert_eq!(desc.buffer_strategy, 1); // PluginAllocated
     assert!(desc.free_buffer.is_some());
@@ -60,7 +60,7 @@ fn descriptor_fields_are_correct() {
 fn can_call_shim_via_vtable() {
     let reg = get_registry();
     let desc = unsafe { &**reg.descriptors };
-    let vtable = unsafe { &*(desc.vtable as *const Greeter_VTable) };
+    let vtable = unsafe { &*(desc.vtable as *const __fidius_Greeter::Greeter_VTable) };
 
     // Serialize the input argument
     let input = "World".to_string();

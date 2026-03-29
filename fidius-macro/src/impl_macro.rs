@@ -224,6 +224,7 @@ fn generate_vtable_static(
     impl_ident: &Ident,
     methods: &[&Ident],
 ) -> TokenStream {
+    let companion = format_ident!("__fidius_{}", trait_name);
     let vtable_type = format_ident!("{}_VTable", trait_name);
     let vtable_name = format_ident!("__FIDIUS_VTABLE_{}", impl_ident);
     let constructor = format_ident!("new_{}_vtable", trait_name.to_string().to_lowercase());
@@ -237,12 +238,13 @@ fn generate_vtable_static(
         .collect();
 
     quote! {
-        static #vtable_name: #vtable_type = #constructor(#(#shim_args),*);
+        static #vtable_name: #companion::#vtable_type = #companion::#constructor(#(#shim_args),*);
     }
 }
 
 /// Generate the PluginDescriptor static.
 fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream {
+    let companion = format_ident!("__fidius_{}", trait_name);
     let vtable_name = format_ident!("__FIDIUS_VTABLE_{}", impl_ident);
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
     let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
@@ -253,9 +255,6 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
     let plugin_name_const = format_ident!("__FIDIUS_PLUGIN_NAME_{}", impl_ident);
     let impl_name_str = impl_ident.to_string();
 
-    // Compute capabilities: OR the {Trait}_CAP_{METHOD} constant for each
-    // method in the impl that also appears in {Trait}_OPTIONAL_METHODS.
-    // We generate a const expression that the compiler evaluates.
     let optional_methods_ident = format_ident!("{}_OPTIONAL_METHODS", trait_name);
     let method_strs: Vec<String> = methods.iter().map(|m| m.to_string()).collect();
 
@@ -268,7 +267,7 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
             // Compute capabilities inline: check which impl'd methods
             // appear in the optional methods list
             const CAPS: u64 = {
-                let optional = #optional_methods_ident;
+                let optional = #companion::#optional_methods_ident;
                 let impl_methods: &[&str] = &[#(#method_strs),*];
                 let mut caps: u64 = 0;
                 let mut opt_idx = 0;
@@ -297,7 +296,7 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
                 caps
             };
 
-            #builder_fn(
+            #companion::#builder_fn(
                 #plugin_name_const.as_ptr(),
                 &#vtable_name as *const _ as *const _,
                 CAPS,

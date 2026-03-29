@@ -58,12 +58,17 @@ pub fn generate_interface(ir: &InterfaceIR) -> syn::Result<TokenStream> {
     let vtable = generate_vtable(ir);
     let constants = generate_constants(ir);
     let descriptor_builder = generate_descriptor_builder(ir);
+    let companion_mod = format_ident!("__fidius_{}", ir.trait_name);
 
     Ok(quote! {
         #cleaned_trait
-        #vtable
-        #constants
-        #descriptor_builder
+        #[allow(non_snake_case, non_upper_case_globals)]
+        pub mod #companion_mod {
+            use super::*;
+            #vtable
+            #constants
+            #descriptor_builder
+        }
     })
 }
 

@@ -61,7 +61,7 @@ fn both_descriptors_are_valid() {
 
     for desc in &descs {
         assert_eq!(desc.abi_version, 1);
-        assert_eq!(desc.interface_hash, Greeter_INTERFACE_HASH);
+        assert_eq!(desc.interface_hash, __fidius_Greeter::Greeter_INTERFACE_HASH);
         assert_eq!(desc.buffer_strategy, 1);
         assert!(desc.free_buffer.is_some());
     }
@@ -88,7 +88,7 @@ fn can_call_both_plugins() {
     let mut results: Vec<String> = Vec::new();
 
     for desc in &descs {
-        let vtable = unsafe { &*(desc.vtable as *const Greeter_VTable) };
+        let vtable = unsafe { &*(desc.vtable as *const __fidius_Greeter::Greeter_VTable) };
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
         let mut out_len: u32 = 0;
 

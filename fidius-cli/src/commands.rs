@@ -168,7 +168,7 @@ fidius-core = {{ version = "0.1" }}
     let struct_name = format!("My{trait_name}");
 
     let lib_rs = format!(
-        r#"use {interface_mod}::*;
+        r#"use {interface_mod}::{{plugin_impl, {trait_name}, PluginError, __fidius_{trait_name}}};
 
 pub struct {struct_name};
 
