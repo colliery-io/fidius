@@ -4,15 +4,15 @@ level: task
 title: "Implement LoadPolicy enforcement in PluginHost"
 short_code: "FIDIUS-T-0029"
 created_at: 2026-03-29T13:15:37.980760+00:00
-updated_at: 2026-03-29T13:15:37.980760+00:00
+updated_at: 2026-03-29T13:49:16.286145+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/backlog"
   - "#feature"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -43,6 +43,12 @@ initiative_id: NULL
 - `LoadPolicy::Lenient` + `require_signature(true)` — attempt verification, log warning on failure, but continue loading
 - `LoadPolicy::Lenient` without `require_signature` — skip verification entirely (same as current default)
 - Remove `#[allow(dead_code)]` from the field
+
+## Acceptance Criteria
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -85,4 +91,4 @@ if self.require_signature {
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: Implemented. Removed `#[allow(dead_code)]` from PluginHost. Wired `load_policy` into `load()` — Lenient catches signature errors and prints warning via `eprintln!`, Strict returns error (existing behavior). 2 new E2E tests: lenient+unsigned loads, lenient+wrong key loads. All 68 tests pass, clippy clean.

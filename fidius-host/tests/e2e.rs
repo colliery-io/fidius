@@ -157,3 +157,49 @@ fn unsigned_plugin_loads_without_signature_requirement() {
     let output: AddOutput = handle.call_method(0, &AddInput { a: 100, b: 200 }).unwrap();
     assert_eq!(output, AddOutput { result: 300 });
 }
+
+#[test]
+fn lenient_policy_loads_unsigned_plugin_with_signature_required() {
+    let plugin_dir = build_test_plugin();
+    let dylib = dylib_path(&plugin_dir);
+    cleanup_sig(&dylib);
+
+    let key = SigningKey::from_bytes(&[14u8; 32]).verifying_key();
+
+    let host = PluginHost::builder()
+        .search_path(&plugin_dir)
+        .require_signature(true)
+        .trusted_keys(&[key])
+        .load_policy(fidius_host::LoadPolicy::Lenient)
+        .build()
+        .unwrap();
+
+    // Lenient: should load despite missing signature
+    let loaded = host.load("BasicCalculator").unwrap();
+    assert_eq!(loaded.info.name, "BasicCalculator");
+}
+
+#[test]
+fn lenient_policy_loads_with_wrong_key() {
+    let plugin_dir = build_test_plugin();
+    let dylib = dylib_path(&plugin_dir);
+
+    let signing_key = SigningKey::from_bytes(&[15u8; 32]);
+    let wrong_key = SigningKey::from_bytes(&[16u8; 32]).verifying_key();
+
+    sign_dylib(&dylib, &signing_key);
+
+    let host = PluginHost::builder()
+        .search_path(&plugin_dir)
+        .require_signature(true)
+        .trusted_keys(&[wrong_key])
+        .load_policy(fidius_host::LoadPolicy::Lenient)
+        .build()
+        .unwrap();
+
+    // Lenient: should load despite wrong key (warns to stderr)
+    let loaded = host.load("BasicCalculator").unwrap();
+    assert_eq!(loaded.info.name, "BasicCalculator");
+
+    cleanup_sig(&dylib);
+}
