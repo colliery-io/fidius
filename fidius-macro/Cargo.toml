@@ -1,6 +1,6 @@
 [package]
 name = "fidius-macro"
-version = "0.1.0"
+version = "0.0.0-alpha.1"
 edition = "2021"
 description = "Proc macros for the Fidius plugin framework"
 license = "MIT OR Apache-2.0"
