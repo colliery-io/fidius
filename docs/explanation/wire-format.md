@@ -136,52 +136,11 @@ let val: serde_json::Value = err.details_value().unwrap();
 
 ## Implications for Testing
 
-Because `cfg(debug_assertions)` controls the wire format, the format used in
-tests depends on how you run them:
-
-| Command | Wire format | Why |
-|---------|-------------|-----|
-| `cargo test` | JSON | Debug assertions are enabled by default |
-| `cargo test --release` | bincode | Debug assertions are disabled in release profile |
-
-This means that `cargo test` and `cargo test --release` exercise **different
-code paths** through the wire module. Both should pass, but they test different
-serialization behaviors.
-
+Because `cfg(debug_assertions)` controls the wire format, `cargo test` (debug)
+and `cargo test --release` exercise **different code paths** through the wire
+module. Both should pass. Run both in CI to cover the JSON and bincode paths.
 The test suite in `fidius-core/tests/layout_and_roundtrip.rs` uses conditional
-compilation to verify this:
-
-```rust
-#[test]
-fn wire_debug_produces_json() {
-    #[cfg(debug_assertions)]
-    {
-        assert_eq!(wire::WIRE_FORMAT, WireFormat::Json);
-        let bytes = wire::serialize(&payload).unwrap();
-        // Verify output is valid JSON
-        let _: serde_json::Value = serde_json::from_slice(&bytes)
-            .expect("debug wire output is not valid JSON");
-    }
-}
-
-#[test]
-fn wire_release_produces_bincode() {
-    #[cfg(not(debug_assertions))]
-    {
-        assert_eq!(wire::WIRE_FORMAT, WireFormat::Bincode);
-        let bytes = wire::serialize(&payload).unwrap();
-        // Verify output is NOT valid JSON (it's bincode)
-        assert!(serde_json::from_slice::<serde_json::Value>(&bytes).is_err());
-    }
-}
-```
-
-**Practical implication:** If you run only `cargo test` in CI, you are not
-testing the bincode path. Consider running both:
-
-```bash
-cargo test && cargo test --release
-```
+compilation to verify the correct format is active in each mode.
 
 ## The WireError Type
 

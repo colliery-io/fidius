@@ -15,6 +15,14 @@ code can use `.await`.
 
 ## 1. Enable the `async` feature on `fidius-core`
 
+> **Note:** Only the [tokio](https://tokio.rs/) runtime is supported. Other
+> async runtimes (async-std, smol, etc.) are not compatible with the generated
+> shims.
+
+The interface crate does not need any changes for async -- `async fn` methods
+in the trait are handled entirely by the proc macro. Only the plugin crate
+needs the feature enabled.
+
 In your **plugin crate's** `Cargo.toml`, enable the feature:
 
 ```toml

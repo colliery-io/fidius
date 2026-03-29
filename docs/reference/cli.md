@@ -56,13 +56,13 @@ fidius init-interface <NAME> --trait <TRAIT_NAME> [--path <DIR>] [--version <VER
     lib.rs
 ```
 
-**`Cargo.toml`** contains a `[dependencies]` entry for `fidius`. **`src/lib.rs`** contains a skeleton trait with `#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]` and a single `fn process(&self, input: String) -> String` method.
+**`Cargo.toml`** contains a `[dependencies]` entry for `fidius`. **`src/lib.rs`** contains a skeleton trait with `#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]`, a single `fn process(&self, input: String) -> String` method, and re-exports of `fidius::plugin_impl` and `fidius::PluginError` so plugin crates only need to depend on the interface crate.
 
 **Dependency resolution algorithm:**
 
 The `fidius` dependency value is resolved as follows:
 
-1. If `"fidius"` is a path that exists on disk, use `{ path = "fidius" }`.
+1. If `"fidius"` is a path that exists on disk relative to CWD (the directory where you run `fidius init-interface`), use `{ path = "fidius" }`.
 2. If `--version` is set, use `"<version>"` (quoted version string).
 3. Query `https://crates.io/api/v1/crates/fidius` for the latest stable version. If found, use `"<latest_version>"`.
 4. Fall back to `{ path = "fidius" }` with a warning to stderr.
@@ -155,7 +155,7 @@ fidius sign --key <SECRET_KEY_PATH> <DYLIB_PATH>
 | `--key` | path | yes | Path to the 32-byte secret key file. |
 | `DYLIB_PATH` | positional | yes | Path to the dylib to sign. |
 
-Reads the entire dylib, signs it, and writes the 64-byte signature to `<dylib_path>.<ext>.sig`. For example, signing `plugin.dylib` produces `plugin.dylib.sig`.
+Reads the entire dylib, signs it, and writes the 64-byte signature to `<DYLIB>.sig` (the full filename including extension, with `.sig` appended). For example, signing `libplugin.dylib` produces `libplugin.dylib.sig`.
 
 **Output on success:**
 
@@ -182,7 +182,7 @@ fidius verify --key <PUBLIC_KEY_PATH> <DYLIB_PATH>
 | `--key` | path | yes | Path to the 32-byte public key file. |
 | `DYLIB_PATH` | positional | yes | Path to the dylib to verify. |
 
-Reads the dylib, reads the signature from `<dylib_path>.<ext>.sig`, and verifies.
+Reads the dylib, reads the signature from `<DYLIB>.sig`, and verifies.
 
 **Output on success:**
 

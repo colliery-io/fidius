@@ -45,18 +45,7 @@ Plugin Registry: path/to/libmy_plugin.dylib
       Capabilities: 0x0000000000000000
 ```
 
-### Field reference
-
-| Field | Meaning |
-|---|---|
-| **Plugins** | Total number of `#[plugin_impl]` blocks in this dylib. |
-| **[N] Name** | The struct name passed to `#[plugin_impl]` (e.g., `HelloGreeter`). |
-| **Interface** | The trait name from `#[plugin_interface]` (e.g., `Greeter`). |
-| **Interface hash** | FNV-1a hash of the required method signatures. Two plugins are compatible only when their hashes match. |
-| **Interface version** | The `version = N` value from `#[plugin_interface(version = N, ...)]`. |
-| **Buffer strategy** | One of `CallerAllocated`, `PluginAllocated`, or `Arena`. Determines how output memory is managed at the FFI boundary. |
-| **Wire format** | `Json` (debug builds) or `Bincode` (release builds). The host rejects plugins compiled with a different wire format. |
-| **Capabilities** | Bitfield indicating which optional methods this plugin implements. `0x0` means no optional methods, or the interface has none. Each bit corresponds to an `#[optional]` method in declaration order. |
+For a description of each field in the output, see the [CLI reference](../reference/cli.md#inspect).
 
 ## 3. Common use cases
 

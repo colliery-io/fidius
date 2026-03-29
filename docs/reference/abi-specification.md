@@ -31,6 +31,10 @@ Both are `u32`. The host rejects registries or descriptors with mismatched versi
 
 ## PluginRegistry Layout
 
+> **Note:** All sizes and offsets in this section assume a 64-bit platform
+> (pointer size = 8 bytes). On 32-bit platforms, pointer fields are 4 bytes and
+> total struct sizes differ.
+
 `#[repr(C)]`, 24 bytes, 8-byte aligned (on 64-bit platforms).
 
 | Offset | Size | Field | Type | Description |
@@ -64,6 +68,18 @@ Each `PluginRegistry` is constructed once per dylib by `build_registry()` and ca
 | 56 | 8 | `vtable` | `*const c_void` | Opaque pointer to the interface-specific `#[repr(C)]` vtable. |
 | 64 | 8 | `free_buffer` | `Option<unsafe extern "C" fn(*mut u8, usize)>` | Buffer deallocation function. Must be `Some` for `PluginAllocated`. |
 
+### PluginDescriptor Helper Methods
+
+`PluginDescriptor` provides the following convenience methods:
+
+| Method | Return type | Description |
+|--------|-------------|-------------|
+| `interface_name_str()` | `&str` | Reads `interface_name` as a `CStr` and converts to `&str`. |
+| `plugin_name_str()` | `&str` | Reads `plugin_name` as a `CStr` and converts to `&str`. |
+| `buffer_strategy_kind()` | `BufferStrategyKind` | Converts the `buffer_strategy` `u8` to the enum. |
+| `wire_format_kind()` | `WireFormat` | Converts the `wire_format` `u8` to the enum. |
+| `has_capability(bit: u32)` | `bool` | Returns `true` if the given capability bit is set. |
+
 ---
 
 ## BufferStrategyKind
@@ -91,9 +107,13 @@ Only `PluginAllocated` is currently supported by the macro.
 
 ---
 
+Layout sizes and offsets are regression-tested in `fidius-core/tests/layout_and_roundtrip.rs` to catch accidental ABI drift.
+
+---
+
 ## Wire Format Selection
 
-The wire format is determined at compile time:
+The wire format is determined at compile time. For a detailed explanation of the debug/release behavior and the rationale behind `PluginError.details`, see [Wire Format and Debug/Release Behavior](../explanation/wire-format.md).
 
 ```rust
 #[cfg(debug_assertions)]
@@ -203,6 +223,8 @@ FNV-1a 64-bit, used to detect ABI drift at load time.
 |------|-------|
 | FNV offset basis | `0xcbf29ce484222325` |
 | FNV prime | `0x100000001b3` |
+
+Both `fnv1a` and `interface_hash` are public API, defined in `fidius_core::hash` and re-exported from the `fidius::` facade crate.
 
 ### `fnv1a(bytes: &[u8]) -> u64`
 

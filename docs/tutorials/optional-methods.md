@@ -77,9 +77,11 @@ pub struct MulOutput {
 
 Key points about `#[optional(since = 2)]`:
 
-- The `since` value is informational -- it documents which interface version
-  introduced the method. It does not change the interface hash (only required
-  methods contribute to the hash).
+- The `since` value is informational -- it documents which interface `version`
+  (from `#[plugin_interface(version = N, ...)]`) introduced the method. In this
+  example, `version = 1` is the original interface and `since = 2` means
+  "added in version 2." The `since` value does not change the interface hash
+  (only required methods contribute to the hash).
 - Optional methods do not break backward compatibility. A plugin compiled
   against the old interface (without `multiply`) will still load and work for
   `add` calls.
@@ -145,6 +147,13 @@ struct MulInput { a: i64, b: i64 }
 #[derive(Deserialize, Debug)]
 struct MulOutput { result: i64 }
 
+// Method indices (zero-based, declaration order across all methods).
+const ADD_METHOD: usize = 0;
+const MULTIPLY_METHOD: usize = 1;
+
+// Capability bit indices (zero-based among optional methods only).
+const MULTIPLY_CAP: u32 = 0;
+
 fn main() {
     let plugin_dir = std::env::args()
         .nth(1)
@@ -161,17 +170,16 @@ fn main() {
 
     let handle = PluginHandle::from_loaded(loaded);
 
-    // Call add (always available -- required method at index 0).
+    // Call add (always available -- required method).
     let sum: AddOutput = handle
-        .call_method(0, &AddInput { a: 3, b: 7 })
+        .call_method(ADD_METHOD, &AddInput { a: 3, b: 7 })
         .expect("add() failed");
     println!("add(3, 7) = {}", sum.result);
 
     // Check if multiply is supported before calling.
-    // Capability bit 0 corresponds to the first optional method.
-    if handle.has_capability(0) {
+    if handle.has_capability(MULTIPLY_CAP) {
         let product: MulOutput = handle
-            .call_method(1, &MulInput { a: 4, b: 5 })
+            .call_method(MULTIPLY_METHOD, &MulInput { a: 4, b: 5 })
             .expect("multiply() failed");
         println!("multiply(4, 5) = {}", product.result);
     } else {
@@ -257,7 +265,21 @@ fidius_core::fidius_plugin_registry!();
 ```
 
 Add `"calculator-plugin-v1"` to the workspace members in the root
-`Cargo.toml`, rebuild, then run:
+`Cargo.toml`:
+
+```toml
+# Cargo.toml
+[workspace]
+resolver = "2"
+members = [
+    "calculator-interface",
+    "calculator-plugin",
+    "calculator-plugin-v1",
+    "calculator-host",
+]
+```
+
+Rebuild, then run:
 
 ```bash
 cargo build

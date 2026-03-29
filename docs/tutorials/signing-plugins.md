@@ -17,9 +17,9 @@ limitations under the License.
 # Signing Plugins
 
 This tutorial walks through the full plugin signing workflow: generating an
-Ed25519 keypair, signing a compiled plugin dylib, verifying the signature from
-the command line, and configuring the host to require valid signatures at load
-time.
+Ed25519 (a public-key signature algorithm) keypair, signing a compiled plugin
+dylib, verifying the signature from the command line, and configuring the host
+to require valid signatures at load time.
 
 Signing ensures that only plugins produced by a trusted party can be loaded.
 If a plugin file is tampered with after signing, or if it was signed with an
@@ -57,10 +57,14 @@ Generated keypair:
   Public: mykey.public
 ```
 
-- `mykey.secret` -- 32-byte Ed25519 secret key. Keep this safe. You need it to
-  sign plugins.
+- `mykey.secret` -- 32-byte Ed25519 secret key. You need it to sign plugins.
 - `mykey.public` -- 32-byte Ed25519 public key. Distribute this to hosts that
   need to verify your plugins.
+
+> **Security note:** Treat `mykey.secret` like a password. Store it outside
+> version control, restrict file permissions (`chmod 600 mykey.secret`), and
+> consider using a secrets manager in CI/CD pipelines. Anyone with access to
+> the secret key can sign plugins that your host will trust.
 
 ## Step 2: Build the plugin
 
@@ -119,7 +123,16 @@ verification fails, it prints `Signature INVALID` and exits with code 1.
 
 ## Step 5: Configure the host to require signatures
 
-Update `calculator-host/src/main.rs` to load the public key and require
+First, add `ed25519-dalek` to the host's `Cargo.toml`:
+
+```toml
+[dependencies]
+fidius-host = { version = "0.1" }
+serde = { version = "1", features = ["derive"] }
+ed25519-dalek = "2"
+```
+
+Then update `calculator-host/src/main.rs` to load the public key and require
 signature verification:
 
 ```rust
@@ -165,15 +178,6 @@ fn main() {
 
     println!("add(3, 7) = {}", output.result);
 }
-```
-
-Add `ed25519-dalek` to the host's `Cargo.toml`:
-
-```toml
-[dependencies]
-fidius-host = { version = "0.1" }
-serde = { version = "1", features = ["derive"] }
-ed25519-dalek = "2"
 ```
 
 The two builder methods that control signing:

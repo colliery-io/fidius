@@ -135,7 +135,7 @@ and checks `capabilities & (1u64 << bit) != 0`.
 | Add required method | **Yes** | `interface_hash` changes | Recompile all plugins |
 | Remove required method | **Yes** | `interface_hash` changes | Recompile all plugins |
 | Change required method signature | **Yes** | `interface_hash` changes | Recompile all plugins |
-| Reorder methods in source | **Yes** | `interface_hash` unchanged, but vtable layout changes | Avoid; treat as breaking |
+| Reorder methods in source | **Yes** | `interface_hash` unchanged (hash is order-independent), but vtable indices follow declaration order -- so reordering silently changes which function pointer each index maps to | Avoid; treat as breaking |
 | Change wire format | **Yes** | `wire_format` mismatch at load | Build everything in same mode |
 | Change buffer strategy | **Yes** | `buffer_strategy` mismatch at load | Recompile all plugins |
 | Bump `version` attribute | No | Informational; host can check if desired | Update interface crate |

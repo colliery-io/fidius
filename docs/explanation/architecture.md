@@ -129,70 +129,35 @@ Key constraints:
 
 ### At Compile Time (Interface Crate)
 
-```
-trait ImageFilter {                   build_signature_string()
-    fn name(&self) -> String;    ──►  "name:->String"
-    fn process(&self, ...) -> ...;    "process:& [u8],Value->Result<...>"
-}                                          │
-                                           ▼  sort + join("\n")
-                                      fnv1a(combined_bytes)
-                                           │
-                                           ▼
-                                    ImageFilter_INTERFACE_HASH = 0x...
-```
+The `#[plugin_interface]` macro extracts a canonical signature string from each
+required method, sorts them, and hashes the combined result with FNV-1a to
+produce a compile-time constant (`INTERFACE_HASH`). This hash is the ABI
+fingerprint for the interface.
 
 ### At Compile Time (Plugin Crate)
 
-```
-#[plugin_impl(ImageFilter)]
-impl ImageFilter for BlurFilter { ... }
-        │
-        ▼ generates
-  __fidius_shim_BlurFilter_name()       extern "C" fn
-  __fidius_shim_BlurFilter_process()    extern "C" fn
-        │
-        ▼ populates
-  __FIDIUS_VTABLE_BlurFilter: ImageFilter_VTable { name: ..., process: ... }
-        │
-        ▼ references
-  __FIDIUS_DESCRIPTOR_BlurFilter: PluginDescriptor {
-      abi_version: 1,
-      interface_hash: ImageFilter_INTERFACE_HASH,
-      vtable: &__FIDIUS_VTABLE_BlurFilter,
-      wire_format: WIRE_FORMAT as u8,
-      free_buffer: Some(__fidius_free_buffer_BlurFilter),
-      ...
-  }
-        │
-        ▼ registered via
-  inventory::submit!(DescriptorEntry { descriptor: &__FIDIUS_DESCRIPTOR_BlurFilter })
-```
+The `#[plugin_impl]` macro generates:
+
+1. One `extern "C"` shim per method (handles serialization, deserialization, and
+   panic-catching).
+2. A static vtable populated with those shim pointers.
+3. A `PluginDescriptor` referencing the vtable, interface hash, wire format,
+   and buffer strategy.
+4. A registration call that makes the descriptor discoverable at runtime.
 
 ### At Runtime (Host)
 
-```
-load_library("blur.dylib")
-    │
-    ├─ dlopen → Library
-    ├─ dlsym("fidius_get_registry") → fn() -> *const PluginRegistry
-    ├─ call → PluginRegistry { magic, registry_version, plugin_count, descriptors }
-    ├─ validate magic == b"FIDIUS\0\0"
-    ├─ validate registry_version == 1
-    └─ for each descriptor:
-        ├─ validate abi_version == 1
-        ├─ validate interface_hash matches (if configured)
-        ├─ validate wire_format matches
-        ├─ validate buffer_strategy matches
-        └─ copy to owned PluginInfo + wrap in PluginHandle
+1. **Open** the dylib and look up the registry export symbol.
+2. **Validate** magic bytes, registry version, ABI version, interface hash,
+   wire format, and buffer strategy. Reject on any mismatch.
+3. **Copy** descriptor metadata into owned `PluginInfo` structs and wrap the
+   vtable in a `PluginHandle`.
+4. **Call** a method: serialize the input, invoke the vtable function pointer,
+   check the status code, deserialize the output, and free the plugin-allocated
+   buffer.
 
-handle.call_method::<ProcessInput, ProcessOutput>(1, &input)
-    │
-    ├─ wire::serialize(&input) → Vec<u8>
-    ├─ vtable[1](in_ptr, in_len, &mut out_ptr, &mut out_len) → status
-    ├─ match status { STATUS_OK => ..., STATUS_PLUGIN_ERROR => ..., ... }
-    ├─ wire::deserialize(out_slice) → ProcessOutput
-    └─ free_buffer(out_ptr, out_len)
-```
+For the exact binary layout, field offsets, and status codes, see the
+[ABI specification](../reference/abi-specification.md).
 
 ## Design Philosophy
 

@@ -292,7 +292,7 @@ method not implemented (capability bit {bit} not set)
 
 | | |
 |---|---|
-| **Trigger** | An optional method was called but the plugin does not implement it (the corresponding capability bit is not set). This variant is available for host-side guard code; the vtable would contain `None` for unimplemented optional methods. |
+| **Trigger** | An optional method was called but the plugin does not implement it (the corresponding capability bit is not set). `call_method` does **not** automatically check capabilities -- the caller must check `has_capability(bit)` before calling. If the caller skips the check and the vtable entry is `None`, the host returns this error. |
 | **Fields** | `bit: u32` -- the capability bit index. |
 | **Resolution** | Check `PluginHandle::has_capability(bit)` before calling optional methods. Use a plugin that implements the required optional method. |
 
@@ -339,7 +339,7 @@ bincode wire error: {0}
 
 ## PluginError
 
-Business logic error returned by plugin method implementations. Defined in `fidius_core::error`. Serialized across the FFI boundary.
+Business logic error returned by plugin method implementations. Defined in `fidius_core::error`. Serialized across the FFI boundary. Implements `std::error::Error` (via `thiserror`), so it composes with standard Rust error handling (`?`, `anyhow`, etc.).
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -354,7 +354,7 @@ pub struct PluginError {
 |-------|-------------|
 | `code` | Machine-readable error code (e.g., `"INVALID_INPUT"`, `"NOT_FOUND"`). |
 | `message` | Human-readable error message. |
-| `details` | Optional structured details as a JSON string. |
+| `details` | Optional structured details as a JSON string (stored as `String` rather than `serde_json::Value` for bincode compatibility -- see [Wire Format](../explanation/wire-format.md#why-pluginerrordetails-is-optionstring) for rationale). |
 
 ### Display Format
 

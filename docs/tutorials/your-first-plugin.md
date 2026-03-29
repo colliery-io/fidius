@@ -123,11 +123,7 @@ Key points:
   annotates the trait. `version` is a user-chosen integer you bump when the
   interface changes. `buffer = PluginAllocated` means the plugin allocates the
   output buffer (the only strategy currently supported).
-- The trait must require `Send + Sync`.
-- Methods must take `&self` (not `&mut self` -- plugins are stateless).
-- Every method argument and return type must implement `serde::Serialize` and
-  `serde::Deserialize`. Define dedicated input/output structs with Serde
-  derives.
+- The trait requires `Send + Sync`, methods take `&self`, and all argument/return types must implement Serde's `Serialize + Deserialize` -- see the [ABI specification](../reference/abi-specification.md) for the full requirements.
 - The crate re-exports `fidius::plugin_impl` and `fidius::PluginError` so
   plugin crates only need to depend on the interface crate.
 
@@ -191,7 +187,7 @@ fidius_core::fidius_plugin_registry!();
 
 Key points:
 
-- `#[plugin_impl(Calculator)]` generates the FFI (Foreign Function Interface) shims, a static vtable, and a
+- `#[plugin_impl(Calculator)]` generates the FFI (Foreign Function Interface -- the mechanism for calling across language or binary boundaries) shims, a static vtable (a table of function pointers, one per method), and a
   `PluginDescriptor` for `BasicCalculator`. The attribute argument is the trait
   name -- it must match the trait annotated with `#[plugin_interface]`.
 - `fidius_core::fidius_plugin_registry!()` emits the `fidius_get_registry`
@@ -228,9 +224,12 @@ serde = { version = "1", features = ["derive"] }
 use fidius_host::{PluginHost, PluginHandle};
 use serde::{Deserialize, Serialize};
 
-// The host defines its own copies of the input/output types.
-// They must have the same field names and types as the interface
-// crate's structs (they are serialized over the wire as JSON or bincode).
+// The host defines its own copies of the input/output types rather than
+// importing them from the interface crate. This keeps the host decoupled
+// from the plugin's compile-time dependencies -- the host only needs
+// fidius-host, not fidius-core or the proc macros. The structs must have
+// the same field names and types (they are serialized over the wire as
+// JSON or bincode).
 
 #[derive(Serialize)]
 struct AddInput {
@@ -242,6 +241,9 @@ struct AddInput {
 struct AddOutput {
     result: i64,
 }
+
+// Method indices are zero-based, in declaration order.
+const ADD_METHOD: usize = 0;
 
 fn main() {
     // Point the host at the directory containing the compiled cdylib.
@@ -267,10 +269,10 @@ fn main() {
     // Wrap in a PluginHandle for type-safe method calls.
     let handle = PluginHandle::from_loaded(loaded);
 
-    // Call add (method index 0) with a=3, b=7.
+    // Call add with a=3, b=7.
     let input = AddInput { a: 3, b: 7 };
     let output: AddOutput = handle
-        .call_method(0, &input)
+        .call_method(ADD_METHOD, &input)
         .expect("add() call failed");
 
     println!("add(3, 7) = {}", output.result);
@@ -280,11 +282,8 @@ fn main() {
 
 Key points:
 
-- `PluginHost::builder()` configures search paths and builds the host.
-- `host.load("BasicCalculator")` finds and loads the named plugin.
-- `PluginHandle::from_loaded(loaded)` wraps the loaded plugin for type-safe calls.
-- `handle.call_method::<AddInput, AddOutput>(0, &input)` calls the method at
-  vtable index 0 (zero-based, declaration order).
+- `handle.call_method::<AddInput, AddOutput>(ADD_METHOD, &input)` calls the method at
+  its vtable index (zero-based, declaration order).
 
 See the [host API reference](../reference/host-api.md) for the full builder and handle API.
 
