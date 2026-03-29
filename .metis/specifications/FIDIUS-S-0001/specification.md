@@ -77,10 +77,10 @@ my-app-plugin-api/
 // my-app-plugin-api/src/lib.rs
 
 // Re-export so plugin authors need only depend on this crate
-pub use fides::plugin_impl;
-pub use fides::PluginError;
+pub use fidius::plugin_impl;
+pub use fidius::PluginError;
 
-#[fides::plugin_interface(version = 1, buffer = PluginAllocated)]
+#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]
 pub trait ImageFilter: Send + Sync {
     fn name(&self) -> String;
     fn process(&self, input: &[u8], params: serde_json::Value) -> Result<Vec<u8>, PluginError>;
@@ -116,6 +116,11 @@ impl ImageFilter for BlurFilter {
         Ok(vec![])
     }
 }
+
+fidius_core::fidius_plugin_registry!();
+```
+
+> **Note on `PluginError`**: The `details` field is `Option<String>` (JSON-encoded) rather than `Option<serde_json::Value>` to ensure compatibility with the bincode wire format. Use `PluginError::with_details()` to set it and `details_value()` to parse it back.
 ```
 
 ### Dependency Graph
@@ -138,12 +143,12 @@ Plugin authors never depend on `fidius` directly — the interface crate is thei
 
 | Command | Purpose |
 |---------|---------|
-| `fides init-interface <name> --trait <TraitName>` | Scaffold an interface crate |
-| `fides init-plugin <name> --interface <crate>` | Scaffold a plugin crate (cdylib) |
-| `fides sign --key <secret> <dylib>` | Sign a compiled plugin |
-| `fides verify --key <public> <dylib>` | Verify a plugin signature |
-| `fides inspect <dylib>` | Dump registry: plugin names, interface hashes, capabilities, wire format |
-| `fides keygen --out <name>` | Generate Ed25519 keypair |
+| `fidius init-interface <name> --trait <TraitName>` | Scaffold an interface crate |
+| `fidius init-plugin <name> --interface <crate>` | Scaffold a plugin crate (cdylib) |
+| `fidius sign --key <secret> <dylib>` | Sign a compiled plugin |
+| `fidius verify --key <public> <dylib>` | Verify a plugin signature |
+| `fidius inspect <dylib>` | Dump registry: plugin names, interface hashes, capabilities, wire format |
+| `fidius keygen --out <name>` | Generate Ed25519 keypair |
 
 ## Plugin Descriptor
 
@@ -162,11 +167,14 @@ pub struct PluginRegistry {
     pub descriptors: *const *const PluginDescriptor,  // Array of pointers
 }
 
+// Plugin crates call fidius_plugin_registry!() to emit this export:
 #[no_mangle]
-pub static FIDIUS_PLUGIN_REGISTRY: PluginRegistry = ...;
+pub extern "C" fn fidius_get_registry() -> *const PluginRegistry { ... }
 ```
 
-The host reads `FIDIUS_PLUGIN_REGISTRY` first, then iterates over the descriptor array. Single-plugin dylibs still use the registry — with `plugin_count = 1`.
+Each `#[plugin_impl]` registers its descriptor via `inventory::submit!`. The `fidius_plugin_registry!()` macro emits the `fidius_get_registry()` export function, which lazily builds the registry from all submitted descriptors via `OnceLock`.
+
+The host calls `dlsym("fidius_get_registry")`, invokes it, and gets back a `*const PluginRegistry`.
 
 ### Descriptor Layout
 
@@ -321,8 +329,9 @@ Not a PKI / certificate chain — just "was this produced by a holder of this ke
 
 ```
 dlopen(path)
-  → dlsym("FIDIUS_PLUGIN_REGISTRY")           // no code execution
-  → check registry magic bytes                // reject non-fides dylibs
+  → dlsym("fidius_get_registry")              // get registry function
+  → call fidius_get_registry()                // builds registry on first call
+  → check registry magic bytes                // reject non-fidius dylibs
   → check registry_version                    // reject incompatible registry layout
   → for each descriptor in registry:
       → check abi_version                     // reject incompatible descriptor layout

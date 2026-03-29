@@ -1,0 +1,21 @@
+repos:
+  - repo: local
+    hooks:
+      - id: license-header
+        name: Check license headers
+        entry: angreal license-header --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: rustfmt
+        name: rustfmt
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: clippy
+        name: clippy
+        entry: cargo clippy --workspace -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false

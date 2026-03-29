@@ -20,7 +20,6 @@ use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
-    punctuated::Punctuated,
     spanned::Spanned,
     Attribute, FnArg, Ident, ItemTrait, LitInt, Pat, ReturnType, Token, TraitItem, TraitItemFn,
     Type,
@@ -84,9 +83,8 @@ impl Parse for InterfaceAttrs {
         Ok(InterfaceAttrs {
             version: version
                 .ok_or_else(|| syn::Error::new(Span::call_site(), "missing `version` attribute"))?,
-            buffer_strategy: buffer.ok_or_else(|| {
-                syn::Error::new(Span::call_site(), "missing `buffer` attribute")
-            })?,
+            buffer_strategy: buffer
+                .ok_or_else(|| syn::Error::new(Span::call_site(), "missing `buffer` attribute"))?,
         })
     }
 }
@@ -103,6 +101,7 @@ pub struct InterfaceIR {
 
 /// IR for a single trait method.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct MethodIR {
     pub name: Ident,
     /// Argument types (excluding `self`).
@@ -346,10 +345,7 @@ mod tests {
         };
         let result = parse_interface(attrs, &item);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("stateless"));
+        assert!(result.unwrap_err().to_string().contains("stateless"));
     }
 
     #[test]

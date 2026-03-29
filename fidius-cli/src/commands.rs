@@ -55,7 +55,10 @@ fn resolve_dep(value: &str, version_override: Option<&str>) -> String {
 fn check_crates_io(name: &str) -> Option<String> {
     let url = format!("https://crates.io/api/v1/crates/{}", name);
     let mut response = ureq::get(&url)
-        .header("User-Agent", "fidius-cli (https://github.com/fidius-rs/fidius)")
+        .header(
+            "User-Agent",
+            "fidius-cli (https://github.com/fidius-rs/fidius)",
+        )
         .call()
         .ok()?;
 
@@ -285,10 +288,7 @@ pub fn inspect(dylib_path: &Path) -> Result {
         println!("      Interface: {}", info.interface_name);
         println!("      Interface hash: {:#018x}", info.interface_hash);
         println!("      Interface version: {}", info.interface_version);
-        println!(
-            "      Buffer strategy: {:?}",
-            info.buffer_strategy
-        );
+        println!("      Buffer strategy: {:?}", info.buffer_strategy);
         println!("      Wire format: {:?}", info.wire_format);
         println!("      Capabilities: {:#018x}", info.capabilities);
     }

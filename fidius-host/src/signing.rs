@@ -29,22 +29,17 @@ use crate::error::LoadError;
 ///
 /// - `LoadError::SignatureRequired` if the `.sig` file doesn't exist
 /// - `LoadError::SignatureInvalid` if no trusted key verifies the signature
-pub fn verify_signature(
-    dylib_path: &Path,
-    trusted_keys: &[VerifyingKey],
-) -> Result<(), LoadError> {
+pub fn verify_signature(dylib_path: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), LoadError> {
     let path_str = dylib_path.display().to_string();
 
     // Build the .sig path
-    let sig_path = dylib_path.with_extension(
-        format!(
-            "{}.sig",
-            dylib_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-        ),
-    );
+    let sig_path = dylib_path.with_extension(format!(
+        "{}.sig",
+        dylib_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+    ));
 
     // Read the sig file
     let sig_bytes = std::fs::read(&sig_path).map_err(|e| {
@@ -91,12 +86,10 @@ mod tests {
     fn sign_file(path: &Path, signing_key: &SigningKey) {
         let content = std::fs::read(path).unwrap();
         let signature = signing_key.sign(&content);
-        let sig_path = path.with_extension(
-            format!(
-                "{}.sig",
-                path.extension().and_then(|e| e.to_str()).unwrap_or("")
-            ),
-        );
+        let sig_path = path.with_extension(format!(
+            "{}.sig",
+            path.extension().and_then(|e| e.to_str()).unwrap_or("")
+        ));
         std::fs::write(sig_path, signature.to_bytes()).unwrap();
     }
 

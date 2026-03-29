@@ -25,6 +25,7 @@ use crate::signing;
 use crate::types::{LoadPolicy, PluginInfo};
 
 /// Host for loading and managing plugins.
+#[allow(dead_code)]
 pub struct PluginHost {
     search_paths: Vec<PathBuf>,
     load_policy: LoadPolicy,

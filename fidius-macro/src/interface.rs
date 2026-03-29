@@ -28,7 +28,9 @@ fn strip_optional_attrs(item: &ItemTrait) -> ItemTrait {
     let mut cleaned = item.clone();
     for trait_item in &mut cleaned.items {
         if let TraitItem::Fn(method) = trait_item {
-            method.attrs.retain(|attr| !attr.path().is_ident("optional"));
+            method
+                .attrs
+                .retain(|attr| !attr.path().is_ident("optional"));
         }
     }
     cleaned
@@ -97,20 +99,27 @@ fn generate_vtable(ir: &InterfaceIR) -> TokenStream {
         unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32
     };
 
-    let param_names: Vec<&proc_macro2::Ident> = ir.methods.iter().map(|m| &m.name).collect();
-    let params: Vec<TokenStream> = ir.methods.iter().map(|m| {
-        let name = &m.name;
-        quote! { #name: #fn_type }
-    }).collect();
+    let params: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .map(|m| {
+            let name = &m.name;
+            quote! { #name: #fn_type }
+        })
+        .collect();
 
-    let field_assigns: Vec<TokenStream> = ir.methods.iter().map(|m| {
-        let name = &m.name;
-        if m.optional_since.is_some() {
-            quote! { #name: Some(#name) }
-        } else {
-            quote! { #name: #name }
-        }
-    }).collect();
+    let field_assigns: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .map(|m| {
+            let name = &m.name;
+            if m.optional_since.is_some() {
+                quote! { #name: Some(#name) }
+            } else {
+                quote! { #name: #name }
+            }
+        })
+        .collect();
 
     quote! {
         #[repr(C)]
@@ -138,9 +147,7 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
         .map(|m| m.signature_string.as_str())
         .collect();
 
-    let hash_value = fidius_core::hash::interface_hash(
-        &required_sigs,
-    );
+    let hash_value = fidius_core::hash::interface_hash(&required_sigs);
 
     let hash_name = format_ident!("{}_INTERFACE_HASH", trait_name);
     let version_name = format_ident!("{}_INTERFACE_VERSION", trait_name);
@@ -156,11 +163,8 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
         .filter(|m| m.optional_since.is_some())
         .enumerate()
         .map(|(bit, m)| {
-            let const_name = format_ident!(
-                "{}_CAP_{}",
-                trait_name,
-                m.name.to_string().to_uppercase()
-            );
+            let const_name =
+                format_ident!("{}_CAP_{}", trait_name, m.name.to_string().to_uppercase());
             let bit_val = 1u64 << bit;
             quote! { pub const #const_name: u64 = #bit_val; }
         })
@@ -187,7 +191,10 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
 fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
     let trait_name = &ir.trait_name;
     let vtable_name = format_ident!("{}_VTable", trait_name);
-    let fn_name = format_ident!("__fidius_build_{}_descriptor", trait_name.to_string().to_lowercase());
+    let fn_name = format_ident!(
+        "__fidius_build_{}_descriptor",
+        trait_name.to_string().to_lowercase()
+    );
     let hash_name = format_ident!("{}_INTERFACE_HASH", trait_name);
     let version_name = format_ident!("{}_INTERFACE_VERSION", trait_name);
     let strategy_name = format_ident!("{}_BUFFER_STRATEGY", trait_name);

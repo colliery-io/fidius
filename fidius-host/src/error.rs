@@ -43,6 +43,9 @@ pub enum LoadError {
     #[error("buffer strategy mismatch: got {got}, expected {expected}")]
     BufferStrategyMismatch { got: u8, expected: u8 },
 
+    #[error("architecture mismatch: expected {expected}, got {got}")]
+    ArchitectureMismatch { expected: String, got: String },
+
     #[error("signature verification failed for {path}")]
     SignatureInvalid { path: String },
 

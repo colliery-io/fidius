@@ -23,7 +23,11 @@ use std::process::Command;
 fn load_cdylib_and_call_plugin() {
     // Build the test plugin cdylib
     let build = Command::new("cargo")
-        .args(["build", "--manifest-path", "../tests/test-plugin-smoke/Cargo.toml"])
+        .args([
+            "build",
+            "--manifest-path",
+            "../tests/test-plugin-smoke/Cargo.toml",
+        ])
         .output()
         .expect("failed to run cargo build");
 
@@ -35,13 +39,13 @@ fn load_cdylib_and_call_plugin() {
 
     // Load the dylib
     let dylib_path = "../tests/test-plugin-smoke/target/debug/libtest_plugin_smoke.dylib";
-    let lib = unsafe { libloading::Library::new(dylib_path) }
-        .expect("failed to load cdylib");
+    let lib = unsafe { libloading::Library::new(dylib_path) }.expect("failed to load cdylib");
 
     // Get the registry via fidius_get_registry function
-    let get_registry: libloading::Symbol<unsafe extern "C" fn() -> *const fidius_core::descriptor::PluginRegistry> =
-        unsafe { lib.get(b"fidius_get_registry") }
-            .expect("failed to find fidius_get_registry symbol");
+    let get_registry: libloading::Symbol<
+        unsafe extern "C" fn() -> *const fidius_core::descriptor::PluginRegistry,
+    > = unsafe { lib.get(b"fidius_get_registry") }
+        .expect("failed to find fidius_get_registry symbol");
 
     let registry = unsafe { &*get_registry() };
 
@@ -68,17 +72,23 @@ fn load_cdylib_and_call_plugin() {
     // The vtable has a known layout — first method is `add`
     // We need to serialize AddInput and deserialize AddOutput
     #[derive(serde::Serialize)]
-    struct AddInput { a: i64, b: i64 }
+    struct AddInput {
+        a: i64,
+        b: i64,
+    }
     #[derive(serde::Deserialize, Debug)]
-    struct AddOutput { result: i64 }
+    struct AddOutput {
+        result: i64,
+    }
 
     let input = AddInput { a: 3, b: 7 };
     let input_bytes = fidius_core::wire::serialize(&input).unwrap();
 
     // The vtable's first function pointer is `add`
     // Read it as a raw fn pointer from the vtable
-    let add_fn: unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32 =
-        unsafe { *(desc.vtable as *const unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32) };
+    let add_fn: unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32 = unsafe {
+        *(desc.vtable as *const unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32)
+    };
 
     let mut out_ptr: *mut u8 = std::ptr::null_mut();
     let mut out_len: u32 = 0;

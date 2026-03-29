@@ -145,9 +145,14 @@ fn unsigned_plugin_loads_without_signature_requirement() {
     let handle = PluginHandle::from_loaded(loaded);
 
     #[derive(serde::Serialize)]
-    struct AddInput { a: i64, b: i64 }
+    struct AddInput {
+        a: i64,
+        b: i64,
+    }
     #[derive(serde::Deserialize, Debug, PartialEq)]
-    struct AddOutput { result: i64 }
+    struct AddOutput {
+        result: i64,
+    }
 
     let output: AddOutput = handle.call_method(0, &AddInput { a: 100, b: 200 }).unwrap();
     assert_eq!(output, AddOutput { result: 300 });

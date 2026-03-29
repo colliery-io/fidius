@@ -203,11 +203,17 @@ fn hash_known_vectors() {
     // Hardcode after first run — these are the "golden" values.
     // For now, just verify determinism and distinctness.
     assert_eq!(v1, interface_hash(&["name:->String"]));
-    assert_eq!(v2, interface_hash(&["process:&[u8],Value->Result<Vec<u8>,PluginError>"]));
-    assert_eq!(v3, interface_hash(&[
-        "name:->String",
-        "process:&[u8],Value->Result<Vec<u8>,PluginError>",
-    ]));
+    assert_eq!(
+        v2,
+        interface_hash(&["process:&[u8],Value->Result<Vec<u8>,PluginError>"])
+    );
+    assert_eq!(
+        v3,
+        interface_hash(&[
+            "name:->String",
+            "process:&[u8],Value->Result<Vec<u8>,PluginError>",
+        ])
+    );
 
     // All three must be distinct
     assert_ne!(v1, v2);

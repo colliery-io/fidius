@@ -50,8 +50,8 @@ pub use fidius_macro::{plugin_impl, plugin_interface};
 
 // Re-export core types that plugin/interface authors need
 pub use fidius_core::descriptor::{
-    BufferStrategyKind, PluginDescriptor, PluginRegistry, WireFormat,
-    ABI_VERSION, FIDIUS_MAGIC, REGISTRY_VERSION,
+    BufferStrategyKind, PluginDescriptor, PluginRegistry, WireFormat, ABI_VERSION, FIDIUS_MAGIC,
+    REGISTRY_VERSION,
 };
 pub use fidius_core::error::PluginError;
 pub use fidius_core::hash::{fnv1a, interface_hash};

@@ -73,8 +73,14 @@ mod tests {
 
     #[test]
     fn order_independence() {
-        let a = interface_hash(&["process:&[u8],Value->Result<Vec<u8>,PluginError>", "name:->String"]);
-        let b = interface_hash(&["name:->String", "process:&[u8],Value->Result<Vec<u8>,PluginError>"]);
+        let a = interface_hash(&[
+            "process:&[u8],Value->Result<Vec<u8>,PluginError>",
+            "name:->String",
+        ]);
+        let b = interface_hash(&[
+            "name:->String",
+            "process:&[u8],Value->Result<Vec<u8>,PluginError>",
+        ]);
         assert_eq!(a, b);
     }
 

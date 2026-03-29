@@ -38,16 +38,11 @@ pub struct PluginInfo {
 }
 
 /// Controls how strictly the host validates plugins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LoadPolicy {
     /// Reject any validation failure, require signatures if configured.
+    #[default]
     Strict,
     /// Warn on unsigned plugins but allow loading.
     Lenient,
-}
-
-impl Default for LoadPolicy {
-    fn default() -> Self {
-        LoadPolicy::Strict
-    }
 }

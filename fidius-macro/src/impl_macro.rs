@@ -20,12 +20,27 @@
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse::Parse, parse::ParseStream, Ident, ImplItem, ItemImpl};
+use syn::{parse::Parse, parse::ParseStream, Ident, ImplItem, ItemImpl, ReturnType, Type};
 
 /// Info about an impl method, extracted from the impl block.
 struct MethodInfo<'a> {
     name: &'a Ident,
     is_async: bool,
+    returns_result: bool,
+}
+
+/// Check if a return type looks like `Result<T, ...>`.
+fn is_result_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        type_path
+            .path
+            .segments
+            .last()
+            .map(|seg| seg.ident == "Result")
+            .unwrap_or(false)
+    } else {
+        false
+    }
 }
 
 /// Arguments to `#[plugin_impl(TraitName)]`.
@@ -55,9 +70,14 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         .iter()
         .filter_map(|item| {
             if let ImplItem::Fn(method) = item {
+                let returns_result = match &method.sig.output {
+                    ReturnType::Type(_, ty) => is_result_type(ty),
+                    ReturnType::Default => false,
+                };
                 Some(MethodInfo {
                     name: &method.sig.ident,
                     is_async: method.sig.asyncness.is_some(),
+                    returns_result,
                 })
             } else {
                 None
@@ -66,7 +86,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         .collect();
 
     let method_names: Vec<&Ident> = impl_methods.iter().map(|m| m.name).collect();
-    let has_async = impl_methods.iter().any(|m| m.is_async);
+    let _has_async = impl_methods.iter().any(|m| m.is_async);
 
     // Generate shim functions
     let shims = generate_shims(&impl_ident, &impl_methods);
@@ -128,6 +148,33 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                 quote! { #instance_name.#method_name(args) }
             };
 
+            // Generate the output handling based on whether the method returns Result
+            let output_handling = if method.returns_result {
+                quote! {
+                    match output {
+                        Ok(val) => {
+                            match fidius_core::wire::serialize(&val) {
+                                Ok(v) => (v, fidius_core::status::STATUS_OK),
+                                Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                            }
+                        }
+                        Err(err) => {
+                            match fidius_core::wire::serialize(&err) {
+                                Ok(v) => (v, fidius_core::status::STATUS_PLUGIN_ERROR),
+                                Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                            }
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    match fidius_core::wire::serialize(&output) {
+                        Ok(v) => (v, fidius_core::status::STATUS_OK),
+                        Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                    }
+                }
+            };
+
             quote! {
                 unsafe extern "C" fn #shim_name(
                     in_ptr: *const u8,
@@ -144,10 +191,7 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
 
                         let output = #method_call;
 
-                        let output_bytes = match fidius_core::wire::serialize(&output) {
-                            Ok(v) => v,
-                            Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
-                        };
+                        let (output_bytes, status) = #output_handling;
 
                         let len = output_bytes.len();
                         let ptr = output_bytes.as_ptr() as *mut u8;
@@ -156,7 +200,7 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                             *out_ptr = ptr;
                             *out_len = len as u32;
                         }
-                        fidius_core::status::STATUS_OK
+                        status
                     }));
 
                     match result {
@@ -198,11 +242,7 @@ fn generate_vtable_static(
 }
 
 /// Generate the PluginDescriptor static.
-fn generate_descriptor(
-    trait_name: &Ident,
-    impl_ident: &Ident,
-    methods: &[&Ident],
-) -> TokenStream {
+fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream {
     let vtable_name = format_ident!("__FIDIUS_VTABLE_{}", impl_ident);
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
     let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
@@ -213,8 +253,11 @@ fn generate_descriptor(
     let plugin_name_const = format_ident!("__FIDIUS_PLUGIN_NAME_{}", impl_ident);
     let impl_name_str = impl_ident.to_string();
 
-    // TODO: compute capabilities from which optional methods are present
-    let capabilities = 0u64;
+    // Compute capabilities: OR the {Trait}_CAP_{METHOD} constant for each
+    // method in the impl that also appears in {Trait}_OPTIONAL_METHODS.
+    // We generate a const expression that the compiler evaluates.
+    let optional_methods_ident = format_ident!("{}_OPTIONAL_METHODS", trait_name);
+    let method_strs: Vec<String> = methods.iter().map(|m| m.to_string()).collect();
 
     quote! {
         const #plugin_name_const: &std::ffi::CStr = unsafe {
@@ -222,10 +265,42 @@ fn generate_descriptor(
         };
 
         static #descriptor_name: fidius_core::descriptor::PluginDescriptor = unsafe {
+            // Compute capabilities inline: check which impl'd methods
+            // appear in the optional methods list
+            const CAPS: u64 = {
+                let optional = #optional_methods_ident;
+                let impl_methods: &[&str] = &[#(#method_strs),*];
+                let mut caps: u64 = 0;
+                let mut opt_idx = 0;
+                while opt_idx < optional.len() {
+                    let opt_name = optional[opt_idx];
+                    let mut impl_idx = 0;
+                    while impl_idx < impl_methods.len() {
+                        let impl_name = impl_methods[impl_idx];
+                        if opt_name.len() == impl_name.len() {
+                            let ob = opt_name.as_bytes();
+                            let ib = impl_name.as_bytes();
+                            let mut j = 0;
+                            let mut eq = true;
+                            while j < ob.len() {
+                                if ob[j] != ib[j] { eq = false; }
+                                j += 1;
+                            }
+                            if eq {
+                                caps |= 1u64 << opt_idx;
+                            }
+                        }
+                        impl_idx += 1;
+                    }
+                    opt_idx += 1;
+                }
+                caps
+            };
+
             #builder_fn(
                 #plugin_name_const.as_ptr(),
                 &#vtable_name as *const _ as *const _,
-                #capabilities,
+                CAPS,
                 Some(#free_fn_name),
             )
         };
@@ -244,4 +319,3 @@ fn generate_inventory_registration(impl_ident: &Ident) -> TokenStream {
         }
     }
 }
-

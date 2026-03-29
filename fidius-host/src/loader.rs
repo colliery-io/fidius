@@ -65,6 +65,9 @@ impl std::fmt::Debug for LoadedPlugin {
 pub fn load_library(path: &Path) -> Result<LoadedLibrary, LoadError> {
     let path_str = path.display().to_string();
 
+    // Check architecture before dlopen
+    crate::arch::check_architecture(path)?;
+
     // dlopen
     let library = unsafe { Library::new(path) }.map_err(|e| {
         if e.to_string().contains("No such file") || e.to_string().contains("not found") {
