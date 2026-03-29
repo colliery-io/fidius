@@ -4,14 +4,14 @@ level: task
 title: "Implement wire format module with JSON/bincode cfg switch"
 short_code: "FIDES-T-0003"
 created_at: 2026-03-29T00:33:51.284150+00:00
-updated_at: 2026-03-29T00:33:51.284150+00:00
+updated_at: 2026-03-29T00:43:06.402003+00:00
 parent: FIDES-I-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,10 @@ initiative_id: FIDES-I-0001
 ## Objective
 
 Implement the `fides_core::wire` module that provides `serialize()` and `deserialize()` functions. In debug builds (`cfg(debug_assertions)`), these use `serde_json` for human-readable output. In release builds, they use `bincode` for compact/fast serialization. Also expose a `WIRE_FORMAT` constant so the descriptor can encode which format is in use.
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -58,4 +62,4 @@ Two `mod` blocks gated by `cfg(debug_assertions)`, each implementing the same pu
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: Implemented in `fides-core/src/wire.rs`. `WireError` uses thiserror with `From` impls for both serde_json and bincode errors. `WIRE_FORMAT` constant and serialize/deserialize functions cfg-gated. Compiles clean in dev profile.

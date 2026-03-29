@@ -7,3 +7,9 @@
 /Users/dstorey/Desktop/fides/.angreal/task_build.py
 /Users/dstorey/Desktop/fides/.angreal/task_check.py
 /Users/dstorey/Desktop/fides/.angreal/task_lint.py
+/Users/dstorey/Desktop/fides/fides-core/src/descriptor.rs
+/Users/dstorey/Desktop/fides/fides-core/src/wire.rs
+/Users/dstorey/Desktop/fides/fides-core/src/error.rs
+/Users/dstorey/Desktop/fides/fides-core/src/status.rs
+/Users/dstorey/Desktop/fides/fides-core/src/hash.rs
+/Users/dstorey/Desktop/fides/fides-core/tests/layout_and_roundtrip.rs

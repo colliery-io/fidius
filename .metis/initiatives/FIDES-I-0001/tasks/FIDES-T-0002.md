@@ -4,14 +4,14 @@ level: task
 title: "Implement repr(C) descriptor and registry types"
 short_code: "FIDES-T-0002"
 created_at: 2026-03-29T00:33:50.078790+00:00
-updated_at: 2026-03-29T00:33:50.078790+00:00
+updated_at: 2026-03-29T00:42:33.650142+00:00
 parent: FIDES-I-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,10 @@ initiative_id: FIDES-I-0001
 ## Objective
 
 Implement the `#[repr(C)]` types that form the stable ABI contract: `PluginRegistry`, `PluginDescriptor`, `BufferStrategyKind`, and the magic bytes constant. These types are read directly from dylib memory by the host, so layout correctness is critical.
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -57,4 +61,4 @@ Key considerations:
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: Implemented in `fides-core/src/descriptor.rs`. All types repr(C), Send+Sync with safety docs. Includes helper methods: `interface_name_str()`, `plugin_name_str()`, `buffer_strategy_kind()`, `wire_format_kind()`, `has_capability()`. Compiles clean.

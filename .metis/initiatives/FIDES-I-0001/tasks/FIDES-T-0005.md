@@ -4,14 +4,14 @@ level: task
 title: "Layout assertion tests and round-trip tests"
 short_code: "FIDES-T-0005"
 created_at: 2026-03-29T00:33:53.612991+00:00
-updated_at: 2026-03-29T00:33:53.612991+00:00
+updated_at: 2026-03-29T00:52:09.720386+00:00
 parent: FIDES-I-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,10 @@ initiative_id: FIDES-I-0001
 ## Objective
 
 Write the test suite for fides-core that guards ABI stability and serialization correctness. Layout assertion tests catch accidental field reordering in `#[repr(C)]` structs. Round-trip tests verify that wire format serialization produces correct output in both JSON and bincode modes. Interface hash tests verify determinism and collision resistance.
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -62,4 +66,4 @@ For wire format testing across debug/release: the `cargo test --release` invocat
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: 17 integration tests in `fides-core/tests/layout_and_roundtrip.rs` + 5 unit tests in hash module = 22 total. All pass in both debug (JSON) and release (bincode). Fixed `PluginError.details` — changed from `Option<serde_json::Value>` to `Option<String>` because bincode v1 doesn't support `deserialize_any`. Added `details_value()` accessor to parse back to Value.

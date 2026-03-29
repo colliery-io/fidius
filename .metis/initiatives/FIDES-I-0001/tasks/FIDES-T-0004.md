@@ -4,14 +4,14 @@ level: task
 title: "Implement PluginError, status codes, and FNV-1a interface hashing"
 short_code: "FIDES-T-0004"
 created_at: 2026-03-29T00:33:52.696321+00:00
-updated_at: 2026-03-29T00:33:52.696321+00:00
+updated_at: 2026-03-29T00:46:08.751819+00:00
 parent: FIDES-I-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,10 @@ initiative_id: FIDES-I-0001
 ## Objective
 
 Implement three related pieces: (1) the `PluginError` type that plugins return to signal business logic errors, (2) the status code constants used as FFI return values, and (3) the FNV-1a hashing utility that computes `interface_hash` from method signatures at compile time.
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -63,4 +67,4 @@ The function should accept a slice of signature strings, sort them, concatenate 
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: Implemented across 3 files: `error.rs` (PluginError with Serialize/Deserialize/Error/Display), `status.rs` (5 status code constants), `hash.rs` (const `fnv1a` + `interface_hash` with sort). 5 unit tests pass: empty input, known vector, order independence, sensitivity, collision resistance.

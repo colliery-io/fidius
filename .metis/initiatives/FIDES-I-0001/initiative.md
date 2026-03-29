@@ -4,14 +4,14 @@ level: initiative
 title: "fides-core — Foundation Types"
 short_code: "FIDES-I-0001"
 created_at: 2026-03-29T00:26:16.932707+00:00
-updated_at: 2026-03-29T00:40:00.306871+00:00
+updated_at: 2026-03-29T00:52:15.399648+00:00
 parent: FIDES-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
