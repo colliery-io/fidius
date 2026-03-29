@@ -4,14 +4,14 @@ level: initiative
 title: "fides-cli — Developer Tooling and Signing"
 short_code: "FIDES-I-0005"
 created_at: 2026-03-29T00:26:20.823874+00:00
-updated_at: 2026-03-29T00:26:20.823874+00:00
+updated_at: 2026-03-29T11:52:45.831914+00:00
 parent: FIDES-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

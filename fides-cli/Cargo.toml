@@ -14,3 +14,12 @@ fides-core = { path = "../fides-core" }
 fides-host = { path = "../fides-host" }
 clap = { workspace = true }
 ed25519-dalek = { workspace = true }
+ureq = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rand = "0.8"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"

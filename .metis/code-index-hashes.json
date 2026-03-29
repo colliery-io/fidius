@@ -1,6 +1,7 @@
 {
   "files": {
-    "fides-cli/src/main.rs": "87593233cb7faa6fe8a24dee1666ba0dbb8f8c1b9737e93f00b0023070bff13a",
+    "fides-cli/src/commands.rs": "00ba6be4ab138425cf90b8d971cfa25e98b97300773725bd55427776a96a5d2b",
+    "fides-cli/src/main.rs": "95e893c139f6e330b60c82d4f6e9045029207d1fda4af1fe62ec1965b91bd663",
     "fides-core/src/async_runtime.rs": "8e863613089ec4adb7332c6cf618a074436e38b3c0592e53a9359da40a3da781",
     "fides-core/src/descriptor.rs": "cac13600221d6438ccd3b1459a96d1948091ec14b4c2fab8fe52a75d95b3d344",
     "fides-core/src/error.rs": "6da137ba348ecc2f70089c87b280fe8f42e483413d6838362b22138da61d1b49",
@@ -12,11 +13,12 @@
     "fides-core/tests/layout_and_roundtrip.rs": "061b1d0d533fa1b03791ad618a54f745e5542d4745fef7dae57a3223465a9202",
     "fides-host/src/error.rs": "fb6d78658faa65878f8a728e419099a3c4fd988b33c3cf2a6e4384dbc0a4803a",
     "fides-host/src/handle.rs": "b46d5827afc41b33f7b32ee7befe75d0d15f250c122df775770e470dfeb8e7af",
-    "fides-host/src/host.rs": "ce02c26b33105bf3196cf8503067320ab45315ca429dc7d9a16085342dc0ff50",
+    "fides-host/src/host.rs": "12028a8ce37838b83aecf19afe2ebf498f690c08ca7b4c1bce8429da3e0995f7",
     "fides-host/src/lib.rs": "c57e832ba2178f13c23106499b01842ca4b36c0f718b4045311ede0fcad5483b",
-    "fides-host/src/loader.rs": "2ca911cb6c2d6edc49a859549e305e64a68d6f758af92c224be45d68af8acc7b",
+    "fides-host/src/loader.rs": "4385b2916a34a28ffafbfd02b1371643ea51d0fe32facd14a952566d49b02fc0",
     "fides-host/src/signing.rs": "9cf557e7f52bf844c572e76247b8e4a52f3b05acf5407b5343e5698bcc560756",
     "fides-host/src/types.rs": "49f52c7e6f0f1a0ec1b544f08bef0399df4d0bae2b0502444ac6a88adc6b69c8",
+    "fides-host/tests/e2e.rs": "28b4f176c1439d9c77b09bb4a531f118bf30594edfac8f1d7d0da0213ce0ad34",
     "fides-host/tests/integration.rs": "9370d791eef353d29bbd98a73694a8f8414015a63e4bf885301044dc2169ee3c",
     "fides-macro/src/impl_macro.rs": "ccc1c1795f6606373bbd93f6d152dd23089f8539822977857576794f1d3d1fc6",
     "fides-macro/src/interface.rs": "d071a27b72442e94c285eb0c19a0ef7a20e9fc5598aad0cdab781c183bb121aa",
@@ -31,7 +33,7 @@
     "fides-macro/tests/multi_plugin.rs": "90f0626ad46ac78b40fe3a626904f5ac91ae9829ebb437eaa482f33f770c802b",
     "fides-macro/tests/smoke_cdylib.rs": "f62f4be01f30293910347ca3b5fd8d53bfa5ce736981f1efc4ebcfeb78d017c1",
     "fides-macro/tests/trybuild.rs": "d2e577fb1e5919180d37894762f46835c547eecfd0b88281a1fe5c1d743490ba",
-    "fides/src/lib.rs": "3784f96322cc4e80ea4b591d1d7b9c4780ba3f0038ebbb22759532d829668727",
+    "fides/src/lib.rs": "09181f0bdcbb7a1ed8dffc330ad499fca68f5714ee6e955ede30191bb8d02322",
     "tests/test-plugin-smoke/src/lib.rs": "c5016166c91956af931a61b1e98b3e8f993060c8e4652721293e47880120d2f1"
   }
 }

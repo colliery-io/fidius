@@ -23,3 +23,4 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 thiserror = "2"
 inventory = "0.3"
 trybuild = "1"
+ureq = "3"
