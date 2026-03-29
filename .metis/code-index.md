@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T15:35:14Z | 41 files | Rust
+> Generated: 2026-03-29T15:44:15Z | 41 files | Rust
 
 ## Project Structure
 
@@ -117,7 +117,7 @@
 -  `fides_cmd` function L23-25 — `() -> Command` — Everything is generated from scratch by the CLI.
 -  `workspace_fidius_path` function L28-30 — `() -> PathBuf` — Path to the workspace root's `fidius` facade crate (for local dep resolution).
 -  `workspace_fidius_core_path` function L33-35 — `() -> PathBuf` — Path to the workspace root's `fidius-core` crate.
--  `full_pipeline_scaffold_package_build_sign_load_call` function L38-274 — `()` — Everything is generated from scratch by the CLI.
+-  `full_pipeline_scaffold_package_build_sign_load_call` function L38-276 — `()` — Everything is generated from scratch by the CLI.
 
 ### fidius-core/src
 
@@ -469,44 +469,44 @@
 
 #### fidius-macro/tests/async_plugin.rs
 
-- pub `AsyncProcessor` interface L20-22 — `{ fn process() }` — Test that async methods work with the fidius macros.
-- pub `MyProcessor` struct L24 — `-` — Test that async methods work with the fidius macros.
--  `MyProcessor` type L27-32 — `impl AsyncProcessor for MyProcessor` — Test that async methods work with the fidius macros.
--  `process` function L28-31 — `(&self, input: String) -> String` — Test that async methods work with the fidius macros.
--  `can_call_async_method_via_vtable` function L37-66 — `()` — Test that async methods work with the fidius macros.
+- pub `AsyncProcessor` interface L21-23 — `{ fn process() }` — Test that async methods work with the fidius macros.
+- pub `MyProcessor` struct L25 — `-` — Test that async methods work with the fidius macros.
+-  `MyProcessor` type L28-33 — `impl AsyncProcessor for MyProcessor` — Test that async methods work with the fidius macros.
+-  `process` function L29-32 — `(&self, input: String) -> String` — Test that async methods work with the fidius macros.
+-  `can_call_async_method_via_vtable` function L38-67 — `()` — Test that async methods work with the fidius macros.
 
 #### fidius-macro/tests/impl_basic.rs
 
-- pub `Greeter` interface L20-22 — `{ fn greet() }` — Test that #[plugin_impl] compiles and generates expected items.
-- pub `HelloGreeter` struct L24 — `-` — Test that #[plugin_impl] compiles and generates expected items.
--  `HelloGreeter` type L27-31 — `impl Greeter for HelloGreeter` — Test that #[plugin_impl] compiles and generates expected items.
--  `greet` function L28-30 — `(&self, name: String) -> String` — Test that #[plugin_impl] compiles and generates expected items.
--  `get_registry` function L36-38 — `() -> &'static fidius_core::descriptor::PluginRegistry` — Test that #[plugin_impl] compiles and generates expected items.
--  `registry_exists_and_is_valid` function L41-46 — `()` — Test that #[plugin_impl] compiles and generates expected items.
--  `descriptor_fields_are_correct` function L49-57 — `()` — Test that #[plugin_impl] compiles and generates expected items.
--  `can_call_shim_via_vtable` function L60-92 — `()` — Test that #[plugin_impl] compiles and generates expected items.
+- pub `Greeter` interface L21-23 — `{ fn greet() }` — Test that #[plugin_impl] compiles and generates expected items.
+- pub `HelloGreeter` struct L25 — `-` — Test that #[plugin_impl] compiles and generates expected items.
+-  `HelloGreeter` type L28-32 — `impl Greeter for HelloGreeter` — Test that #[plugin_impl] compiles and generates expected items.
+-  `greet` function L29-31 — `(&self, name: String) -> String` — Test that #[plugin_impl] compiles and generates expected items.
+-  `get_registry` function L37-39 — `() -> &'static fidius_core::descriptor::PluginRegistry` — Test that #[plugin_impl] compiles and generates expected items.
+-  `registry_exists_and_is_valid` function L42-47 — `()` — Test that #[plugin_impl] compiles and generates expected items.
+-  `descriptor_fields_are_correct` function L50-58 — `()` — Test that #[plugin_impl] compiles and generates expected items.
+-  `can_call_shim_via_vtable` function L61-93 — `()` — Test that #[plugin_impl] compiles and generates expected items.
 
 #### fidius-macro/tests/interface_basic.rs
 
-- pub `Greeter` interface L20-25 — `{ fn greet(), fn greet_fancy() }` — Basic test that #[plugin_interface] compiles and generates expected items.
--  `vtable_struct_exists` function L28-33 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
--  `interface_hash_is_nonzero` function L36-38 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
--  `interface_version_matches` function L41-43 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
--  `buffer_strategy_matches` function L46-48 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
--  `capability_constant_exists` function L51-54 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
+- pub `Greeter` interface L21-26 — `{ fn greet(), fn greet_fancy() }` — Basic test that #[plugin_interface] compiles and generates expected items.
+-  `vtable_struct_exists` function L29-34 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
+-  `interface_hash_is_nonzero` function L37-39 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
+-  `interface_version_matches` function L42-44 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
+-  `buffer_strategy_matches` function L47-49 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
+-  `capability_constant_exists` function L52-55 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
 
 #### fidius-macro/tests/multi_plugin.rs
 
-- pub `Greeter` interface L20-22 — `{ fn greet() }` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
-- pub `HelloGreeter` struct L25 — `-` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
-- pub `GoodbyeGreeter` struct L35 — `-` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `HelloGreeter` type L28-32 — `impl Greeter for HelloGreeter` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `greet` function L29-31 — `(&self, name: String) -> String` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `GoodbyeGreeter` type L38-42 — `impl Greeter for GoodbyeGreeter` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `greet` function L39-41 — `(&self, name: String) -> String` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `registry_has_two_plugins` function L48-53 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `both_descriptors_are_valid` function L56-76 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `can_call_both_plugins` function L79-116 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+- pub `Greeter` interface L21-23 — `{ fn greet() }` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+- pub `HelloGreeter` struct L26 — `-` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+- pub `GoodbyeGreeter` struct L36 — `-` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `HelloGreeter` type L29-33 — `impl Greeter for HelloGreeter` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `greet` function L30-32 — `(&self, name: String) -> String` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `GoodbyeGreeter` type L39-43 — `impl Greeter for GoodbyeGreeter` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `greet` function L40-42 — `(&self, name: String) -> String` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `registry_has_two_plugins` function L49-54 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `both_descriptors_are_valid` function L57-77 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `can_call_both_plugins` function L80-117 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
 
 #### fidius-macro/tests/smoke_cdylib.rs
 
