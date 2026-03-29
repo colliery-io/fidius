@@ -98,6 +98,7 @@ edition = "2021"
 
 [dependencies]
 fidius = {fidius_dep}
+fidius-core = {fidius_dep}
 "#
     );
 
@@ -167,14 +168,14 @@ fidius-core = {{ version = "0.1" }}
     let struct_name = format!("My{trait_name}");
 
     let lib_rs = format!(
-        r#"use {interface_mod}::{{plugin_impl, {trait_name}, PluginError}};
+        r#"use {interface_mod}::*;
 
 pub struct {struct_name};
 
 #[plugin_impl({trait_name})]
 impl {trait_name} for {struct_name} {{
     fn process(&self, input: String) -> String {{
-        todo!("implement {trait_name}")
+        format!("processed: {{}}", input)
     }}
 }}
 

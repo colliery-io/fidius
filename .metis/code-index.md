@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T14:44:51Z | 40 files | Rust
+> Generated: 2026-03-29T15:04:48Z | 41 files | Rust
 
 ## Project Structure
 
@@ -13,7 +13,8 @@
 │   │   ├── commands.rs
 │   │   └── main.rs
 │   └── tests/
-│       └── cli.rs
+│       ├── cli.rs
+│       └── full_pipeline.rs
 ├── fidius-core/
 │   ├── src/
 │   │   ├── async_runtime.rs
@@ -73,17 +74,17 @@
 
 #### fidius-cli/src/commands.rs
 
-- pub `init_interface` function L74-119 — `( name: &str, trait_name: &str, path: Option<&Path>, version: Option<&str>, ) ->...`
-- pub `init_plugin` function L123-190 — `( name: &str, interface: &str, trait_name: &str, path: Option<&Path>, version: O...`
-- pub `keygen` function L194-210 — `(out: &str) -> Result`
-- pub `sign` function L214-234 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `verify` function L238-273 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `inspect` function L277-297 — `(dylib_path: &Path) -> Result`
-- pub `package_validate` function L301-322 — `(dir: &Path) -> Result`
-- pub `package_build` function L326-357 — `(dir: &Path, release: bool) -> Result`
-- pub `package_inspect` function L361-386 — `(dir: &Path) -> Result`
-- pub `package_sign` function L390-396 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_verify` function L400-406 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `init_interface` function L74-120 — `( name: &str, trait_name: &str, path: Option<&Path>, version: Option<&str>, ) ->...`
+- pub `init_plugin` function L124-191 — `( name: &str, interface: &str, trait_name: &str, path: Option<&Path>, version: O...`
+- pub `keygen` function L195-211 — `(out: &str) -> Result`
+- pub `sign` function L215-235 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `verify` function L239-274 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `inspect` function L278-298 — `(dylib_path: &Path) -> Result`
+- pub `package_validate` function L302-323 — `(dir: &Path) -> Result`
+- pub `package_build` function L327-358 — `(dir: &Path, release: bool) -> Result`
+- pub `package_inspect` function L362-387 — `(dir: &Path) -> Result`
+- pub `package_sign` function L391-397 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L401-407 — `(key_path: &Path, dir: &Path) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
 -  `resolve_dep` function L30-52 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
 -  `check_crates_io` function L55-70 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
@@ -110,6 +111,13 @@
 -  `init_plugin_creates_files` function L120-152 — `()` — CLI integration tests using assert_cmd.
 -  `keygen_sign_verify_roundtrip` function L155-189 — `()` — CLI integration tests using assert_cmd.
 -  `inspect_shows_plugin_info` function L192-203 — `()` — CLI integration tests using assert_cmd.
+
+#### fidius-cli/tests/full_pipeline.rs
+
+-  `fides_cmd` function L23-25 — `() -> Command` — Everything is generated from scratch by the CLI.
+-  `workspace_fidius_path` function L28-30 — `() -> PathBuf` — Path to the workspace root's `fidius` facade crate (for local dep resolution).
+-  `workspace_fidius_core_path` function L33-35 — `() -> PathBuf` — Path to the workspace root's `fidius-core` crate.
+-  `full_pipeline_scaffold_package_build_sign_load_call` function L38-274 — `()` — Everything is generated from scratch by the CLI.
 
 ### fidius-core/src
 

@@ -1,8 +1,9 @@
 {
   "files": {
-    "fidius-cli/src/commands.rs": "2cd47937d363c4cc7d2fc78562c7fd81a895c833d2ecaebac92313a46035d759",
+    "fidius-cli/src/commands.rs": "e81327d63ed6771f437233ef574b865cc33025e8da79561ff8017ca7b4b9c2cd",
     "fidius-cli/src/main.rs": "f93a6448e8e9be935188d6bd58fdf738645861ece07336231b021d829fdd7b38",
     "fidius-cli/tests/cli.rs": "35a47028eec8a790cb42f8a5fa03e95a5292f22eac2184bed25a139769efb95f",
+    "fidius-cli/tests/full_pipeline.rs": "89d69a8333684a95a0d1d8c6d4c74fe71a8c512b834397f3a69c8ceedfd2e1f5",
     "fidius-core/src/async_runtime.rs": "4b6250b572183e7e1eab5cdb2f14fc7baf0c7ea5e3474d7bdfdb1b758dd9b0a9",
     "fidius-core/src/descriptor.rs": "fe486096c4e7671f91d2c84f853f760c8e6db7c15619f0a09d1b4fb1c0d9db7b",
     "fidius-core/src/error.rs": "7019fee345503864597d8d0a94c511ca83ff49040c642568081a1330addf2a90",
