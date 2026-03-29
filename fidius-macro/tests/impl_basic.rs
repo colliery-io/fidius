@@ -50,7 +50,7 @@ fn registry_exists_and_is_valid() {
 fn descriptor_fields_are_correct() {
     let reg = get_registry();
     let desc = unsafe { &**reg.descriptors };
-    assert_eq!(desc.abi_version, 1);
+    assert_eq!(desc.abi_version, 2);
     assert_eq!(desc.interface_hash, __fidius_Greeter::Greeter_INTERFACE_HASH);
     assert_eq!(desc.interface_version, 1);
     assert_eq!(desc.buffer_strategy, 1); // PluginAllocated

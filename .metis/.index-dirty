@@ -1,0 +1,14 @@
+/Users/dstorey/Desktop/fides/fidius-macro/src/impl_macro.rs
+/Users/dstorey/Desktop/fides/fidius-host/src/handle.rs
+/Users/dstorey/Desktop/fides/fidius-core/src/descriptor.rs
+/Users/dstorey/Desktop/fides/fidius-host/src/error.rs
+/Users/dstorey/Desktop/fides/fidius-host/src/loader.rs
+/Users/dstorey/Desktop/fides/fidius-host/src/arch.rs
+/Users/dstorey/Desktop/fides/fidius-cli/src/commands.rs
+/Users/dstorey/Desktop/fides/fidius-macro/src/interface.rs
+/Users/dstorey/Desktop/fides/fidius-core/tests/layout_and_roundtrip.rs
+/Users/dstorey/Desktop/fides/fidius-macro/tests/impl_basic.rs
+/Users/dstorey/Desktop/fides/fidius-macro/tests/multi_plugin.rs
+/Users/dstorey/Desktop/fides/fidius-macro/tests/smoke_cdylib.rs
+/Users/dstorey/Desktop/fides/fidius-host/src/host.rs
+/Users/dstorey/Desktop/fides/fidius-host/tests/e2e.rs

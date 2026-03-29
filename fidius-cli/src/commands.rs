@@ -202,6 +202,11 @@ pub fn keygen(out: &str) -> Result {
     let public_path = format!("{}.public", out);
 
     std::fs::write(&secret_path, signing_key.to_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o600))?;
+    }
     std::fs::write(&public_path, verifying_key.to_bytes())?;
 
     println!("Generated keypair:");
@@ -266,10 +271,7 @@ pub fn verify(key_path: &Path, dylib_path: &Path) -> Result {
             println!("Signature valid: {}", dylib_path.display());
             Ok(())
         }
-        Err(_) => {
-            eprintln!("Signature INVALID: {}", dylib_path.display());
-            std::process::exit(1);
-        }
+        Err(_) => Err(format!("Signature INVALID: {}", dylib_path.display()).into()),
     }
 }
 

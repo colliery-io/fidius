@@ -44,6 +44,8 @@ pub struct PluginHandle {
     free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
     /// Capability bitfield for optional method support.
     capabilities: u64,
+    /// Total number of methods in the vtable.
+    method_count: u32,
     /// Owned plugin metadata.
     info: PluginInfo,
 }
@@ -60,6 +62,7 @@ impl PluginHandle {
         vtable: *const c_void,
         free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
         capabilities: u64,
+        method_count: u32,
         info: PluginInfo,
     ) -> Self {
         Self {
@@ -67,6 +70,7 @@ impl PluginHandle {
             vtable,
             free_buffer,
             capabilities,
+            method_count,
             info,
         }
     }
@@ -78,6 +82,7 @@ impl PluginHandle {
             vtable: plugin.vtable,
             free_buffer: plugin.free_buffer,
             capabilities: plugin.info.capabilities,
+            method_count: plugin.method_count,
             info: plugin.info,
         }
     }
@@ -95,6 +100,13 @@ impl PluginHandle {
         index: usize,
         input: &I,
     ) -> Result<O, CallError> {
+        // Bounds check: ensure index is within the vtable
+        if index >= self.method_count as usize {
+            return Err(CallError::NotImplemented {
+                bit: index as u32,
+            });
+        }
+
         // Serialize input
         let input_bytes =
             wire::serialize(input).map_err(|e| CallError::Serialization(e.to_string()))?;
@@ -151,6 +163,13 @@ impl PluginHandle {
                     "unknown status code: {status}"
                 )))
             }
+        }
+
+        // Defensive check: ensure plugin set the output pointer
+        if out_ptr.is_null() {
+            return Err(CallError::Serialization(
+                "plugin returned null output buffer".into(),
+            ));
         }
 
         // Deserialize output

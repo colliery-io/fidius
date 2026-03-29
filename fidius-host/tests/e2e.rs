@@ -159,7 +159,9 @@ fn unsigned_plugin_loads_without_signature_requirement() {
 }
 
 #[test]
-fn lenient_policy_loads_unsigned_plugin_with_signature_required() {
+fn lenient_policy_still_enforces_signatures() {
+    // Lenient policy no longer bypasses signature enforcement.
+    // require_signature(true) always enforces, regardless of policy.
     let plugin_dir = build_test_plugin();
     let dylib = dylib_path(&plugin_dir);
     cleanup_sig(&dylib);
@@ -174,13 +176,16 @@ fn lenient_policy_loads_unsigned_plugin_with_signature_required() {
         .build()
         .unwrap();
 
-    // Lenient: should load despite missing signature
-    let loaded = host.load("BasicCalculator").unwrap();
-    assert_eq!(loaded.info.name, "BasicCalculator");
+    let result = host.load("BasicCalculator");
+    assert!(
+        matches!(result, Err(LoadError::SignatureRequired { .. })),
+        "Lenient should still enforce signatures: got {:?}",
+        result
+    );
 }
 
 #[test]
-fn lenient_policy_loads_with_wrong_key() {
+fn lenient_policy_still_rejects_wrong_key() {
     let plugin_dir = build_test_plugin();
     let dylib = dylib_path(&plugin_dir);
 
@@ -197,9 +202,12 @@ fn lenient_policy_loads_with_wrong_key() {
         .build()
         .unwrap();
 
-    // Lenient: should load despite wrong key (warns to stderr)
-    let loaded = host.load("BasicCalculator").unwrap();
-    assert_eq!(loaded.info.name, "BasicCalculator");
+    let result = host.load("BasicCalculator");
+    assert!(
+        matches!(result, Err(LoadError::SignatureInvalid { .. })),
+        "Lenient should still reject wrong key: got {:?}",
+        result
+    );
 
     cleanup_sig(&dylib);
 }

@@ -40,6 +40,8 @@ pub struct LoadedPlugin {
     pub vtable: *const c_void,
     /// Free function for plugin-allocated buffers.
     pub free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
+    /// Total number of methods in the vtable.
+    pub method_count: u32,
     /// Reference to the library to keep it alive.
     pub library: Arc<Library>,
 }
@@ -137,14 +139,19 @@ fn validate_descriptor(
         interface_hash: desc.interface_hash,
         interface_version: desc.interface_version,
         capabilities: desc.capabilities,
-        wire_format: desc.wire_format_kind(),
-        buffer_strategy: desc.buffer_strategy_kind(),
+        wire_format: desc
+            .wire_format_kind()
+            .map_err(|v| LoadError::UnknownWireFormat { value: v })?,
+        buffer_strategy: desc
+            .buffer_strategy_kind()
+            .map_err(|v| LoadError::UnknownBufferStrategy { value: v })?,
     };
 
     Ok(LoadedPlugin {
         info,
         vtable: desc.vtable,
         free_buffer: desc.free_buffer,
+        method_count: desc.method_count,
         library: Arc::clone(library),
     })
 }

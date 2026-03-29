@@ -50,9 +50,9 @@ fn descriptor_size_and_align() {
     // Print actual size for debugging if assertion fails
     let size = size_of::<PluginDescriptor>();
     let align = align_of::<PluginDescriptor>();
-    // 64-bit expected: 72 bytes, 8-byte aligned
+    // 64-bit expected: 80 bytes, 8-byte aligned (method_count u32 + 4 padding at end)
     assert_eq!(align, 8, "PluginDescriptor alignment");
-    assert_eq!(size, 72, "PluginDescriptor size");
+    assert_eq!(size, 80, "PluginDescriptor size");
 }
 
 #[test]
@@ -70,6 +70,7 @@ fn descriptor_field_offsets() {
     assert_eq!(offset_of!(PluginDescriptor, plugin_name), 48);
     assert_eq!(offset_of!(PluginDescriptor, vtable), 56);
     assert_eq!(offset_of!(PluginDescriptor, free_buffer), 64);
+    assert_eq!(offset_of!(PluginDescriptor, method_count), 72);
 }
 
 // ─── Layout assertions: enums ────────────────────────────────────────────────
@@ -240,5 +241,5 @@ fn magic_bytes_value() {
 #[test]
 fn version_constants() {
     assert_eq!(REGISTRY_VERSION, 1);
-    assert_eq!(ABI_VERSION, 1);
+    assert_eq!(ABI_VERSION, 2);
 }

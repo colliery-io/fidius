@@ -191,8 +191,11 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
 
                         let output = #method_call;
 
-                        let (output_bytes, status) = #output_handling;
+                        let (mut output_bytes, status) = #output_handling;
 
+                        // Ensure capacity == len so free_buffer can safely
+                        // reconstruct the Vec with capacity == len.
+                        output_bytes.shrink_to_fit();
                         let len = output_bytes.len();
                         let ptr = output_bytes.as_ptr() as *mut u8;
                         std::mem::forget(output_bytes);
@@ -257,6 +260,7 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
 
     let optional_methods_ident = format_ident!("{}_OPTIONAL_METHODS", trait_name);
     let method_strs: Vec<String> = methods.iter().map(|m| m.to_string()).collect();
+    let method_count = methods.len() as u32;
 
     quote! {
         const #plugin_name_const: &std::ffi::CStr = unsafe {
@@ -301,6 +305,7 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
                 &#vtable_name as *const _ as *const _,
                 CAPS,
                 Some(#free_fn_name),
+                #method_count,
             )
         };
     }

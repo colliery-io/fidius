@@ -227,6 +227,7 @@ fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
             vtable: *const #vtable_name,
             capabilities: u64,
             free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
+            method_count: u32,
         ) -> fidius::descriptor::PluginDescriptor {
             fidius::descriptor::PluginDescriptor {
                 abi_version: fidius::descriptor::ABI_VERSION,
@@ -239,6 +240,7 @@ fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
                 plugin_name,
                 vtable: vtable as *const std::ffi::c_void,
                 free_buffer,
+                method_count,
             }
         }
     }

@@ -25,6 +25,7 @@ use crate::signing;
 use crate::types::{LoadPolicy, PluginInfo};
 
 /// Host for loading and managing plugins.
+#[allow(dead_code)] // load_policy will be used for non-security validation (hash/version lenient)
 pub struct PluginHost {
     search_paths: Vec<PathBuf>,
     load_policy: LoadPolicy,
@@ -142,6 +143,13 @@ impl PluginHost {
                     continue;
                 }
 
+                // Verify signature before dlopen to prevent code execution from untrusted dylibs
+                if self.require_signature
+                    && signing::verify_signature(&path, &self.trusted_keys).is_err()
+                {
+                    continue;
+                }
+
                 match loader::load_library(&path) {
                     Ok(loaded) => {
                         for plugin in &loaded.plugins {
@@ -185,15 +193,9 @@ impl PluginHost {
                     continue;
                 }
 
-                // Verify signature if required
+                // Verify signature if required — always enforced regardless of LoadPolicy
                 if self.require_signature {
-                    match signing::verify_signature(&path, &self.trusted_keys) {
-                        Ok(()) => {}
-                        Err(e) if self.load_policy == LoadPolicy::Lenient => {
-                            eprintln!("fidius warning: {e}");
-                        }
-                        Err(e) => return Err(e),
-                    }
+                    signing::verify_signature(&path, &self.trusted_keys)?;
                 }
 
                 match loader::load_library(&path) {

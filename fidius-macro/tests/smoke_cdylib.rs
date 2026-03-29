@@ -56,7 +56,7 @@ fn load_cdylib_and_call_plugin() {
 
     // Read the descriptor
     let desc = unsafe { &**registry.descriptors };
-    assert_eq!(desc.abi_version, 1);
+    assert_eq!(desc.abi_version, 2);
     assert_eq!(desc.buffer_strategy, 1); // PluginAllocated
     assert!(desc.free_buffer.is_some());
 

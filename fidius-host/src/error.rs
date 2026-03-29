@@ -46,6 +46,12 @@ pub enum LoadError {
     #[error("architecture mismatch: expected {expected}, got {got}")]
     ArchitectureMismatch { expected: String, got: String },
 
+    #[error("unknown wire format discriminant: {value}")]
+    UnknownWireFormat { value: u8 },
+
+    #[error("unknown buffer strategy discriminant: {value}")]
+    UnknownBufferStrategy { value: u8 },
+
     #[error("signature verification failed for {path}")]
     SignatureInvalid { path: String },
 

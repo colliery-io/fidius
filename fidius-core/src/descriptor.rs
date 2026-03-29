@@ -27,7 +27,8 @@ pub const FIDIUS_MAGIC: [u8; 8] = *b"FIDIUS\0\0";
 pub const REGISTRY_VERSION: u32 = 1;
 
 /// Current version of the `PluginDescriptor` struct layout.
-pub const ABI_VERSION: u32 = 1;
+/// Bumped to 2 to add `method_count` field.
+pub const ABI_VERSION: u32 = 2;
 
 /// Buffer management strategy for an interface.
 ///
@@ -127,6 +128,9 @@ pub struct PluginDescriptor {
     /// Must be `Some` when `buffer_strategy == PluginAllocated`.
     /// The host calls this after reading output data to free the plugin's allocation.
     pub free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
+    /// Total number of methods in the vtable (required + optional).
+    /// Used for bounds checking in `call_method`.
+    pub method_count: u32,
 }
 
 // SAFETY: PluginDescriptor fields are either primitives, pointers to static
@@ -171,27 +175,36 @@ impl PluginDescriptor {
     }
 
     /// Returns the `buffer_strategy` field as a `BufferStrategyKind`.
-    pub fn buffer_strategy_kind(&self) -> BufferStrategyKind {
+    ///
+    /// Returns `Err(value)` if the discriminant is unknown. This can happen
+    /// with malformed plugins — callers should reject rather than panic.
+    pub fn buffer_strategy_kind(&self) -> Result<BufferStrategyKind, u8> {
         match self.buffer_strategy {
-            0 => BufferStrategyKind::CallerAllocated,
-            1 => BufferStrategyKind::PluginAllocated,
-            2 => BufferStrategyKind::Arena,
-            _ => panic!("invalid buffer_strategy value: {}", self.buffer_strategy),
+            0 => Ok(BufferStrategyKind::CallerAllocated),
+            1 => Ok(BufferStrategyKind::PluginAllocated),
+            2 => Ok(BufferStrategyKind::Arena),
+            v => Err(v),
         }
     }
 
     /// Returns the `wire_format` field as a `WireFormat`.
-    pub fn wire_format_kind(&self) -> WireFormat {
+    ///
+    /// Returns `Err(value)` if the discriminant is unknown.
+    pub fn wire_format_kind(&self) -> Result<WireFormat, u8> {
         match self.wire_format {
-            0 => WireFormat::Json,
-            1 => WireFormat::Bincode,
-            _ => panic!("invalid wire_format value: {}", self.wire_format),
+            0 => Ok(WireFormat::Json),
+            1 => Ok(WireFormat::Bincode),
+            v => Err(v),
         }
     }
 
     /// Check if the given optional method capability bit is set.
+    ///
+    /// Returns `false` for bit indices >= 64 rather than panicking.
     pub fn has_capability(&self, bit: u32) -> bool {
-        assert!(bit < 64, "capability bit must be < 64");
+        if bit >= 64 {
+            return false;
+        }
         self.capabilities & (1u64 << bit) != 0
     }
 }
