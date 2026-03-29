@@ -1,0 +1,11 @@
+[package]
+name = "fides-host"
+version = "0.1.0"
+edition = "2021"
+description = "Host-side loading and calling for the Fides plugin framework"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+fides-core = { path = "../fides-core" }
+libloading = { workspace = true }
+ed25519-dalek = { workspace = true }
