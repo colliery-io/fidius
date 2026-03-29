@@ -1,0 +1,32 @@
+# Recommended: add to markdown_extensions in mkdocs.yml
+# to hide method-level entries from the table of contents:
+#
+# markdown_extensions:
+#   - toc:
+#       toc_depth: 2
+
+nav:
+  - Rust:
+    - fidius: rust/fidius.md
+    - fidius-cli: rust/fidius-cli.md
+    - fidius-cli::commands: rust/fidius-cli/commands.md
+    - fidius-core: rust/fidius-core.md
+    - fidius-core::async_runtime: rust/fidius-core/async_runtime.md
+    - fidius-core::descriptor: rust/fidius-core/descriptor.md
+    - fidius-core::error: rust/fidius-core/error.md
+    - fidius-core::hash: rust/fidius-core/hash.md
+    - fidius-core::registry: rust/fidius-core/registry.md
+    - fidius-core::status: rust/fidius-core/status.md
+    - fidius-core::wire: rust/fidius-core/wire.md
+    - fidius-host: rust/fidius-host.md
+    - fidius-host::arch: rust/fidius-host/arch.md
+    - fidius-host::error: rust/fidius-host/error.md
+    - fidius-host::handle: rust/fidius-host/handle.md
+    - fidius-host::host: rust/fidius-host/host.md
+    - fidius-host::loader: rust/fidius-host/loader.md
+    - fidius-host::signing: rust/fidius-host/signing.md
+    - fidius-host::types: rust/fidius-host/types.md
+    - fidius-macro: rust/fidius-macro.md
+    - fidius-macro::impl_macro: rust/fidius-macro/impl_macro.md
+    - fidius-macro::interface: rust/fidius-macro/interface.md
+    - fidius-macro::ir: rust/fidius-macro/ir.md

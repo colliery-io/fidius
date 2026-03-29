@@ -1,0 +1,17 @@
+[project]
+name = "fidius"
+version_from = "cargo"
+
+[output]
+format = "markdown"
+path = "docs/api"
+template = "mkdocs-material"
+
+[rust]
+crates = [
+    "fidius-core",
+    "fidius-macro",
+    "fidius-host",
+    "fidius-cli",
+    "fidius",
+]

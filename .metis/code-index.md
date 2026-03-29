@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T12:48:24Z | 37 files | Rust
+> Generated: 2026-03-29T12:57:35Z | 37 files | Rust
 
 ## Project Structure
 
@@ -260,23 +260,23 @@
 
 #### fidius-host/src/host.rs
 
-- pub `PluginHost` struct L28-36 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
-- pub `PluginHostBuilder` struct L39-47 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
-- pub `search_path` function L63-66 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
-- pub `load_policy` function L69-72 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
-- pub `require_signature` function L75-78 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
-- pub `trusted_keys` function L81-84 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
-- pub `interface_hash` function L87-90 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
-- pub `wire_format` function L93-96 — `(mut self, format: WireFormat) -> Self` — Set the expected wire format for validation.
-- pub `buffer_strategy` function L99-102 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
-- pub `build` function L105-115 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
-- pub `builder` function L120-122 — `() -> PluginHostBuilder` — Create a new builder.
-- pub `discover` function L128-167 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
-- pub `load` function L173-215 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
--  `PluginHostBuilder` type L49-116 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
--  `new` function L50-60 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L118-216 — `= PluginHost` — PluginHost builder and plugin discovery.
--  `is_dylib` function L219-228 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+- pub `PluginHost` struct L29-37 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
+- pub `PluginHostBuilder` struct L40-48 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
+- pub `search_path` function L64-67 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
+- pub `load_policy` function L70-73 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
+- pub `require_signature` function L76-79 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
+- pub `trusted_keys` function L82-85 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
+- pub `interface_hash` function L88-91 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
+- pub `wire_format` function L94-97 — `(mut self, format: WireFormat) -> Self` — Set the expected wire format for validation.
+- pub `buffer_strategy` function L100-103 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
+- pub `build` function L106-116 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
+- pub `builder` function L121-123 — `() -> PluginHostBuilder` — Create a new builder.
+- pub `discover` function L129-168 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
+- pub `load` function L174-216 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+-  `PluginHostBuilder` type L50-117 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
+-  `new` function L51-61 — `() -> Self` — PluginHost builder and plugin discovery.
+-  `PluginHost` type L119-217 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L220-229 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### fidius-host/src/lib.rs
 
@@ -314,9 +314,7 @@
 #### fidius-host/src/types.rs
 
 - pub `PluginInfo` struct L23-38 — `{ name: String, interface_name: String, interface_hash: u64, interface_version: ...` — Owned metadata for a discovered or loaded plugin.
-- pub `LoadPolicy` enum L42-47 — `Strict | Lenient` — Controls how strictly the host validates plugins.
--  `LoadPolicy` type L49-53 — `impl Default for LoadPolicy` — Owned metadata types for loaded plugins.
--  `default` function L50-52 — `() -> Self` — Owned metadata types for loaded plugins.
+- pub `LoadPolicy` enum L42-48 — `Strict | Lenient` — Controls how strictly the host validates plugins.
 
 ### fidius-host/tests
 
@@ -376,28 +374,28 @@
 
 #### fidius-macro/src/ir.rs
 
-- pub `InterfaceAttrs` struct L31-34 — `{ version: u32, buffer_strategy: BufferStrategyAttr }` — Parsed attributes from `#[plugin_interface(version = N, buffer = Strategy)]`.
-- pub `BufferStrategyAttr` enum L37-41 — `CallerAllocated | PluginAllocated | Arena` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
-- pub `InterfaceIR` struct L95-101 — `{ trait_name: Ident, attrs: InterfaceAttrs, methods: Vec<MethodIR>, original_tra...` — Full IR for a parsed interface trait.
-- pub `MethodIR` struct L106-121 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
-- pub `is_required` function L125-127 — `(&self) -> bool` — Whether this is a required (non-optional) method.
-- pub `parse_interface` function L215-269 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
--  `InterfaceAttrs` type L43-91 — `impl Parse for InterfaceAttrs` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse` function L44-90 — `(input: ParseStream) -> syn::Result<Self>` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `MethodIR` type L123-128 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_optional_attr` function L131-149 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
--  `build_signature_string` function L152-171 — `(method: &TraitItemFn) -> String` — Build the canonical signature string for a method.
--  `extract_arg_names` function L174-191 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
--  `extract_arg_types` function L194-204 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
--  `extract_return_type` function L207-212 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
--  `tests` module L272-371 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_test_trait` function L276-283 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `basic_trait_parsing` function L286-303 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `optional_method_parsing` function L306-319 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `async_method_detection` function L322-332 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `rejects_mut_self` function L335-350 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `signature_string_format` function L353-363 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `interface_attrs_parsing` function L366-370 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+- pub `InterfaceAttrs` struct L30-33 — `{ version: u32, buffer_strategy: BufferStrategyAttr }` — Parsed attributes from `#[plugin_interface(version = N, buffer = Strategy)]`.
+- pub `BufferStrategyAttr` enum L36-40 — `CallerAllocated | PluginAllocated | Arena` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+- pub `InterfaceIR` struct L94-100 — `{ trait_name: Ident, attrs: InterfaceAttrs, methods: Vec<MethodIR>, original_tra...` — Full IR for a parsed interface trait.
+- pub `MethodIR` struct L105-120 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
+- pub `is_required` function L124-126 — `(&self) -> bool` — Whether this is a required (non-optional) method.
+- pub `parse_interface` function L214-268 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
+-  `InterfaceAttrs` type L42-90 — `impl Parse for InterfaceAttrs` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse` function L43-89 — `(input: ParseStream) -> syn::Result<Self>` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `MethodIR` type L122-127 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_optional_attr` function L130-148 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
+-  `build_signature_string` function L151-170 — `(method: &TraitItemFn) -> String` — Build the canonical signature string for a method.
+-  `extract_arg_names` function L173-190 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
+-  `extract_arg_types` function L193-203 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
+-  `extract_return_type` function L206-211 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
+-  `tests` module L271-370 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_test_trait` function L275-282 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `basic_trait_parsing` function L285-302 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `optional_method_parsing` function L305-318 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `async_method_detection` function L321-331 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `rejects_mut_self` function L334-349 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `signature_string_format` function L352-362 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `interface_attrs_parsing` function L365-369 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 
 #### fidius-macro/src/lib.rs
 
