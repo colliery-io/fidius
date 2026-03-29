@@ -161,3 +161,46 @@ fn load_nonexistent_plugin_returns_not_found() {
     let result = host.load("DoesNotExist");
     assert!(matches!(result, Err(LoadError::PluginNotFound { .. })));
 }
+
+#[test]
+fn out_of_bounds_vtable_index_returns_error() {
+    let plugin_dir = build_test_plugin();
+
+    let host = PluginHost::builder()
+        .search_path(&plugin_dir)
+        .build()
+        .unwrap();
+
+    let loaded = host.load("BasicCalculator").unwrap();
+    let handle = PluginHandle::from_loaded(loaded);
+
+    #[derive(serde::Serialize)]
+    struct Dummy;
+
+    // Index 99 is way past the vtable — should return NotImplemented
+    let result = handle.call_method::<Dummy, String>(99, &Dummy);
+    assert!(
+        matches!(result, Err(fidius_host::CallError::NotImplemented { .. })),
+        "expected NotImplemented for OOB index, got {:?}",
+        result
+    );
+}
+
+#[test]
+fn has_capability_returns_false_for_high_bits() {
+    let plugin_dir = build_test_plugin();
+
+    let host = PluginHost::builder()
+        .search_path(&plugin_dir)
+        .build()
+        .unwrap();
+
+    let loaded = host.load("BasicCalculator").unwrap();
+    let handle = PluginHandle::from_loaded(loaded);
+
+    // Bit 63 should return false, not panic
+    assert!(!handle.has_capability(63));
+    // Bit 64+ should also return false (was a panic before)
+    assert!(!handle.has_capability(64));
+    assert!(!handle.has_capability(100));
+}

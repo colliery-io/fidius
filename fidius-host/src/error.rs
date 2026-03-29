@@ -37,11 +37,17 @@ pub enum LoadError {
     #[error("interface hash mismatch: got {got:#x}, expected {expected:#x}")]
     InterfaceHashMismatch { got: u64, expected: u64 },
 
-    #[error("wire format mismatch: got {got}, expected {expected}")]
-    WireFormatMismatch { got: u8, expected: u8 },
+    #[error("wire format mismatch: plugin uses {got}, host expects {expected}. Ensure both are built with the same profile.")]
+    WireFormatMismatch {
+        got: fidius_core::descriptor::WireFormat,
+        expected: fidius_core::descriptor::WireFormat,
+    },
 
-    #[error("buffer strategy mismatch: got {got}, expected {expected}")]
-    BufferStrategyMismatch { got: u8, expected: u8 },
+    #[error("buffer strategy mismatch: plugin uses {got}, host expects {expected}")]
+    BufferStrategyMismatch {
+        got: fidius_core::descriptor::BufferStrategyKind,
+        expected: fidius_core::descriptor::BufferStrategyKind,
+    },
 
     #[error("architecture mismatch: expected {expected}, got {got}")]
     ArchitectureMismatch { expected: String, got: String },
@@ -80,12 +86,15 @@ pub enum CallError {
     #[error("plugin error: {0}")]
     Plugin(PluginError),
 
-    #[error("plugin panicked during method call")]
-    Panic,
+    #[error("plugin panicked: {0}")]
+    Panic(String),
 
     #[error("buffer too small")]
     BufferTooSmall,
 
     #[error("method not implemented (capability bit {bit} not set)")]
     NotImplemented { bit: u32 },
+
+    #[error("unknown FFI status code: {code}")]
+    UnknownStatus { code: i32 },
 }

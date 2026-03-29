@@ -60,6 +60,25 @@ pub enum WireFormat {
     Bincode = 1,
 }
 
+impl std::fmt::Display for BufferStrategyKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BufferStrategyKind::CallerAllocated => write!(f, "CallerAllocated"),
+            BufferStrategyKind::PluginAllocated => write!(f, "PluginAllocated"),
+            BufferStrategyKind::Arena => write!(f, "Arena"),
+        }
+    }
+}
+
+impl std::fmt::Display for WireFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WireFormat::Json => write!(f, "Json (debug build)"),
+            WireFormat::Bincode => write!(f, "Bincode (release build)"),
+        }
+    }
+}
+
 /// Top-level registry exported by every Fidius plugin dylib.
 ///
 /// Each dylib exports exactly one `FIDIUS_PLUGIN_REGISTRY` static symbol

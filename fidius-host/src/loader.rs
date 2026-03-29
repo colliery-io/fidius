@@ -67,6 +67,9 @@ impl std::fmt::Debug for LoadedPlugin {
 pub fn load_library(path: &Path) -> Result<LoadedLibrary, LoadError> {
     let path_str = path.display().to_string();
 
+    #[cfg(feature = "tracing")]
+    tracing::debug!(path = %path_str, "loading library");
+
     // Check architecture before dlopen
     crate::arch::check_architecture(path)?;
 
@@ -175,8 +178,8 @@ pub fn validate_against_interface(
     if let Some(wire) = expected_wire {
         if plugin.info.wire_format != wire {
             return Err(LoadError::WireFormatMismatch {
-                got: plugin.info.wire_format as u8,
-                expected: wire as u8,
+                got: plugin.info.wire_format,
+                expected: wire,
             });
         }
     }
@@ -184,8 +187,8 @@ pub fn validate_against_interface(
     if let Some(strategy) = expected_strategy {
         if plugin.info.buffer_strategy != strategy {
             return Err(LoadError::BufferStrategyMismatch {
-                got: plugin.info.buffer_strategy as u8,
-                expected: strategy as u8,
+                got: plugin.info.buffer_strategy,
+                expected: strategy,
             });
         }
     }

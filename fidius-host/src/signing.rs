@@ -20,6 +20,16 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 use crate::error::LoadError;
 
+/// Compute the detached signature file path for a given file.
+///
+/// Appends `.sig` to the full filename (e.g., `foo.dylib` → `foo.dylib.sig`).
+pub fn sig_path_for(path: &Path) -> std::path::PathBuf {
+    path.with_extension(format!(
+        "{}.sig",
+        path.extension().and_then(|e| e.to_str()).unwrap_or("")
+    ))
+}
+
 /// Verify a plugin dylib's signature against trusted public keys.
 ///
 /// Reads the dylib bytes and the detached `.sig` file, then verifies
@@ -27,19 +37,11 @@ use crate::error::LoadError;
 ///
 /// # Errors
 ///
-/// - `LoadError::SignatureRequired` if the `.sig` file doesn't exist
-/// - `LoadError::SignatureInvalid` if no trusted key verifies the signature
+/// - `LoadError::SignatureRequired` — if the `.sig` file doesn't exist
+/// - `LoadError::SignatureInvalid` — if no trusted key verifies the signature
 pub fn verify_signature(dylib_path: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), LoadError> {
     let path_str = dylib_path.display().to_string();
-
-    // Build the .sig path
-    let sig_path = dylib_path.with_extension(format!(
-        "{}.sig",
-        dylib_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-    ));
+    let sig_path = sig_path_for(dylib_path);
 
     // Read the sig file
     let sig_bytes = std::fs::read(&sig_path).map_err(|e| {

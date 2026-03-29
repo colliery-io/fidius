@@ -127,6 +127,9 @@ impl PluginHost {
     /// Scans directories for dylib files, loads each, validates,
     /// and returns metadata for all valid plugins found.
     pub fn discover(&self) -> Result<Vec<PluginInfo>, LoadError> {
+        #[cfg(feature = "tracing")]
+        tracing::info!(search_paths = ?self.search_paths, "discovering plugins");
+
         let mut plugins = Vec::new();
 
         for search_path in &self.search_paths {
@@ -179,6 +182,9 @@ impl PluginHost {
     /// Searches all configured paths for a dylib containing a plugin
     /// with the given name. Returns the loaded plugin ready for calling.
     pub fn load(&self, name: &str) -> Result<LoadedPlugin, LoadError> {
+        #[cfg(feature = "tracing")]
+        tracing::info!(plugin_name = name, "loading plugin");
+
         for search_path in &self.search_paths {
             if !search_path.is_dir() {
                 continue;

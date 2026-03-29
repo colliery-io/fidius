@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T15:44:15Z | 41 files | Rust
+> Generated: 2026-03-29T17:09:31Z | 41 files | Rust
 
 ## Project Structure
 
@@ -76,15 +76,15 @@
 
 - pub `init_interface` function L74-120 — `( name: &str, trait_name: &str, path: Option<&Path>, version: Option<&str>, ) ->...`
 - pub `init_plugin` function L124-191 — `( name: &str, interface: &str, trait_name: &str, path: Option<&Path>, version: O...`
-- pub `keygen` function L195-211 — `(out: &str) -> Result`
-- pub `sign` function L215-235 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `verify` function L239-274 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `inspect` function L278-298 — `(dylib_path: &Path) -> Result`
-- pub `package_validate` function L302-323 — `(dir: &Path) -> Result`
-- pub `package_build` function L327-358 — `(dir: &Path, release: bool) -> Result`
-- pub `package_inspect` function L362-387 — `(dir: &Path) -> Result`
-- pub `package_sign` function L391-397 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_verify` function L401-407 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `keygen` function L195-216 — `(out: &str) -> Result`
+- pub `sign` function L220-240 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `verify` function L244-276 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `inspect` function L280-300 — `(dylib_path: &Path) -> Result`
+- pub `package_validate` function L304-325 — `(dir: &Path) -> Result`
+- pub `package_build` function L329-360 — `(dir: &Path, release: bool) -> Result`
+- pub `package_inspect` function L364-389 — `(dir: &Path) -> Result`
+- pub `package_sign` function L393-399 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L403-409 — `(key_path: &Path, dir: &Path) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
 -  `resolve_dep` function L30-52 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
 -  `check_crates_io` function L55-70 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
@@ -131,24 +131,24 @@
 
 - pub `FIDIUS_MAGIC` variable L24 — `: [u8; 8]` — Magic bytes identifying a Fidius plugin registry.
 - pub `REGISTRY_VERSION` variable L27 — `: u32` — Current version of the `PluginRegistry` struct layout.
-- pub `ABI_VERSION` variable L30 — `: u32` — Current version of the `PluginDescriptor` struct layout.
-- pub `BufferStrategyKind` enum L38-47 — `CallerAllocated | PluginAllocated | Arena` — Buffer management strategy for an interface.
-- pub `WireFormat` enum L55-60 — `Json | Bincode` — Wire serialization format.
-- pub `PluginRegistry` struct L74-83 — `{ magic: [u8; 8], registry_version: u32, plugin_count: u32, descriptors: *const ...` — Top-level registry exported by every Fidius plugin dylib.
-- pub `PluginDescriptor` struct L106-130 — `{ abi_version: u32, interface_name: *const c_char, interface_hash: u64, interfac...` — Metadata descriptor for a single plugin within a dylib.
-- pub `DescriptorPtr` struct L144 — `-` — A `Sync` wrapper for a raw pointer to a `PluginDescriptor`.
-- pub `interface_name_str` function L157-160 — `(&self) -> &str` — Read the `interface_name` field as a Rust `&str`.
-- pub `plugin_name_str` function L168-171 — `(&self) -> &str` — Read the `plugin_name` field as a Rust `&str`.
-- pub `buffer_strategy_kind` function L174-181 — `(&self) -> BufferStrategyKind` — Returns the `buffer_strategy` field as a `BufferStrategyKind`.
-- pub `wire_format_kind` function L184-190 — `(&self) -> WireFormat` — Returns the `wire_format` field as a `WireFormat`.
-- pub `has_capability` function L193-196 — `(&self, bit: u32) -> bool` — Check if the given optional method capability bit is set.
--  `PluginRegistry` type L88 — `impl Send for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginRegistry` type L89 — `impl Sync for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginDescriptor` type L135 — `impl Send for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginDescriptor` type L136 — `impl Sync for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `DescriptorPtr` type L147 — `impl Send for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `DescriptorPtr` type L148 — `impl Sync for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginDescriptor` type L150-197 — `= PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+- pub `ABI_VERSION` variable L31 — `: u32` — Current version of the `PluginDescriptor` struct layout.
+- pub `BufferStrategyKind` enum L39-48 — `CallerAllocated | PluginAllocated | Arena` — Buffer management strategy for an interface.
+- pub `WireFormat` enum L56-61 — `Json | Bincode` — Wire serialization format.
+- pub `PluginRegistry` struct L75-84 — `{ magic: [u8; 8], registry_version: u32, plugin_count: u32, descriptors: *const ...` — Top-level registry exported by every Fidius plugin dylib.
+- pub `PluginDescriptor` struct L107-134 — `{ abi_version: u32, interface_name: *const c_char, interface_hash: u64, interfac...` — Metadata descriptor for a single plugin within a dylib.
+- pub `DescriptorPtr` struct L148 — `-` — A `Sync` wrapper for a raw pointer to a `PluginDescriptor`.
+- pub `interface_name_str` function L161-164 — `(&self) -> &str` — Read the `interface_name` field as a Rust `&str`.
+- pub `plugin_name_str` function L172-175 — `(&self) -> &str` — Read the `plugin_name` field as a Rust `&str`.
+- pub `buffer_strategy_kind` function L181-188 — `(&self) -> Result<BufferStrategyKind, u8>` — Returns the `buffer_strategy` field as a `BufferStrategyKind`.
+- pub `wire_format_kind` function L193-199 — `(&self) -> Result<WireFormat, u8>` — Returns the `wire_format` field as a `WireFormat`.
+- pub `has_capability` function L204-209 — `(&self, bit: u32) -> bool` — Check if the given optional method capability bit is set.
+-  `PluginRegistry` type L89 — `impl Send for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginRegistry` type L90 — `impl Sync for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginDescriptor` type L139 — `impl Send for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginDescriptor` type L140 — `impl Sync for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `DescriptorPtr` type L151 — `impl Send for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `DescriptorPtr` type L152 — `impl Sync for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginDescriptor` type L154-210 — `= PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
 
 #### fidius-core/src/error.rs
 
@@ -238,22 +238,22 @@
 -  `registry_size_and_align` function L32-36 — `()` — and interface hash determinism.
 -  `registry_field_offsets` function L39-44 — `()` — and interface hash determinism.
 -  `descriptor_size_and_align` function L49-56 — `()` — and interface hash determinism.
--  `descriptor_field_offsets` function L59-73 — `()` — and interface hash determinism.
--  `buffer_strategy_kind_layout` function L78-83 — `()` — and interface hash determinism.
--  `wire_format_layout` function L86-90 — `()` — and interface hash determinism.
--  `status_code_values` function L95-101 — `()` — and interface hash determinism.
--  `TestPayload` struct L106-110 — `{ name: String, value: i64, tags: Vec<String> }` — and interface hash determinism.
--  `wire_roundtrip` function L113-123 — `()` — and interface hash determinism.
--  `wire_debug_produces_json` function L126-141 — `()` — and interface hash determinism.
--  `wire_release_produces_bincode` function L144-161 — `()` — and interface hash determinism.
--  `plugin_error_roundtrip_without_details` function L166-173 — `()` — and interface hash determinism.
--  `plugin_error_roundtrip_with_details` function L176-183 — `()` — and interface hash determinism.
--  `plugin_error_display` function L186-189 — `()` — and interface hash determinism.
--  `hash_known_vectors` function L194-222 — `()` — and interface hash determinism.
--  `hash_const_fnv1a` function L225-230 — `()` — and interface hash determinism.
--  `HASH` variable L227 — `: u64` — and interface hash determinism.
--  `magic_bytes_value` function L235-238 — `()` — and interface hash determinism.
--  `version_constants` function L241-244 — `()` — and interface hash determinism.
+-  `descriptor_field_offsets` function L59-74 — `()` — and interface hash determinism.
+-  `buffer_strategy_kind_layout` function L79-84 — `()` — and interface hash determinism.
+-  `wire_format_layout` function L87-91 — `()` — and interface hash determinism.
+-  `status_code_values` function L96-102 — `()` — and interface hash determinism.
+-  `TestPayload` struct L107-111 — `{ name: String, value: i64, tags: Vec<String> }` — and interface hash determinism.
+-  `wire_roundtrip` function L114-124 — `()` — and interface hash determinism.
+-  `wire_debug_produces_json` function L127-142 — `()` — and interface hash determinism.
+-  `wire_release_produces_bincode` function L145-162 — `()` — and interface hash determinism.
+-  `plugin_error_roundtrip_without_details` function L167-174 — `()` — and interface hash determinism.
+-  `plugin_error_roundtrip_with_details` function L177-184 — `()` — and interface hash determinism.
+-  `plugin_error_display` function L187-190 — `()` — and interface hash determinism.
+-  `hash_known_vectors` function L195-223 — `()` — and interface hash determinism.
+-  `hash_const_fnv1a` function L226-231 — `()` — and interface hash determinism.
+-  `HASH` variable L228 — `: u64` — and interface hash determinism.
+-  `magic_bytes_value` function L236-239 — `()` — and interface hash determinism.
+-  `version_constants` function L242-245 — `()` — and interface hash determinism.
 
 ### fidius-host/src
 
@@ -264,55 +264,55 @@
 - pub `BinaryInfo` struct L26-29 — `{ format: BinaryFormat, arch: Arch }` — Detected binary format and architecture.
 - pub `BinaryFormat` enum L32-37 — `Elf | MachO | Pe | Unknown` — architecture before attempting to dlopen.
 - pub `Arch` enum L40-44 — `X86_64 | Aarch64 | Unknown` — architecture before attempting to dlopen.
-- pub `detect_architecture` function L68-135 — `(path: &Path) -> Result<BinaryInfo, LoadError>` — Detect the binary format and architecture of a file.
-- pub `check_architecture` function L138-173 — `(path: &Path) -> Result<(), LoadError>` — Check that a dylib matches the current platform's expected format.
+- pub `detect_architecture` function L68-147 — `(path: &Path) -> Result<BinaryInfo, LoadError>` — Detect the binary format and architecture of a file.
+- pub `check_architecture` function L150-185 — `(path: &Path) -> Result<(), LoadError>` — Check that a dylib matches the current platform's expected format.
 -  `BinaryFormat` type L46-55 — `= BinaryFormat` — architecture before attempting to dlopen.
 -  `fmt` function L47-54 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — architecture before attempting to dlopen.
 -  `Arch` type L57-65 — `= Arch` — architecture before attempting to dlopen.
 -  `fmt` function L58-64 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — architecture before attempting to dlopen.
--  `tests` module L176-231 — `-` — architecture before attempting to dlopen.
--  `detects_elf` function L180-192 — `()` — architecture before attempting to dlopen.
--  `detects_macho_le` function L195-207 — `()` — architecture before attempting to dlopen.
--  `detects_pe` function L210-219 — `()` — architecture before attempting to dlopen.
--  `unknown_format` function L222-230 — `()` — architecture before attempting to dlopen.
+-  `tests` module L188-243 — `-` — architecture before attempting to dlopen.
+-  `detects_elf` function L192-204 — `()` — architecture before attempting to dlopen.
+-  `detects_macho_le` function L207-219 — `()` — architecture before attempting to dlopen.
+-  `detects_pe` function L222-231 — `()` — architecture before attempting to dlopen.
+-  `unknown_format` function L234-242 — `()` — architecture before attempting to dlopen.
 
 #### fidius-host/src/error.rs
 
-- pub `LoadError` enum L21-63 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
-- pub `CallError` enum L67-85 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
+- pub `LoadError` enum L21-69 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
+- pub `CallError` enum L73-91 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
 
 #### fidius-host/src/handle.rs
 
-- pub `PluginHandle` struct L38-49 — `{ _library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exte...` — A handle to a loaded plugin, ready for calling methods.
-- pub `new` function L58-72 — `( library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exter...` — Create a new PluginHandle from a loaded plugin.
-- pub `from_loaded` function L75-83 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a PluginHandle from a LoadedPlugin.
-- pub `call_method` function L93-167 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `has_capability` function L170-173 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L176-178 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `PluginHandle` struct L38-51 — `{ _library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exte...` — A handle to a loaded plugin, ready for calling methods.
+- pub `new` function L60-76 — `( library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exter...` — Create a new PluginHandle from a loaded plugin.
+- pub `from_loaded` function L79-88 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a PluginHandle from a LoadedPlugin.
+- pub `call_method` function L98-186 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `has_capability` function L189-192 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L195-197 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
 -  `FfiFn` type L32 — `= unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32` — Type alias for the PluginAllocated FFI function pointer signature.
--  `PluginHandle` type L53 — `impl Send for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L54 — `impl Sync for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L56-179 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `PluginHandle` type L55 — `impl Send for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `PluginHandle` type L56 — `impl Sync for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `PluginHandle` type L58-198 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
 
 #### fidius-host/src/host.rs
 
-- pub `PluginHost` struct L28-36 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
-- pub `PluginHostBuilder` struct L39-47 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
-- pub `search_path` function L63-66 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
-- pub `load_policy` function L69-72 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
-- pub `require_signature` function L75-78 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
-- pub `trusted_keys` function L81-84 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
-- pub `interface_hash` function L87-90 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
-- pub `wire_format` function L93-96 — `(mut self, format: WireFormat) -> Self` — Set the expected wire format for validation.
-- pub `buffer_strategy` function L99-102 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
-- pub `build` function L105-115 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
-- pub `builder` function L120-122 — `() -> PluginHostBuilder` — Create a new builder.
-- pub `discover` function L128-167 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
-- pub `load` function L173-221 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
--  `PluginHostBuilder` type L49-116 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
--  `new` function L50-60 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L118-222 — `= PluginHost` — PluginHost builder and plugin discovery.
--  `is_dylib` function L225-234 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+- pub `PluginHost` struct L29-37 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
+- pub `PluginHostBuilder` struct L40-48 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
+- pub `search_path` function L64-67 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
+- pub `load_policy` function L70-73 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
+- pub `require_signature` function L76-79 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
+- pub `trusted_keys` function L82-85 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
+- pub `interface_hash` function L88-91 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
+- pub `wire_format` function L94-97 — `(mut self, format: WireFormat) -> Self` — Set the expected wire format for validation.
+- pub `buffer_strategy` function L100-103 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
+- pub `build` function L106-116 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
+- pub `builder` function L121-123 — `() -> PluginHostBuilder` — Create a new builder.
+- pub `discover` function L129-175 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
+- pub `load` function L181-223 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+-  `PluginHostBuilder` type L50-117 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
+-  `new` function L51-61 — `() -> Self` — PluginHost builder and plugin discovery.
+-  `PluginHost` type L119-224 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L227-236 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### fidius-host/src/lib.rs
 
@@ -328,14 +328,14 @@
 #### fidius-host/src/loader.rs
 
 - pub `LoadedLibrary` struct L28-33 — `{ library: Arc<Library>, plugins: Vec<LoadedPlugin> }` — A loaded plugin library with validated descriptors.
-- pub `LoadedPlugin` struct L36-45 — `{ info: PluginInfo, vtable: *const c_void, free_buffer: Option<unsafe extern "C"...` — A single validated plugin from a loaded library.
-- pub `load_library` function L65-115 — `(path: &Path) -> Result<LoadedLibrary, LoadError>` — Load a plugin library from a path.
-- pub `validate_against_interface` function L153-187 — `( plugin: &LoadedPlugin, expected_hash: Option<u64>, expected_wire: Option<WireF...` — Validate a loaded plugin against expected interface parameters.
--  `LoadedPlugin` type L49 — `impl Send for LoadedPlugin` — Core plugin loading and descriptor validation.
--  `LoadedPlugin` type L50 — `impl Sync for LoadedPlugin` — Core plugin loading and descriptor validation.
--  `LoadedPlugin` type L52-59 — `= LoadedPlugin` — Core plugin loading and descriptor validation.
--  `fmt` function L53-58 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — Core plugin loading and descriptor validation.
--  `validate_descriptor` function L118-150 — `( desc: &PluginDescriptor, library: &Arc<Library>, ) -> Result<LoadedPlugin, Loa...` — Validate a single descriptor and copy to owned types.
+- pub `LoadedPlugin` struct L36-47 — `{ info: PluginInfo, vtable: *const c_void, free_buffer: Option<unsafe extern "C"...` — A single validated plugin from a loaded library.
+- pub `load_library` function L67-117 — `(path: &Path) -> Result<LoadedLibrary, LoadError>` — Load a plugin library from a path.
+- pub `validate_against_interface` function L160-194 — `( plugin: &LoadedPlugin, expected_hash: Option<u64>, expected_wire: Option<WireF...` — Validate a loaded plugin against expected interface parameters.
+-  `LoadedPlugin` type L51 — `impl Send for LoadedPlugin` — Core plugin loading and descriptor validation.
+-  `LoadedPlugin` type L52 — `impl Sync for LoadedPlugin` — Core plugin loading and descriptor validation.
+-  `LoadedPlugin` type L54-61 — `= LoadedPlugin` — Core plugin loading and descriptor validation.
+-  `fmt` function L55-60 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — Core plugin loading and descriptor validation.
+-  `validate_descriptor` function L120-157 — `( desc: &PluginDescriptor, library: &Arc<Library>, ) -> Result<LoadedPlugin, Loa...` — Validate a single descriptor and copy to owned types.
 
 #### fidius-host/src/package.rs
 
@@ -375,8 +375,8 @@
 -  `unsigned_plugin_loads_without_signature_requirement` function L134-159 — `()` — End-to-end validation tests: signing, negative cases.
 -  `AddInput` struct L148-151 — `{ a: i64, b: i64 }` — End-to-end validation tests: signing, negative cases.
 -  `AddOutput` struct L153-155 — `{ result: i64 }` — End-to-end validation tests: signing, negative cases.
--  `lenient_policy_loads_unsigned_plugin_with_signature_required` function L162-180 — `()` — End-to-end validation tests: signing, negative cases.
--  `lenient_policy_loads_with_wrong_key` function L183-205 — `()` — End-to-end validation tests: signing, negative cases.
+-  `lenient_policy_still_enforces_signatures` function L162-185 — `()` — End-to-end validation tests: signing, negative cases.
+-  `lenient_policy_still_rejects_wrong_key` function L188-213 — `()` — End-to-end validation tests: signing, negative cases.
 
 #### fidius-host/tests/integration.rs
 
@@ -417,10 +417,10 @@
 -  `is_result_type` function L33-44 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
 -  `PluginImplAttrs` type L51-56 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
 -  `parse` function L52-55 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `generate_shims` function L131-216 — `(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L222-243 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L246-307 — `(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L310-320 — `(impl_ident: &Ident) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+-  `generate_shims` function L131-219 — `(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream` — Generate extern "C" shim functions for each method.
+-  `generate_vtable_static` function L225-246 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L249-312 — `(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L315-325 — `(impl_ident: &Ident) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### fidius-macro/src/interface.rs
 
@@ -428,7 +428,7 @@
 -  `strip_optional_attrs` function L27-37 — `(item: &ItemTrait) -> ItemTrait` — Strip `#[optional(...)]` attributes from trait methods so the emitted trait compiles.
 -  `generate_vtable` function L76-141 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
 -  `generate_constants` function L144-193 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
--  `generate_descriptor_builder` function L196-245 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
+-  `generate_descriptor_builder` function L196-247 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
 
 #### fidius-macro/src/ir.rs
 

@@ -208,7 +208,27 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
 
                     match result {
                         Ok(status) => status,
-                        Err(_) => fidius::status::STATUS_PANIC,
+                        Err(panic_payload) => {
+                            // Extract panic message and serialize into output buffer
+                            let msg = panic_payload
+                                .downcast_ref::<&str>()
+                                .map(|s| s.to_string())
+                                .or_else(|| panic_payload.downcast_ref::<String>().cloned())
+                                .unwrap_or_else(|| "unknown panic".to_string());
+
+                            if let Ok(msg_bytes) = fidius::wire::serialize(&msg) {
+                                let mut msg_bytes = msg_bytes;
+                                msg_bytes.shrink_to_fit();
+                                let len = msg_bytes.len();
+                                let ptr = msg_bytes.as_ptr() as *mut u8;
+                                std::mem::forget(msg_bytes);
+                                unsafe {
+                                    *out_ptr = ptr;
+                                    *out_len = len as u32;
+                                }
+                            }
+                            fidius::status::STATUS_PANIC
+                        }
                     }
                 }
             }

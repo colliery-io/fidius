@@ -116,6 +116,9 @@ pub fn build_package(dir: &Path, release: bool) -> Result<PathBuf, PackageError>
         }
     }
 
-    // Return the target dir even if we can't find the specific dylib
-    Ok(target_dir)
+    Err(PackageError::BuildFailed(format!(
+        "build succeeded but no .{} file found in {}",
+        dylib_ext,
+        target_dir.display()
+    )))
 }

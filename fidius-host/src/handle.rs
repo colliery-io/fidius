@@ -56,8 +56,9 @@ unsafe impl Send for PluginHandle {}
 unsafe impl Sync for PluginHandle {}
 
 impl PluginHandle {
-    /// Create a new PluginHandle from a loaded plugin.
-    pub fn new(
+    /// Create a new PluginHandle. Crate-private — use `from_loaded()` instead.
+    #[allow(dead_code)]
+    pub(crate) fn new(
         library: Arc<Library>,
         vtable: *const c_void,
         free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
@@ -157,12 +158,22 @@ impl PluginHandle {
                     "plugin returned error but no error data",
                 )));
             }
-            STATUS_PANIC => return Err(CallError::Panic),
-            _ => {
-                return Err(CallError::Serialization(format!(
-                    "unknown status code: {status}"
-                )))
+            STATUS_PANIC => {
+                // Try to extract panic message from output buffer
+                let msg = if !out_ptr.is_null() && out_len > 0 {
+                    let slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let msg = wire::deserialize::<String>(slice)
+                        .unwrap_or_else(|_| "unknown panic".into());
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+                    msg
+                } else {
+                    "unknown panic".into()
+                };
+                return Err(CallError::Panic(msg));
             }
+            _ => return Err(CallError::UnknownStatus { code: status }),
         }
 
         // Defensive check: ensure plugin set the output pointer
@@ -186,8 +197,12 @@ impl PluginHandle {
     }
 
     /// Check if an optional method is supported (capability bit is set).
+    ///
+    /// Returns `false` for bit indices >= 64 rather than panicking.
     pub fn has_capability(&self, bit: u32) -> bool {
-        assert!(bit < 64, "capability bit must be < 64");
+        if bit >= 64 {
+            return false;
+        }
         self.capabilities & (1u64 << bit) != 0
     }
 

@@ -57,7 +57,7 @@ fn check_crates_io(name: &str) -> Option<String> {
     let mut response = ureq::get(&url)
         .header(
             "User-Agent",
-            "fidius-cli (https://github.com/fidius-rs/fidius)",
+            "fidius-cli (https://github.com/colliery-io/fidius)",
         )
         .call()
         .ok()?;
@@ -87,8 +87,9 @@ pub fn init_interface(
     let src_dir = crate_dir.join("src");
     std::fs::create_dir_all(&src_dir)?;
 
-    // Resolve fidius dependency
+    // Resolve fidius dependencies independently
     let fidius_dep = resolve_dep("fidius", version);
+    let fidius_core_dep = resolve_dep("fidius-core", version);
 
     let cargo_toml = format!(
         r#"[package]
@@ -98,7 +99,7 @@ edition = "2021"
 
 [dependencies]
 fidius = {fidius_dep}
-fidius-core = {fidius_dep}
+fidius-core = {fidius_core_dep}
 "#
     );
 
@@ -138,8 +139,9 @@ pub fn init_plugin(
     let src_dir = crate_dir.join("src");
     std::fs::create_dir_all(&src_dir)?;
 
-    // Resolve interface dependency
+    // Resolve dependencies
     let interface_dep = resolve_dep(interface, version);
+    let fidius_core_dep = resolve_dep("fidius-core", version);
 
     // Extract the crate name from the interface value (strip path components)
     let interface_crate = Path::new(interface)
@@ -161,7 +163,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 {interface_crate} = {interface_dep}
-fidius-core = {{ version = "0.1" }}
+fidius-core = {fidius_core_dep}
 "#
     );
 

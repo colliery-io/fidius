@@ -6,6 +6,9 @@ description = "Host-side loading and calling for the Fidius plugin framework"
 license = "Apache-2.0"
 repository = "https://github.com/colliery-io/fidius"
 
+[features]
+tracing = ["dep:tracing"]
+
 [dependencies]
 fidius-core = { path = "../fidius-core", version = "0.0.0-alpha.1" }
 libloading = { workspace = true }
@@ -13,6 +16,7 @@ ed25519-dalek = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = "3"
