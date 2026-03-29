@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T15:08:37Z | 41 files | Rust
+> Generated: 2026-03-29T15:35:14Z | 41 files | Rust
 
 ## Project Structure
 
@@ -418,17 +418,17 @@
 -  `PluginImplAttrs` type L51-56 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
 -  `parse` function L52-55 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
 -  `generate_shims` function L131-216 — `(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L222-242 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L245-308 — `(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L311-321 — `(impl_ident: &Ident) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+-  `generate_vtable_static` function L222-243 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L246-307 — `(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L310-320 — `(impl_ident: &Ident) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### fidius-macro/src/interface.rs
 
-- pub `generate_interface` function L40-68 — `(ir: &InterfaceIR) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_interface]` invocation.
+- pub `generate_interface` function L40-73 — `(ir: &InterfaceIR) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_interface]` invocation.
 -  `strip_optional_attrs` function L27-37 — `(item: &ItemTrait) -> ItemTrait` — Strip `#[optional(...)]` attributes from trait methods so the emitted trait compiles.
--  `generate_vtable` function L71-136 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
--  `generate_constants` function L139-188 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
--  `generate_descriptor_builder` function L191-240 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
+-  `generate_vtable` function L76-141 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
+-  `generate_constants` function L144-193 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
+-  `generate_descriptor_builder` function L196-245 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
 
 #### fidius-macro/src/ir.rs
 

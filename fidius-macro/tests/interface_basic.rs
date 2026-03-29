@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //! Basic test that #[plugin_interface] compiles and generates expected items.
+extern crate fidius;
 
 use fidius_macro::plugin_interface;
 

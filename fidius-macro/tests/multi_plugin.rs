@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //! Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+extern crate fidius;
 
 use fidius_macro::{plugin_impl, plugin_interface};
 

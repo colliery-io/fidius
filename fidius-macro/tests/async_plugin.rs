@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //! Test that async methods work with the fidius macros.
+extern crate fidius;
 
 use fidius_macro::{plugin_impl, plugin_interface};
 

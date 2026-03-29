@@ -227,14 +227,14 @@ fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
             vtable: *const #vtable_name,
             capabilities: u64,
             free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
-        ) -> fidius_core::descriptor::PluginDescriptor {
-            fidius_core::descriptor::PluginDescriptor {
-                abi_version: fidius_core::descriptor::ABI_VERSION,
+        ) -> fidius::descriptor::PluginDescriptor {
+            fidius::descriptor::PluginDescriptor {
+                abi_version: fidius::descriptor::ABI_VERSION,
                 interface_name: #interface_name_cstr_ident.as_ptr(),
                 interface_hash: #hash_name,
                 interface_version: #version_name,
                 capabilities,
-                wire_format: fidius_core::wire::WIRE_FORMAT as u8,
+                wire_format: fidius::wire::WIRE_FORMAT as u8,
                 buffer_strategy: #strategy_name,
                 plugin_name,
                 vtable: vtable as *const std::ffi::c_void,

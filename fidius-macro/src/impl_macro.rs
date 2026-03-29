@@ -140,7 +140,7 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
             // The method call — either sync or async via block_on
             let method_call = if method.is_async {
                 quote! {
-                    fidius_core::async_runtime::FIDIUS_RUNTIME.block_on(
+                    fidius::async_runtime::FIDIUS_RUNTIME.block_on(
                         #instance_name.#method_name(args)
                     )
                 }
@@ -153,24 +153,24 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                 quote! {
                     match output {
                         Ok(val) => {
-                            match fidius_core::wire::serialize(&val) {
-                                Ok(v) => (v, fidius_core::status::STATUS_OK),
-                                Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                            match fidius::wire::serialize(&val) {
+                                Ok(v) => (v, fidius::status::STATUS_OK),
+                                Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
                             }
                         }
                         Err(err) => {
-                            match fidius_core::wire::serialize(&err) {
-                                Ok(v) => (v, fidius_core::status::STATUS_PLUGIN_ERROR),
-                                Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                            match fidius::wire::serialize(&err) {
+                                Ok(v) => (v, fidius::status::STATUS_PLUGIN_ERROR),
+                                Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
                             }
                         }
                     }
                 }
             } else {
                 quote! {
-                    match fidius_core::wire::serialize(&output) {
-                        Ok(v) => (v, fidius_core::status::STATUS_OK),
-                        Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                    match fidius::wire::serialize(&output) {
+                        Ok(v) => (v, fidius::status::STATUS_OK),
+                        Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
                     }
                 }
             };
@@ -184,9 +184,9 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                 ) -> i32 {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
-                        let args = match fidius_core::wire::deserialize(in_slice) {
+                        let args = match fidius::wire::deserialize(in_slice) {
                             Ok(v) => v,
-                            Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                            Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
                         };
 
                         let output = #method_call;
@@ -205,7 +205,7 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
 
                     match result {
                         Ok(status) => status,
-                        Err(_) => fidius_core::status::STATUS_PANIC,
+                        Err(_) => fidius::status::STATUS_PANIC,
                     }
                 }
             }
@@ -263,7 +263,7 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
             std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#impl_name_str, "\0").as_bytes())
         };
 
-        static #descriptor_name: fidius_core::descriptor::PluginDescriptor = unsafe {
+        static #descriptor_name: fidius::descriptor::PluginDescriptor = unsafe {
             // Compute capabilities inline: check which impl'd methods
             // appear in the optional methods list
             const CAPS: u64 = {
@@ -311,8 +311,8 @@ fn generate_inventory_registration(impl_ident: &Ident) -> TokenStream {
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
 
     quote! {
-        fidius_core::inventory::submit! {
-            fidius_core::registry::DescriptorEntry {
+        fidius::inventory::submit! {
+            fidius::registry::DescriptorEntry {
                 descriptor: &#descriptor_name,
             }
         }

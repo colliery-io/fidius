@@ -16,6 +16,7 @@ proc-macro2 = { workspace = true }
 fidius-core = { path = "../fidius-core", version = "0.0.0-alpha.1" }
 
 [dev-dependencies]
+fidius = { path = "../fidius", version = "0.0.0-alpha.1", features = ["async"] }
 fidius-core = { path = "../fidius-core", version = "0.0.0-alpha.1", features = ["async"] }
 tokio = { workspace = true }
 trybuild = { workspace = true }

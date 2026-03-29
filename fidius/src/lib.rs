@@ -48,15 +48,23 @@
 // Re-export macros
 pub use fidius_macro::{plugin_impl, plugin_interface};
 
-// Re-export core types that plugin/interface authors need
+// Re-export modules so generated code can use fidius::descriptor::, fidius::status::, etc.
+pub use fidius_core::descriptor;
+pub use fidius_core::error;
+pub use fidius_core::hash;
+pub use fidius_core::status;
+pub use fidius_core::wire;
+
+// Also re-export key types at the crate root for convenience
 pub use fidius_core::descriptor::{
     BufferStrategyKind, PluginDescriptor, PluginRegistry, WireFormat, ABI_VERSION, FIDIUS_MAGIC,
     REGISTRY_VERSION,
 };
 pub use fidius_core::error::PluginError;
 pub use fidius_core::hash::{fnv1a, interface_hash};
-pub use fidius_core::status::*;
-pub use fidius_core::wire;
+
+#[cfg(feature = "async")]
+pub use fidius_core::async_runtime;
 
 // Re-export inventory so fidius_plugin_registry!() works via fidius_core
 pub use fidius_core::inventory;

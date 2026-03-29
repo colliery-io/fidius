@@ -113,9 +113,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 test-api = {{ path = "{}" }}
+fidius = {{ path = "{}" }}
 fidius-core = {{ path = "{}" }}
 "#,
             iface_dir.display(),
+            fidius_path.display(),
             workspace_fidius_core_path().display(),
         ),
     )

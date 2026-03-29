@@ -7,6 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+fidius = { path = "../../fidius", features = ["async"] }
 fidius-core = { path = "../../fidius-core", features = ["async"] }
 fidius-macro = { path = "../../fidius-macro" }
 serde = { version = "1", features = ["derive"] }
