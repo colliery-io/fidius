@@ -11,7 +11,7 @@ pub enum LoadError {
     #[error("symbol 'fidius_get_registry' not found in {path}")]
     SymbolNotFound { path: String },
 
-    #[error("invalid magic bytes (expected FIDES\\0\\0\\0)")]
+    #[error("invalid magic bytes (expected FIDIUS\\0\\0)")]
     InvalidMagic,
 
     #[error("incompatible registry version: got {got}, expected {expected}")]
