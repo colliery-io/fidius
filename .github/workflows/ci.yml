@@ -31,17 +31,18 @@ jobs:
       - run: cargo fmt --all -- --check
 
   test:
-    name: Test (${{ matrix.profile }})
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }}, ${{ matrix.profile }})
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest]
         profile: [dev, release]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.profile }}
+          key: ${{ matrix.os }}-${{ matrix.profile }}
       - name: Run tests
         run: |
           if [ "${{ matrix.profile }}" = "release" ]; then

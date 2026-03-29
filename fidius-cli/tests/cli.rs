@@ -38,6 +38,16 @@ fn build_test_plugin() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/test-plugin-smoke/target/debug")
 }
 
+fn smoke_dylib_name() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "libtest_plugin_smoke.dylib"
+    } else if cfg!(target_os = "windows") {
+        "test_plugin_smoke.dll"
+    } else {
+        "libtest_plugin_smoke.so"
+    }
+}
+
 #[test]
 fn help_works() {
     fidius_cmd()
@@ -156,7 +166,7 @@ fn keygen_sign_verify_roundtrip() {
     let tmp = TempDir::new().unwrap();
     let key_base = tmp.path().join("testkey");
     let plugin_dir = build_test_plugin();
-    let dylib = plugin_dir.join("libtest_plugin_smoke.dylib");
+    let dylib = plugin_dir.join(smoke_dylib_name());
 
     // Keygen
     fidius_cmd()
@@ -185,13 +195,14 @@ fn keygen_sign_verify_roundtrip() {
         .stdout(predicate::str::contains("Signature valid"));
 
     // Cleanup sig
-    let _ = std::fs::remove_file(dylib.with_extension("dylib.sig"));
+    let sig_ext = format!("{}.sig", dylib.extension().unwrap().to_str().unwrap());
+    let _ = std::fs::remove_file(dylib.with_extension(sig_ext));
 }
 
 #[test]
 fn inspect_shows_plugin_info() {
     let plugin_dir = build_test_plugin();
-    let dylib = plugin_dir.join("libtest_plugin_smoke.dylib");
+    let dylib = plugin_dir.join(smoke_dylib_name());
 
     fidius_cmd()
         .args(["inspect", dylib.to_str().unwrap()])
