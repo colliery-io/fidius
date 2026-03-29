@@ -1,17 +1,17 @@
----
+em ---
 id: smoke-test-compile-and-load-a-real
 level: task
 title: "Smoke test — compile and load a real cdylib plugin"
 short_code: "FIDES-T-0012"
 created_at: 2026-03-29T00:53:38.360267+00:00
-updated_at: 2026-03-29T00:53:38.360267+00:00
+updated_at: 2026-03-29T01:13:35.951618+00:00
 parent: FIDES-I-0002
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -27,6 +27,8 @@ initiative_id: FIDES-I-0002
 ## Objective
 
 Build a minimal end-to-end proof: define a trait with `#[plugin_interface]`, implement it with `#[plugin_impl]`, compile to a cdylib, then use `libloading` to dlopen it and verify the `FIDES_PLUGIN_REGISTRY` is correct. This is not the full fides-host integration (that's FIDES-I-0003/I-0004) — just a raw dlsym smoke test to prove the macro output is a valid, loadable plugin.
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -64,4 +66,4 @@ Alternative: use a build script to pre-compile the cdylib and just load it in th
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: Full pipeline proven. test-plugin-smoke cdylib with Calculator trait (add + optional multiply). smoke_cdylib test: builds cdylib via subprocess, dlopen, dlsym("fides_get_registry"), reads registry (magic, version, count), reads descriptor (abi_version, buffer_strategy, interface/plugin names), calls add(3,7) through vtable, verifies result=10, frees buffer. All passing.

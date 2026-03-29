@@ -1,0 +1,5 @@
+error: CallerAllocated buffer strategy is not yet supported
+ --> tests/compile_fail/unsupported_buffer.rs:4:11
+  |
+4 | pub trait BadPlugin: Send + Sync {
+  |           ^^^^^^^^^

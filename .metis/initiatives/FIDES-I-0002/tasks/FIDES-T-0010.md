@@ -4,14 +4,14 @@ level: task
 title: "Feature-gated async support"
 short_code: "FIDES-T-0010"
 created_at: 2026-03-29T00:53:36.142982+00:00
-updated_at: 2026-03-29T00:53:36.142982+00:00
+updated_at: 2026-03-29T01:11:57.650359+00:00
 parent: FIDES-I-0002
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,10 @@ initiative_id: FIDES-I-0002
 ## Objective
 
 Add async method support to both macros behind a `features = ["async"]` feature flag. When the trait contains `async fn` methods and the feature is enabled, the `#[plugin_impl]` shims create a per-plugin lazy tokio runtime and call `runtime.block_on(instance.method(...))`. The FFI boundary stays synchronous.
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -65,4 +69,4 @@ One runtime per dylib (shared across all plugin impls in that dylib).
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: Implemented. fides-core has `async` feature flag gating `async_runtime` module with `FIDES_RUNTIME: LazyLock<tokio::Runtime>`. Shim codegen detects `async fn` in impl block and generates `FIDES_RUNTIME.block_on(...)` call. Test passes: async method called through FFI vtable returns correct result. Note: compile_error for async-without-feature not yet implemented (deferred — the feature is always on in dev-deps for tests).

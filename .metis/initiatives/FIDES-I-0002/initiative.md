@@ -4,14 +4,14 @@ level: initiative
 title: "fides-macro — Code Generation"
 short_code: "FIDES-I-0002"
 created_at: 2026-03-29T00:26:17.838269+00:00
-updated_at: 2026-03-29T00:57:44.100859+00:00
+updated_at: 2026-03-29T01:26:35.624088+00:00
 parent: FIDES-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

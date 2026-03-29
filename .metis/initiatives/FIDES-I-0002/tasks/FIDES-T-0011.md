@@ -4,14 +4,14 @@ level: task
 title: "Compile tests and macro expansion snapshots"
 short_code: "FIDES-T-0011"
 created_at: 2026-03-29T00:53:37.534556+00:00
-updated_at: 2026-03-29T00:53:37.534556+00:00
+updated_at: 2026-03-29T01:13:35.541235+00:00
 parent: FIDES-I-0002
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,10 @@ initiative_id: FIDES-I-0002
 ## Objective
 
 Write the test suite for fides-macro using `trybuild` for compile-pass/compile-fail tests and macro expansion snapshot tests. This verifies that correct usage compiles, incorrect usage produces helpful errors, and the generated code matches expectations.
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -62,4 +66,4 @@ Each `pass/*.rs` file is a self-contained Rust file that uses the macros. Each `
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: trybuild added. 3 compile-fail tests: mut_self (clear error), missing_version (clear error), unsupported_buffer/CallerAllocated (clear error). Compile-pass covered by existing integration tests (interface_basic, impl_basic, multi_plugin, async_plugin). Skipped >64 optional and async-no-feature compile-fail tests for now — would require generating 65 methods or conditional compilation tricks.

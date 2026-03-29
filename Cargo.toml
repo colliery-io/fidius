@@ -6,6 +6,7 @@ members = [
     "fides-cli",
     "fides",
 ]
+exclude = ["tests/test-plugin-smoke"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -20,3 +21,5 @@ ed25519-dalek = { version = "2", features = ["std", "rand_core"] }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 thiserror = "2"
+inventory = "0.3"
+trybuild = "1"

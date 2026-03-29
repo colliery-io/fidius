@@ -76,10 +76,38 @@ fn generate_vtable(ir: &InterfaceIR) -> TokenStream {
         })
         .collect();
 
+    // Constructor function that takes bare fn pointers and wraps optional ones in Some()
+    let constructor_name = format_ident!("new_{}_vtable", ir.trait_name.to_string().to_lowercase());
+
+    let fn_type = quote! {
+        unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32
+    };
+
+    let param_names: Vec<&proc_macro2::Ident> = ir.methods.iter().map(|m| &m.name).collect();
+    let params: Vec<TokenStream> = ir.methods.iter().map(|m| {
+        let name = &m.name;
+        quote! { #name: #fn_type }
+    }).collect();
+
+    let field_assigns: Vec<TokenStream> = ir.methods.iter().map(|m| {
+        let name = &m.name;
+        if m.optional_since.is_some() {
+            quote! { #name: Some(#name) }
+        } else {
+            quote! { #name: #name }
+        }
+    }).collect();
+
     quote! {
         #[repr(C)]
         pub struct #vtable_name {
             #(#fields,)*
+        }
+
+        pub const fn #constructor_name(#(#params),*) -> #vtable_name {
+            #vtable_name {
+                #(#field_assigns,)*
+            }
         }
     }
 }
@@ -124,11 +152,20 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
         })
         .collect();
 
+    let optional_names_ident = format_ident!("{}_OPTIONAL_METHODS", trait_name);
+    let optional_names: Vec<String> = ir
+        .methods
+        .iter()
+        .filter(|m| m.optional_since.is_some())
+        .map(|m| m.name.to_string())
+        .collect();
+
     quote! {
         pub const #hash_name: u64 = #hash_value;
         pub const #version_name: u32 = #version_val;
         pub const #strategy_name: u8 = #strategy_val;
         #(#cap_constants)*
+        pub const #optional_names_ident: &[&str] = &[#(#optional_names),*];
     }
 }
 

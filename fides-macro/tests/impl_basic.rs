@@ -16,16 +16,25 @@ impl Greeter for HelloGreeter {
     }
 }
 
+// Emit the registry export
+fides_core::fides_plugin_registry!();
+
+fn get_registry() -> &'static fides_core::descriptor::PluginRegistry {
+    fides_core::registry::get_registry()
+}
+
 #[test]
 fn registry_exists_and_is_valid() {
-    assert_eq!(&FIDES_PLUGIN_REGISTRY.magic, b"FIDES\0\0\0");
-    assert_eq!(FIDES_PLUGIN_REGISTRY.registry_version, 1);
-    assert_eq!(FIDES_PLUGIN_REGISTRY.plugin_count, 1);
+    let reg = get_registry();
+    assert_eq!(&reg.magic, b"FIDES\0\0\0");
+    assert_eq!(reg.registry_version, 1);
+    assert_eq!(reg.plugin_count, 1);
 }
 
 #[test]
 fn descriptor_fields_are_correct() {
-    let desc = unsafe { &**FIDES_PLUGIN_REGISTRY.descriptors };
+    let reg = get_registry();
+    let desc = unsafe { &**reg.descriptors };
     assert_eq!(desc.abi_version, 1);
     assert_eq!(desc.interface_hash, Greeter_INTERFACE_HASH);
     assert_eq!(desc.interface_version, 1);
@@ -35,7 +44,8 @@ fn descriptor_fields_are_correct() {
 
 #[test]
 fn can_call_shim_via_vtable() {
-    let desc = unsafe { &**FIDES_PLUGIN_REGISTRY.descriptors };
+    let reg = get_registry();
+    let desc = unsafe { &**reg.descriptors };
     let vtable = unsafe { &*(desc.vtable as *const Greeter_VTable) };
 
     // Serialize the input argument

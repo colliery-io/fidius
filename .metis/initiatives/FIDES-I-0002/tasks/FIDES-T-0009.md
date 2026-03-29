@@ -4,14 +4,14 @@ level: task
 title: "Multi-plugin registry assembly"
 short_code: "FIDES-T-0009"
 created_at: 2026-03-29T00:53:35.325306+00:00
-updated_at: 2026-03-29T00:53:35.325306+00:00
+updated_at: 2026-03-29T01:09:09.746646+00:00
 parent: FIDES-I-0002
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,10 @@ initiative_id: FIDES-I-0002
 ## Objective
 
 Enable multiple `#[plugin_impl]` invocations in a single cdylib to produce a single `FIDES_PLUGIN_REGISTRY` that points to all descriptors. T-0008 handles the single-plugin case; this task adds the multi-plugin mechanism.
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -70,4 +74,4 @@ The `fides-core` crate needs a `registry` module that provides the global descri
 
 ## Status Updates
 
-*To be added during implementation*
+- **2026-03-29**: Went with `inventory` crate (not `ctor`) — cleaner, more portable. Each `#[plugin_impl]` does `inventory::submit!(DescriptorEntry{...})`. User calls `fides_plugin_registry!()` once to emit `fides_get_registry()` export. Registry built lazily via `OnceLock`. Spec change: host calls `dlsym("fides_get_registry")` function instead of reading a static symbol. Re-exported `inventory` from fides-core so consumers don't need it as a direct dep. 3 multi-plugin tests pass (registry count, descriptor validity, calling both plugins).

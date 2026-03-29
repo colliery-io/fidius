@@ -1,0 +1,12 @@
+[package]
+name = "test-plugin-smoke"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fides-core = { path = "../../fides-core", features = ["async"] }
+fides-macro = { path = "../../fides-macro" }
+serde = { version = "1", features = ["derive"] }

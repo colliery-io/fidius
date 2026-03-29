@@ -6,3 +6,14 @@
 /Users/dstorey/Desktop/fides/fides-macro/src/impl_macro.rs
 /Users/dstorey/Desktop/fides/fides-macro/tests/impl_basic.rs
 /Users/dstorey/Desktop/fides/fides-core/src/descriptor.rs
+/Users/dstorey/Desktop/fides/fides-core/src/registry.rs
+/Users/dstorey/Desktop/fides/fides-core/src/lib.rs
+/Users/dstorey/Desktop/fides/fides-macro/tests/multi_plugin.rs
+/Users/dstorey/Desktop/fides/fides-core/src/async_runtime.rs
+/Users/dstorey/Desktop/fides/fides-macro/tests/async_plugin.rs
+/Users/dstorey/Desktop/fides/fides-macro/tests/compile_fail/mut_self.rs
+/Users/dstorey/Desktop/fides/fides-macro/tests/compile_fail/missing_version.rs
+/Users/dstorey/Desktop/fides/fides-macro/tests/compile_fail/unsupported_buffer.rs
+/Users/dstorey/Desktop/fides/fides-macro/tests/trybuild.rs
+/Users/dstorey/Desktop/fides/tests/test-plugin-smoke/src/lib.rs
+/Users/dstorey/Desktop/fides/fides-macro/tests/smoke_cdylib.rs
