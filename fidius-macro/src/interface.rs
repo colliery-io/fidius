@@ -58,15 +58,23 @@ pub fn generate_interface(ir: &InterfaceIR) -> syn::Result<TokenStream> {
     let vtable = generate_vtable(ir);
     let constants = generate_constants(ir);
     let descriptor_builder = generate_descriptor_builder(ir);
+    let method_indices = generate_method_indices(ir);
     let companion_mod = format_ident!("__fidius_{}", ir.trait_name);
 
     Ok(quote! {
         #cleaned_trait
-        #[allow(non_snake_case, non_upper_case_globals)]
+        /// Generated companion module for the plugin interface.
+        ///
+        /// Contains the VTable struct, interface hash, capability constants,
+        /// vtable constructor, descriptor builder, method index constants,
+        /// and a typed `Client` struct for host-side calling.
+        /// Method indices follow trait declaration order (0-based).
+        #[allow(non_snake_case, non_upper_case_globals, dead_code)]
         pub mod #companion_mod {
             use super::*;
             #vtable
             #constants
+            #method_indices
             #descriptor_builder
         }
     })
@@ -242,6 +250,121 @@ fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
                 free_buffer,
                 method_count,
             }
+        }
+    }
+}
+
+/// Generate method index constants.
+fn generate_method_indices(ir: &InterfaceIR) -> TokenStream {
+    let indices: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let const_name = format_ident!("METHOD_{}", m.name.to_string().to_uppercase());
+            let doc = format!("Vtable index for `{}`.", m.name);
+            quote! {
+                #[doc = #doc]
+                pub const #const_name: usize = #i;
+            }
+        })
+        .collect();
+
+    quote! { #(#indices)* }
+}
+
+// NOTE: Typed client generation deferred — requires fidius-host types
+// which the interface crate doesn't depend on. Method index constants
+// provide the key benefit: named indices instead of magic numbers.
+#[allow(dead_code)]
+fn _generate_client_deferred(ir: &InterfaceIR) -> TokenStream {
+    let trait_name = &ir.trait_name;
+    let client_name = format_ident!("{}Client", trait_name);
+
+    let methods: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let method_name = &m.name;
+            let index = i;
+
+            // Get arg types (excluding &self)
+            let arg_types = &m.arg_types;
+            let arg_names = &m.arg_names;
+
+            // Get return type
+            let ret_type = match &m.return_type {
+                Some(ty) => quote! { #ty },
+                None => quote! { () },
+            };
+
+            // For optional methods, check capability first
+            let cap_check = if m.optional_since.is_some() {
+                let cap_bit = ir.methods.iter()
+                    .filter(|mm| mm.optional_since.is_some())
+                    .position(|mm| mm.name == m.name)
+                    .unwrap_or(0) as u32;
+                quote! {
+                    if !self.handle.has_capability(#cap_bit) {
+                        return Err(fidius_host::CallError::NotImplemented { bit: #cap_bit });
+                    }
+                }
+            } else {
+                quote! {}
+            };
+
+            if arg_types.len() == 1 {
+                // Single arg — pass directly
+                let arg_type = &arg_types[0];
+                let arg_name = &arg_names[0];
+                quote! {
+                    pub fn #method_name(&self, #arg_name: &#arg_type) -> Result<#ret_type, fidius_host::CallError> {
+                        #cap_check
+                        self.handle.call_method(#index, #arg_name)
+                    }
+                }
+            } else if arg_types.is_empty() {
+                // No args — pass unit
+                quote! {
+                    pub fn #method_name(&self) -> Result<#ret_type, fidius_host::CallError> {
+                        #cap_check
+                        self.handle.call_method(#index, &())
+                    }
+                }
+            } else {
+                // Multiple args — pass as tuple
+                quote! {
+                    pub fn #method_name(&self, #(#arg_names: &#arg_types),*) -> Result<#ret_type, fidius_host::CallError> {
+                        #cap_check
+                        self.handle.call_method(#index, &(#(#arg_names.clone()),*))
+                    }
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        /// Typed client for calling plugin methods by name.
+        ///
+        /// Wraps a `PluginHandle` and provides named methods with correct types,
+        /// eliminating raw index-based `call_method` usage.
+        pub struct #client_name {
+            handle: fidius_host::PluginHandle,
+        }
+
+        impl #client_name {
+            /// Create a client from a loaded plugin handle.
+            pub fn from_handle(handle: fidius_host::PluginHandle) -> Self {
+                Self { handle }
+            }
+
+            /// Access the underlying handle for raw method calls or metadata.
+            pub fn handle(&self) -> &fidius_host::PluginHandle {
+                &self.handle
+            }
+
+            #(#methods)*
         }
     }
 }

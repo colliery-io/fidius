@@ -53,3 +53,9 @@ fn capability_constant_exists() {
     // The optional method `greet_fancy` should get bit 0
     assert_eq!(__fidius_Greeter::Greeter_CAP_GREET_FANCY, 1u64);
 }
+
+#[test]
+fn method_index_constants_exist() {
+    assert_eq!(__fidius_Greeter::METHOD_GREET, 0);
+    assert_eq!(__fidius_Greeter::METHOD_GREET_FANCY, 1);
+}

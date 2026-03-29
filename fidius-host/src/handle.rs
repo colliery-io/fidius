@@ -35,6 +35,10 @@ type FfiFn = unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32
 ///
 /// Holds an `Arc<Library>` to keep the dylib loaded as long as any handle exists.
 /// Call methods via `call_method()` which handles serialization, FFI, and cleanup.
+///
+/// `PluginHandle` is `Send + Sync`. Plugin methods take `&self` (enforced by
+/// the macro), so concurrent calls from multiple threads are safe as long as
+/// the plugin implementation is thread-safe internally.
 pub struct PluginHandle {
     /// Keeps the library alive.
     _library: Arc<Library>,
@@ -50,8 +54,14 @@ pub struct PluginHandle {
     info: PluginInfo,
 }
 
-// SAFETY: vtable and free_buffer point to static code/data in the loaded library.
-// Arc<Library> ensures the library stays loaded. All access is read-only.
+// SAFETY: PluginHandle is Send + Sync because:
+// - vtable and free_buffer are function pointers to static code in the loaded library
+// - Arc<Library> is Send + Sync and ensures the library stays loaded
+// - All access through call_method is read-only (no mutation of handle state)
+//
+// Plugin implementations must be thread-safe (&self methods, no &mut self)
+// if the PluginHandle is shared across threads. This is enforced at compile
+// time by the #[plugin_interface] macro which rejects &mut self methods.
 unsafe impl Send for PluginHandle {}
 unsafe impl Sync for PluginHandle {}
 

@@ -3,17 +3,10 @@
 project_path: "/Users/dstorey/Desktop/fides/.metis"
 mode: tasks
 tasks:
-  - "FIDIUS-T-0046"
-  - "FIDIUS-T-0047"
-  - "FIDIUS-T-0048"
-  - "FIDIUS-T-0049"
-  - "FIDIUS-T-0050"
-  - "FIDIUS-T-0051"
-  - "FIDIUS-T-0052"
-  - "FIDIUS-T-0053"
-  - "FIDIUS-T-0054"
+  - "FIDIUS-T-0056"
+  - "FIDIUS-T-0055"
 current_task_index: 0
 iteration: 1
 max_iterations: 0
 completion_promise: "ALL TASKS COMPLETE"
-started_at: "2026-03-29T17:25:23Z"
+started_at: "2026-03-29T18:04:45Z"

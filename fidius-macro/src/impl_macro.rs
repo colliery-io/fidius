@@ -289,7 +289,9 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
 
         static #descriptor_name: fidius::descriptor::PluginDescriptor = unsafe {
             // Compute capabilities inline: check which impl'd methods
-            // appear in the optional methods list
+            // appear in the optional methods list.
+            // Uses manual byte-by-byte comparison because stable Rust does not
+            // support str::eq in const contexts.
             const CAPS: u64 = {
                 let optional = #companion::#optional_methods_ident;
                 let impl_methods: &[&str] = &[#(#method_strs),*];
