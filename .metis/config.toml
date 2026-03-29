@@ -1,5 +1,5 @@
 [project]
-prefix = "FIDES"
+prefix = "FIDIUS"
 
 [flight_levels]
 initiatives_enabled = true
