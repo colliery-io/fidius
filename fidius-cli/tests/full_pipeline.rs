@@ -29,10 +29,6 @@ fn workspace_fidius_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fidius")
 }
 
-/// Path to the workspace root's `fidius-core` crate.
-fn workspace_fidius_core_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fidius-core")
-}
 
 #[test]
 fn full_pipeline_scaffold_package_build_sign_load_call() {
@@ -70,10 +66,8 @@ edition = "2021"
 
 [dependencies]
 fidius = {{ path = "{}" }}
-fidius-core = {{ path = "{}" }}
 "#,
             fidius_path.display(),
-            workspace_fidius_core_path().display(),
         ),
     )
     .unwrap();
@@ -114,11 +108,9 @@ crate-type = ["cdylib"]
 [dependencies]
 test-api = {{ path = "{}" }}
 fidius = {{ path = "{}" }}
-fidius-core = {{ path = "{}" }}
 "#,
             iface_dir.display(),
             fidius_path.display(),
-            workspace_fidius_core_path().display(),
         ),
     )
     .unwrap();
@@ -159,25 +151,9 @@ description = "E2E test plugin"
 
     eprintln!("  ✓ Keypair generated\n");
 
-    // ── Step 5: Sign the package manifest ─────────────────────────────────
-    eprintln!("Step 5: fidius package sign");
+    // ── Step 5: Validate the package ──────────────────────────────────────
+    eprintln!("Step 5: fidius package validate");
     let plugin_dir = work_dir.join("test-plugin");
-
-    fides_cmd()
-        .args([
-            "package",
-            "sign",
-            "--key",
-            &secret_key,
-            plugin_dir.to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-
-    eprintln!("  ✓ Manifest signed\n");
-
-    // ── Step 6: Validate the package ──────────────────────────────────────
-    eprintln!("Step 6: fidius package validate");
     fides_cmd()
         .args(["package", "validate", plugin_dir.to_str().unwrap()])
         .assert()
@@ -186,8 +162,10 @@ description = "E2E test plugin"
 
     eprintln!("  ✓ Package validated\n");
 
-    // ── Step 7: Build the package ─────────────────────────────────────────
-    eprintln!("Step 7: fidius package build --debug");
+    // ── Step 6: Build the package ─────────────────────────────────────────
+    // Build before signing — cargo build may create/update Cargo.lock which
+    // is part of the signed digest.
+    eprintln!("Step 6: fidius package build --debug");
     fides_cmd()
         .args([
             "package",
@@ -200,6 +178,22 @@ description = "E2E test plugin"
         .stdout(predicates::str::contains("Build successful"));
 
     eprintln!("  ✓ Package built\n");
+
+    // ── Step 7: Sign the package ─────────────────────────────────────────
+    // Signs a digest of all source files (excluding target/ and .sig files).
+    eprintln!("Step 7: fidius package sign");
+    fides_cmd()
+        .args([
+            "package",
+            "sign",
+            "--key",
+            &secret_key,
+            plugin_dir.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    eprintln!("  ✓ Package signed\n");
 
     // ── Step 8: Verify the signature ──────────────────────────────────────
     eprintln!("Step 8: fidius package verify");
@@ -214,7 +208,7 @@ description = "E2E test plugin"
         .assert()
         .success();
 
-    eprintln!("  ✓ Manifest signature verified\n");
+    eprintln!("  ✓ Package signature verified\n");
 
     // ── Step 9: Load via PluginHost and call a method ─────────────────────
     eprintln!("Step 9: Sign dylib + load via PluginHost + call method");

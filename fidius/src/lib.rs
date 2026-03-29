@@ -42,7 +42,7 @@
 //!     }
 //! }
 //!
-//! fidius_core::fidius_plugin_registry!();
+//! fidius::fidius_plugin_registry!();
 //! ```
 
 // Re-export macros
@@ -72,5 +72,9 @@ pub use fidius_core::inventory;
 // Re-export the registry module for fidius_plugin_registry!() macro
 pub use fidius_core::registry;
 
-// The fidius_plugin_registry!() macro is #[macro_export] in fidius_core,
-// so it's available as fidius_core::fidius_plugin_registry!() automatically.
+// Re-export the fidius_plugin_registry!() macro.
+// Because it uses $crate:: paths, it resolves to fidius_core:: when called
+// as fidius_core::fidius_plugin_registry!(), which works because fidius
+// re-exports the necessary modules. Plugin authors call it as:
+//   fidius::fidius_plugin_registry!();
+pub use fidius_core::fidius_plugin_registry;

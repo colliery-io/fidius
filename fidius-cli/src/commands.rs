@@ -87,9 +87,8 @@ pub fn init_interface(
     let src_dir = crate_dir.join("src");
     std::fs::create_dir_all(&src_dir)?;
 
-    // Resolve fidius dependencies independently
+    // Resolve fidius dependency
     let fidius_dep = resolve_dep("fidius", version);
-    let fidius_core_dep = resolve_dep("fidius-core", version);
 
     let cargo_toml = format!(
         r#"[package]
@@ -99,7 +98,6 @@ edition = "2021"
 
 [dependencies]
 fidius = {fidius_dep}
-fidius-core = {fidius_core_dep}
 "#
     );
 
@@ -141,7 +139,7 @@ pub fn init_plugin(
 
     // Resolve dependencies
     let interface_dep = resolve_dep(interface, version);
-    let fidius_core_dep = resolve_dep("fidius-core", version);
+    let fidius_dep = resolve_dep("fidius", version);
 
     // Extract the crate name from the interface value (strip path components)
     let interface_crate = Path::new(interface)
@@ -163,7 +161,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 {interface_crate} = {interface_dep}
-fidius-core = {fidius_core_dep}
+fidius = {fidius_dep}
 "#
     );
 
@@ -181,7 +179,7 @@ impl {trait_name} for {struct_name} {{
     }}
 }}
 
-fidius_core::fidius_plugin_registry!();
+fidius::fidius_plugin_registry!();
 "#
     );
 
@@ -309,15 +307,6 @@ pub fn package_validate(dir: &Path) -> Result {
 
     println!("Package: {} v{}", pkg.name, pkg.version);
     println!("  Interface: {} (version {})", pkg.interface, pkg.interface_version);
-    if let Some(hash) = &pkg.source_hash {
-        println!("  Source hash: {}", hash);
-    }
-    if !manifest.dependencies.is_empty() {
-        println!("  Dependencies:");
-        for (name, req) in &manifest.dependencies {
-            println!("    {} = \"{}\"", name, req);
-        }
-    }
     println!(
         "  Metadata: {} field(s)",
         manifest.metadata.as_table().map_or(0, |t| t.len())
@@ -372,15 +361,6 @@ pub fn package_inspect(dir: &Path) -> Result {
     println!("  Version: {}", pkg.version);
     println!("  Interface: {}", pkg.interface);
     println!("  Interface version: {}", pkg.interface_version);
-    if let Some(hash) = &pkg.source_hash {
-        println!("  Source hash: {}", hash);
-    }
-    if !manifest.dependencies.is_empty() {
-        println!("  Dependencies:");
-        for (name, req) in &manifest.dependencies {
-            println!("    {} = \"{}\"", name, req);
-        }
-    }
     if let Some(table) = manifest.metadata.as_table() {
         println!("  Metadata:");
         for (key, value) in table {
@@ -393,19 +373,52 @@ pub fn package_inspect(dir: &Path) -> Result {
 // ─── package sign ────────────────────────────────────────────────────────────
 
 pub fn package_sign(key_path: &Path, dir: &Path) -> Result {
-    let manifest_path = dir.join("package.toml");
-    if !manifest_path.exists() {
+    if !dir.join("package.toml").exists() {
         return Err(format!("package.toml not found in {}", dir.display()).into());
     }
-    sign(key_path, &manifest_path)
+
+    let key_bytes: [u8; 32] = std::fs::read(key_path)?
+        .try_into()
+        .map_err(|_| "secret key must be exactly 32 bytes")?;
+
+    let signing_key = SigningKey::from_bytes(&key_bytes);
+    let digest = fidius_core::package::package_digest(dir)?;
+    let signature = signing_key.sign(&digest);
+
+    let sig_path = dir.join("package.sig");
+    std::fs::write(&sig_path, signature.to_bytes())?;
+    println!("Signed package: {} -> {}", dir.display(), sig_path.display());
+    Ok(())
 }
 
 // ─── package verify ──────────────────────────────────────────────────────────
 
 pub fn package_verify(key_path: &Path, dir: &Path) -> Result {
-    let manifest_path = dir.join("package.toml");
-    if !manifest_path.exists() {
+    if !dir.join("package.toml").exists() {
         return Err(format!("package.toml not found in {}", dir.display()).into());
     }
-    verify(key_path, &manifest_path)
+
+    let key_bytes: [u8; 32] = std::fs::read(key_path)?
+        .try_into()
+        .map_err(|_| "public key must be exactly 32 bytes")?;
+
+    let verifying_key =
+        VerifyingKey::from_bytes(&key_bytes).map_err(|e| format!("invalid public key: {e}"))?;
+
+    let sig_path = dir.join("package.sig");
+    let sig_bytes: [u8; 64] = std::fs::read(&sig_path)
+        .map_err(|_| format!("signature file not found: {}", sig_path.display()))?
+        .try_into()
+        .map_err(|_| "signature must be exactly 64 bytes")?;
+
+    let signature = Signature::from_bytes(&sig_bytes);
+    let digest = fidius_core::package::package_digest(dir)?;
+
+    match verifying_key.verify(&digest, &signature) {
+        Ok(()) => {
+            println!("Package signature valid: {}", dir.display());
+            Ok(())
+        }
+        Err(_) => Err(format!("Package signature INVALID: {}", dir.display()).into()),
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "fidius-cli"
-version = "0.0.0-alpha.1"
+version = "0.0.1"
 edition = "2021"
 description = "CLI for the Fidius plugin framework"
 license = "Apache-2.0"
@@ -11,8 +11,8 @@ name = "fidius"
 path = "src/main.rs"
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.0.0-alpha.1" }
-fidius-host = { path = "../fidius-host", version = "0.0.0-alpha.1" }
+fidius-core = { path = "../fidius-core", version = "0.0.1" }
+fidius-host = { path = "../fidius-host", version = "0.0.1" }
 clap = { workspace = true }
 ed25519-dalek = { workspace = true }
 ureq = { workspace = true }

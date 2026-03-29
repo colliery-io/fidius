@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use fidius_macro::{plugin_impl, plugin_interface};
+use fidius::{plugin_impl, plugin_interface};
 use serde::{Deserialize, Serialize};
 
 #[plugin_interface(version = 1, buffer = PluginAllocated)]
@@ -62,4 +62,4 @@ impl Calculator for BasicCalculator {
     }
 }
 
-fidius_core::fidius_plugin_registry!();
+fidius::fidius_plugin_registry!();

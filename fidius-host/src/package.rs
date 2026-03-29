@@ -16,6 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use fidius_core::package::{PackageError, PackageManifest};
 use serde::de::DeserializeOwned;
 
@@ -67,6 +68,43 @@ pub fn discover_packages(dir: &Path) -> Result<Vec<PathBuf>, PackageError> {
 
     packages.sort();
     Ok(packages)
+}
+
+/// Verify a source package's signature against trusted public keys.
+///
+/// Recomputes the package digest from files on disk and verifies the
+/// `package.sig` signature against the provided trusted keys.
+///
+/// # Errors
+///
+/// - `PackageError::SignatureNotFound` — if `package.sig` doesn't exist
+/// - `PackageError::SignatureInvalid` — if no trusted key verifies the signature
+pub fn verify_package(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), PackageError> {
+    let sig_path = dir.join("package.sig");
+    if !sig_path.exists() {
+        return Err(PackageError::SignatureNotFound {
+            path: dir.display().to_string(),
+        });
+    }
+
+    let sig_bytes: [u8; 64] = std::fs::read(&sig_path)?
+        .try_into()
+        .map_err(|_| PackageError::SignatureInvalid {
+            path: dir.display().to_string(),
+        })?;
+
+    let signature = Signature::from_bytes(&sig_bytes);
+    let digest = fidius_core::package::package_digest(dir)?;
+
+    for key in trusted_keys {
+        if key.verify(&digest, &signature).is_ok() {
+            return Ok(());
+        }
+    }
+
+    Err(PackageError::SignatureInvalid {
+        path: dir.display().to_string(),
+    })
 }
 
 /// Build a package by running `cargo build` inside the package directory.

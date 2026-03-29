@@ -21,7 +21,6 @@
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::path::Path;
 
 /// A parsed package manifest, generic over the host-defined metadata schema.
@@ -33,9 +32,6 @@ use std::path::Path;
 pub struct PackageManifest<M> {
     /// Fixed header fields required by fidius.
     pub package: PackageHeader,
-    /// Dependencies on other packages (name → version requirement).
-    #[serde(default)]
-    pub dependencies: BTreeMap<String, String>,
     /// Host-defined metadata. Must deserialize from the `[metadata]` section.
     pub metadata: M,
 }
@@ -51,8 +47,6 @@ pub struct PackageHeader {
     pub interface: String,
     /// Expected interface version.
     pub interface_version: u32,
-    /// Optional SHA-256 hash of the source directory contents.
-    pub source_hash: Option<String>,
 }
 
 /// Errors that can occur when loading a package manifest.
@@ -74,6 +68,14 @@ pub enum PackageError {
     /// Build failed.
     #[error("package build failed: {0}")]
     BuildFailed(String),
+
+    /// Package signature file not found.
+    #[error("package.sig not found in {path}")]
+    SignatureNotFound { path: String },
+
+    /// Package signature is invalid (no trusted key verified it).
+    #[error("package signature invalid for {path}")]
+    SignatureInvalid { path: String },
 }
 
 /// Load and parse a `package.toml` manifest from a package directory.
@@ -118,10 +120,74 @@ pub fn load_manifest_untyped(
     load_manifest::<toml::Value>(dir)
 }
 
+/// Compute a deterministic SHA-256 digest over all package source files.
+///
+/// Walks the package directory, collects all files (excluding `target/`,
+/// `.git/`, and `*.sig` files), sorts by relative path, and feeds each
+/// file's relative path and contents into a SHA-256 hasher.
+///
+/// The resulting 32-byte digest covers the entire package contents.
+/// Sign this digest to protect against tampering.
+pub fn package_digest(dir: &Path) -> Result<[u8; 32], PackageError> {
+    use sha2::{Digest, Sha256};
+
+    let mut files = Vec::new();
+    collect_files(dir, dir, &mut files)?;
+    files.sort();
+
+    let mut hasher = Sha256::new();
+    for rel_path in &files {
+        let abs_path = dir.join(rel_path);
+        let contents = std::fs::read(&abs_path)?;
+        // Hash the relative path (as UTF-8 bytes) then the file contents.
+        // Length-prefix both to prevent ambiguity.
+        let path_bytes = rel_path.as_bytes();
+        hasher.update((path_bytes.len() as u64).to_le_bytes());
+        hasher.update(path_bytes);
+        hasher.update((contents.len() as u64).to_le_bytes());
+        hasher.update(&contents);
+    }
+
+    Ok(hasher.finalize().into())
+}
+
+/// Recursively collect file paths relative to `root`, skipping excluded dirs/files.
+fn collect_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError> {
+    let entries = std::fs::read_dir(dir)?;
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Skip excluded directories
+        if path.is_dir() {
+            if name_str == "target" || name_str == ".git" {
+                continue;
+            }
+            collect_files(root, &path, out)?;
+            continue;
+        }
+
+        // Skip signature files
+        if name_str.ends_with(".sig") {
+            continue;
+        }
+
+        // Store relative path using forward slashes for cross-platform determinism
+        let rel = path
+            .strip_prefix(root)
+            .expect("path is under root")
+            .to_string_lossy()
+            .replace('\\', "/");
+        out.push(rel);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use tempfile::TempDir;
 
     fn write_manifest(dir: &Path, content: &str) {
@@ -160,34 +226,6 @@ mod tests {
         assert_eq!(m.package.interface_version, 1);
         assert_eq!(m.metadata.category, "testing");
         assert_eq!(m.metadata.tags, vec!["a", "b"]);
-        assert!(m.dependencies.is_empty());
-    }
-
-    #[test]
-    fn manifest_with_dependencies() {
-        let tmp = TempDir::new().unwrap();
-        write_manifest(
-            tmp.path(),
-            r#"
-            [package]
-            name = "dep-pkg"
-            version = "0.1.0"
-            interface = "my-api"
-            interface_version = 2
-
-            [dependencies]
-            base-utils = ">=1.0"
-            helper = "0.5"
-
-            [metadata]
-            category = "utils"
-            "#,
-        );
-
-        let m = load_manifest::<TestMeta>(tmp.path()).unwrap();
-        assert_eq!(m.dependencies.len(), 2);
-        assert_eq!(m.dependencies["base-utils"], ">=1.0");
-        assert_eq!(m.dependencies["helper"], "0.5");
     }
 
     #[test]
@@ -270,23 +308,44 @@ mod tests {
     }
 
     #[test]
-    fn source_hash_is_optional() {
+    fn digest_is_deterministic() {
         let tmp = TempDir::new().unwrap();
-        write_manifest(
-            tmp.path(),
-            r#"
-            [package]
-            name = "no-hash"
-            version = "1.0.0"
-            interface = "my-api"
-            interface_version = 1
+        write_manifest(tmp.path(), "[package]\nname = \"test\"\nversion = \"1.0.0\"\ninterface = \"api\"\ninterface_version = 1\n\n[metadata]\nk = \"v\"\n");
+        std::fs::write(tmp.path().join("src.rs"), b"fn main() {}").unwrap();
 
-            [metadata]
-            category = "test"
-            "#,
-        );
+        let d1 = package_digest(tmp.path()).unwrap();
+        let d2 = package_digest(tmp.path()).unwrap();
+        assert_eq!(d1, d2);
+    }
 
-        let m = load_manifest::<TestMeta>(tmp.path()).unwrap();
-        assert!(m.package.source_hash.is_none());
+    #[test]
+    fn digest_changes_on_file_modification() {
+        let tmp = TempDir::new().unwrap();
+        write_manifest(tmp.path(), "[package]\nname = \"test\"\nversion = \"1.0.0\"\ninterface = \"api\"\ninterface_version = 1\n\n[metadata]\nk = \"v\"\n");
+        std::fs::write(tmp.path().join("src.rs"), b"fn main() {}").unwrap();
+
+        let d1 = package_digest(tmp.path()).unwrap();
+
+        std::fs::write(tmp.path().join("src.rs"), b"fn main() { evil() }").unwrap();
+        let d2 = package_digest(tmp.path()).unwrap();
+
+        assert_ne!(d1, d2);
+    }
+
+    #[test]
+    fn digest_excludes_target_and_sig() {
+        let tmp = TempDir::new().unwrap();
+        write_manifest(tmp.path(), "[package]\nname = \"test\"\nversion = \"1.0.0\"\ninterface = \"api\"\ninterface_version = 1\n\n[metadata]\nk = \"v\"\n");
+        std::fs::write(tmp.path().join("src.rs"), b"fn main() {}").unwrap();
+
+        let d1 = package_digest(tmp.path()).unwrap();
+
+        // Adding target/ dir and .sig file should not change digest
+        std::fs::create_dir(tmp.path().join("target")).unwrap();
+        std::fs::write(tmp.path().join("target/output.dylib"), b"binary").unwrap();
+        std::fs::write(tmp.path().join("package.sig"), b"sig bytes").unwrap();
+
+        let d2 = package_digest(tmp.path()).unwrap();
+        assert_eq!(d1, d2);
     }
 }

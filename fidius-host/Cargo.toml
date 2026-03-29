@@ -1,6 +1,6 @@
 [package]
 name = "fidius-host"
-version = "0.0.0-alpha.1"
+version = "0.0.1"
 edition = "2021"
 description = "Host-side loading and calling for the Fidius plugin framework"
 license = "Apache-2.0"
@@ -10,7 +10,7 @@ repository = "https://github.com/colliery-io/fidius"
 tracing = ["dep:tracing"]
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.0.0-alpha.1" }
+fidius-core = { path = "../fidius-core", version = "0.0.1" }
 libloading = { workspace = true }
 ed25519-dalek = { workspace = true }
 thiserror = { workspace = true }

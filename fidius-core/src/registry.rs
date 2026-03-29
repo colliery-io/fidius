@@ -69,8 +69,8 @@ pub fn get_registry() -> &'static PluginRegistry {
 macro_rules! fidius_plugin_registry {
     () => {
         #[no_mangle]
-        pub extern "C" fn fidius_get_registry() -> *const fidius_core::descriptor::PluginRegistry {
-            fidius_core::registry::get_registry() as *const _
+        pub extern "C" fn fidius_get_registry() -> *const $crate::descriptor::PluginRegistry {
+            $crate::registry::get_registry() as *const _
         }
     };
 }

@@ -1,6 +1,6 @@
 [package]
 name = "fidius-core"
-version = "0.0.0-alpha.1"
+version = "0.0.1"
 edition = "2021"
 description = "Shared types for the Fidius plugin framework"
 license = "Apache-2.0"
@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 inventory = { workspace = true }
 tokio = { workspace = true, optional = true }
 toml = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
