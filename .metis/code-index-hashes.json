@@ -1,0 +1,15 @@
+{
+  "files": {
+    "fides-cli/src/main.rs": "87593233cb7faa6fe8a24dee1666ba0dbb8f8c1b9737e93f00b0023070bff13a",
+    "fides-core/src/descriptor.rs": "4fd4c2e991a2aa92a7e412004f9759796535f3b0ae6d918b13e6beb6c4bf68c1",
+    "fides-core/src/error.rs": "6da137ba348ecc2f70089c87b280fe8f42e483413d6838362b22138da61d1b49",
+    "fides-core/src/hash.rs": "45d98c6ca8cd08a5cb160fd2b19cee67cce3758a16735617a232b9f604a85a2e",
+    "fides-core/src/lib.rs": "9b9b53a54958ffa5d635f8427302ace58f3c2034856e7815fd9fbce9577a40f4",
+    "fides-core/src/status.rs": "886fd0250e85876b6eb524a185bdc1aec1cf0af58cd4c5058632af4088225080",
+    "fides-core/src/wire.rs": "500d9522d68a0a824df5ebe5bd76d3d9f3f854b51136f7a623d6b44c0ae1c504",
+    "fides-core/tests/layout_and_roundtrip.rs": "061b1d0d533fa1b03791ad618a54f745e5542d4745fef7dae57a3223465a9202",
+    "fides-host/src/lib.rs": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+    "fides-macro/src/lib.rs": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+    "fides/src/lib.rs": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+  }
+}

@@ -121,6 +121,18 @@ pub struct PluginDescriptor {
 unsafe impl Send for PluginDescriptor {}
 unsafe impl Sync for PluginDescriptor {}
 
+/// A `Sync` wrapper for a raw pointer to a `PluginDescriptor`.
+///
+/// Used in static contexts where a `*const PluginDescriptor` needs to live
+/// in a `static` variable (which requires `Sync`). The pointed-to descriptor
+/// must have `'static` lifetime.
+#[repr(transparent)]
+pub struct DescriptorPtr(pub *const PluginDescriptor);
+
+// SAFETY: The pointer targets static data that is immutable after construction.
+unsafe impl Send for DescriptorPtr {}
+unsafe impl Sync for DescriptorPtr {}
+
 impl PluginDescriptor {
     /// Read the `interface_name` field as a Rust `&str`.
     ///

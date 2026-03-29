@@ -1,0 +1,182 @@
+//! Code generation for `#[plugin_interface]`.
+//!
+//! Generates: the original trait, a `#[repr(C)]` vtable struct, interface hash constant,
+//! capability bit constants, version/strategy constants, and a descriptor builder function.
+
+use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use syn::{ItemTrait, TraitItem};
+
+use crate::ir::{BufferStrategyAttr, InterfaceIR};
+
+/// Strip `#[optional(...)]` attributes from trait methods so the emitted trait compiles.
+fn strip_optional_attrs(item: &ItemTrait) -> ItemTrait {
+    let mut cleaned = item.clone();
+    for trait_item in &mut cleaned.items {
+        if let TraitItem::Fn(method) = trait_item {
+            method.attrs.retain(|attr| !attr.path().is_ident("optional"));
+        }
+    }
+    cleaned
+}
+
+/// Generate all code for a `#[plugin_interface]` invocation.
+pub fn generate_interface(ir: &InterfaceIR) -> syn::Result<TokenStream> {
+    match ir.attrs.buffer_strategy {
+        BufferStrategyAttr::CallerAllocated => {
+            return Err(syn::Error::new_spanned(
+                &ir.original_trait.ident,
+                "CallerAllocated buffer strategy is not yet supported",
+            ));
+        }
+        BufferStrategyAttr::Arena => {
+            return Err(syn::Error::new_spanned(
+                &ir.original_trait.ident,
+                "Arena buffer strategy is not yet supported",
+            ));
+        }
+        BufferStrategyAttr::PluginAllocated => {}
+    }
+
+    let cleaned_trait = strip_optional_attrs(&ir.original_trait);
+    let vtable = generate_vtable(ir);
+    let constants = generate_constants(ir);
+    let descriptor_builder = generate_descriptor_builder(ir);
+
+    Ok(quote! {
+        #cleaned_trait
+        #vtable
+        #constants
+        #descriptor_builder
+    })
+}
+
+/// Generate the `#[repr(C)]` vtable struct.
+fn generate_vtable(ir: &InterfaceIR) -> TokenStream {
+    let vtable_name = format_ident!("{}_VTable", ir.trait_name);
+
+    let fields: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .map(|m| {
+            let field_name = &m.name;
+            // PluginAllocated signature: (in_ptr, in_len, out_ptr_ptr, out_len) -> i32
+            let fn_type = quote! {
+                unsafe extern "C" fn(
+                    *const u8, u32,
+                    *mut *mut u8, *mut u32,
+                ) -> i32
+            };
+
+            if m.optional_since.is_some() {
+                quote! { pub #field_name: Option<#fn_type> }
+            } else {
+                quote! { pub #field_name: #fn_type }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[repr(C)]
+        pub struct #vtable_name {
+            #(#fields,)*
+        }
+    }
+}
+
+/// Generate interface hash, capability bit constants, version, and buffer strategy constants.
+fn generate_constants(ir: &InterfaceIR) -> TokenStream {
+    let trait_name = &ir.trait_name;
+
+    // Interface hash: computed from sorted required method signature strings
+    let required_sigs: Vec<&str> = ir
+        .methods
+        .iter()
+        .filter(|m| m.is_required())
+        .map(|m| m.signature_string.as_str())
+        .collect();
+
+    let hash_value = fides_core::hash::interface_hash(
+        &required_sigs,
+    );
+
+    let hash_name = format_ident!("{}_INTERFACE_HASH", trait_name);
+    let version_name = format_ident!("{}_INTERFACE_VERSION", trait_name);
+    let strategy_name = format_ident!("{}_BUFFER_STRATEGY", trait_name);
+
+    let version_val = ir.attrs.version;
+    let strategy_val = ir.attrs.buffer_strategy as u8;
+
+    // Capability bit constants for optional methods
+    let cap_constants: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .filter(|m| m.optional_since.is_some())
+        .enumerate()
+        .map(|(bit, m)| {
+            let const_name = format_ident!(
+                "{}_CAP_{}",
+                trait_name,
+                m.name.to_string().to_uppercase()
+            );
+            let bit_val = 1u64 << bit;
+            quote! { pub const #const_name: u64 = #bit_val; }
+        })
+        .collect();
+
+    quote! {
+        pub const #hash_name: u64 = #hash_value;
+        pub const #version_name: u32 = #version_val;
+        pub const #strategy_name: u8 = #strategy_val;
+        #(#cap_constants)*
+    }
+}
+
+/// Generate the descriptor builder function used by `#[plugin_impl]`.
+fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
+    let trait_name = &ir.trait_name;
+    let vtable_name = format_ident!("{}_VTable", trait_name);
+    let fn_name = format_ident!("__fides_build_{}_descriptor", trait_name.to_string().to_lowercase());
+    let hash_name = format_ident!("{}_INTERFACE_HASH", trait_name);
+    let version_name = format_ident!("{}_INTERFACE_VERSION", trait_name);
+    let strategy_name = format_ident!("{}_BUFFER_STRATEGY", trait_name);
+    let interface_name_str = trait_name.to_string();
+    let interface_name_cstr_ident = format_ident!("__FIDES_INTERFACE_NAME_{}", trait_name);
+
+    quote! {
+        /// Null-terminated interface name for the descriptor.
+        const #interface_name_cstr_ident: &std::ffi::CStr = {
+            // Use c"..." literal syntax (stable since Rust 1.77)
+            // We can't use c"..." with a variable, so we use unsafe from_bytes_with_nul_unchecked
+            // on a concat! with \0
+            unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#interface_name_str, "\0").as_bytes()) }
+        };
+
+        /// Build a `PluginDescriptor` for this interface.
+        ///
+        /// # Safety
+        ///
+        /// `plugin_name` must be a static, null-terminated C string.
+        /// `vtable` must point to a valid, static `#vtable_name`.
+        /// `free_buffer` must be `Some` (PluginAllocated strategy).
+        pub const unsafe fn #fn_name(
+            plugin_name: *const std::ffi::c_char,
+            vtable: *const #vtable_name,
+            capabilities: u64,
+            free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
+        ) -> fides_core::descriptor::PluginDescriptor {
+            fides_core::descriptor::PluginDescriptor {
+                abi_version: fides_core::descriptor::ABI_VERSION,
+                interface_name: #interface_name_cstr_ident.as_ptr(),
+                interface_hash: #hash_name,
+                interface_version: #version_name,
+                capabilities,
+                wire_format: fides_core::wire::WIRE_FORMAT as u8,
+                buffer_strategy: #strategy_name,
+                plugin_name,
+                vtable: vtable as *const std::ffi::c_void,
+                free_buffer,
+            }
+        }
+    }
+}
