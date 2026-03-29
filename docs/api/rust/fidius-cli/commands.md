@@ -413,3 +413,192 @@ pub fn inspect(dylib_path: &Path) -> Result {
 
 
 
+### `fidius-cli::commands::package_validate`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn package_validate (dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_validate(dir: &Path) -> Result {
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    let pkg = &manifest.package;
+
+    println!("Package: {} v{}", pkg.name, pkg.version);
+    println!("  Interface: {} (version {})", pkg.interface, pkg.interface_version);
+    if let Some(hash) = &pkg.source_hash {
+        println!("  Source hash: {}", hash);
+    }
+    if !manifest.dependencies.is_empty() {
+        println!("  Dependencies:");
+        for (name, req) in &manifest.dependencies {
+            println!("    {} = \"{}\"", name, req);
+        }
+    }
+    println!(
+        "  Metadata: {} field(s)",
+        manifest.metadata.as_table().map_or(0, |t| t.len())
+    );
+    println!("\nManifest valid.");
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### `fidius-cli::commands::package_build`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn package_build (dir : & Path , release : bool) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_build(dir: &Path, release: bool) -> Result {
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    let cargo_toml = dir.join("Cargo.toml");
+    if !cargo_toml.exists() {
+        return Err(format!("Cargo.toml not found in {}", dir.display()).into());
+    }
+
+    println!(
+        "Building package: {} v{}",
+        manifest.package.name, manifest.package.version
+    );
+
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.arg("build").arg("--manifest-path").arg(&cargo_toml);
+    if release {
+        cmd.arg("--release");
+    }
+
+    let output = cmd.output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("build failed:\n{}", stderr).into());
+    }
+
+    let profile = if release { "release" } else { "debug" };
+    println!(
+        "Build successful. Output in {}/target/{}/",
+        dir.display(),
+        profile
+    );
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### `fidius-cli::commands::package_inspect`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn package_inspect (dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_inspect(dir: &Path) -> Result {
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    let pkg = &manifest.package;
+
+    println!("Package: {}", dir.display());
+    println!("  Name: {}", pkg.name);
+    println!("  Version: {}", pkg.version);
+    println!("  Interface: {}", pkg.interface);
+    println!("  Interface version: {}", pkg.interface_version);
+    if let Some(hash) = &pkg.source_hash {
+        println!("  Source hash: {}", hash);
+    }
+    if !manifest.dependencies.is_empty() {
+        println!("  Dependencies:");
+        for (name, req) in &manifest.dependencies {
+            println!("    {} = \"{}\"", name, req);
+        }
+    }
+    if let Some(table) = manifest.metadata.as_table() {
+        println!("  Metadata:");
+        for (key, value) in table {
+            println!("    {} = {}", key, value);
+        }
+    }
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### `fidius-cli::commands::package_sign`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn package_sign (key_path : & Path , dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_sign(key_path: &Path, dir: &Path) -> Result {
+    let manifest_path = dir.join("package.toml");
+    if !manifest_path.exists() {
+        return Err(format!("package.toml not found in {}", dir.display()).into());
+    }
+    sign(key_path, &manifest_path)
+}
+```
+
+</details>
+
+
+
+### `fidius-cli::commands::package_verify`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn package_verify (key_path : & Path , dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_verify(key_path: &Path, dir: &Path) -> Result {
+    let manifest_path = dir.join("package.toml");
+    if !manifest_path.exists() {
+        return Err(format!("package.toml not found in {}", dir.display()).into());
+    }
+    verify(key_path, &manifest_path)
+}
+```
+
+</details>
+
+
+

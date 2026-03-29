@@ -4,7 +4,7 @@
 
 All error types in the Fidius plugin framework, with causes and resolutions.
 
-**Source:** `fidius-host/src/error.rs`, `fidius-core/src/wire.rs`, `fidius-core/src/error.rs`
+**Source:** `fidius-host/src/error.rs`, `fidius-core/src/wire.rs`, `fidius-core/src/error.rs`, `fidius-core/src/package.rs`
 
 ---
 
@@ -390,8 +390,77 @@ Parse the `details` field back into a `serde_json::Value`. Returns `None` if det
 
 ---
 
+## PackageError
+
+Errors that can occur when loading or building a source package. Defined in
+`fidius_core::package`.
+
+Derives `Debug` and `thiserror::Error`.
+
+```rust
+pub enum PackageError {
+    ManifestNotFound { path: String },
+    ParseError(toml::de::Error),
+    Io(std::io::Error),
+    BuildFailed(String),
+}
+```
+
+### Variant Details
+
+#### `ManifestNotFound`
+
+```
+package.toml not found in {path}
+```
+
+| | |
+|---|---|
+| **Trigger** | The specified directory does not contain a `package.toml` file. |
+| **Fields** | `path: String` -- display path of the directory. |
+| **Resolution** | Ensure the directory contains a `package.toml` file. |
+
+#### `ParseError`
+
+```
+failed to parse package.toml: {0}
+```
+
+| | |
+|---|---|
+| **Trigger** | The `package.toml` file contains invalid TOML syntax, is missing required `[package]` header fields, or the `[metadata]` section does not match the host-defined schema type `M`. |
+| **Fields** | Inner `toml::de::Error` with line/column and field information. |
+| **Resolution** | Fix the TOML syntax or add the missing fields. If using a typed schema, ensure the `[metadata]` section matches all required fields in the schema struct. |
+
+#### `Io`
+
+```
+io error reading package.toml: {0}
+```
+
+| | |
+|---|---|
+| **Trigger** | An `std::io::Error` from reading the manifest file or scanning directories. |
+| **Fields** | The inner `std::io::Error`. |
+| **Resolution** | Check file permissions and that the path exists. |
+
+#### `BuildFailed`
+
+```
+package build failed: {0}
+```
+
+| | |
+|---|---|
+| **Trigger** | `cargo build` returned a non-zero exit code inside `build_package`, or `Cargo.toml` was not found in the package directory. |
+| **Fields** | `String` -- stderr output from `cargo build`, or a descriptive message. |
+| **Resolution** | Fix the compilation errors reported in the message. Ensure the package directory contains both `package.toml` and `Cargo.toml`. |
+
+---
+
 ## See Also
 
 - [Host API Reference](./host-api.md) -- where these errors are returned
 - [ABI Specification](./abi-specification.md) -- status codes that map to `CallError` variants
 - [#[plugin_impl] Reference](./plugin-impl-macro.md) -- shim code that produces status codes
+- [Package Manifest Reference](./package-manifest.md) -- `package.toml` format and functions that return `PackageError`

@@ -244,8 +244,162 @@ One block per plugin, 0-indexed.
 
 ---
 
+### `package`
+
+Package management commands. All subcommands operate on a package directory
+(a directory containing `package.toml`).
+
+```
+fidius package <SUBCOMMAND>
+```
+
+#### `package validate`
+
+Validate a package manifest. Parses the `package.toml` without a host-defined
+schema (accepts any `[metadata]` section) and prints a summary.
+
+```
+fidius package validate <DIR>
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `DIR` | positional | yes | Path to the package directory. |
+
+**Output on success:**
+
+```
+Package: <name> v<version>
+  Interface: <interface> (version <interface_version>)
+  Source hash: <hash>          # only if source_hash is set
+  Dependencies:                # only if dependencies exist
+    <name> = "<requirement>"
+  Metadata: <N> field(s)
+
+Manifest valid.
+```
+
+**Errors:** `PackageError::ManifestNotFound` if no `package.toml` exists;
+`PackageError::ParseError` if the TOML is invalid.
+
+---
+
+#### `package build`
+
+Build a package by running `cargo build` inside the package directory. Builds
+in release mode by default.
+
+```
+fidius package build <DIR> [--debug]
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `DIR` | positional | yes | Path to the package directory. |
+| `--debug` | flag | no | Build in debug mode instead of release. |
+
+**Output on success:**
+
+```
+Building package: <name> v<version>
+Build successful. Output in <dir>/target/<profile>/
+```
+
+**Errors:** Fails if `package.toml` or `Cargo.toml` is missing, or if
+`cargo build` returns a non-zero exit code.
+
+---
+
+#### `package inspect`
+
+Inspect a package manifest. Prints all fields including individual `[metadata]`
+key-value pairs.
+
+```
+fidius package inspect <DIR>
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `DIR` | positional | yes | Path to the package directory. |
+
+**Output format:**
+
+```
+Package: <dir>
+  Name: <name>
+  Version: <version>
+  Interface: <interface>
+  Interface version: <interface_version>
+  Source hash: <hash>          # only if set
+  Dependencies:                # only if present
+    <name> = "<requirement>"
+  Metadata:                    # only if metadata is a table
+    <key> = <value>
+```
+
+---
+
+#### `package sign`
+
+Sign a package manifest with an Ed25519 secret key. Signs the `package.toml`
+file and writes the signature to `package.toml.sig`.
+
+```
+fidius package sign --key <SECRET_KEY_PATH> <DIR>
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `--key` | path | yes | Path to the 32-byte secret key file. |
+| `DIR` | positional | yes | Path to the package directory. |
+
+**Output on success:**
+
+```
+Signed: <dir>/package.toml -> <dir>/package.toml.sig
+```
+
+**Errors:** Fails if `package.toml` does not exist in the directory, or if
+the secret key is not exactly 32 bytes.
+
+---
+
+#### `package verify`
+
+Verify a package manifest's Ed25519 signature.
+
+```
+fidius package verify --key <PUBLIC_KEY_PATH> <DIR>
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `--key` | path | yes | Path to the 32-byte public key file. |
+| `DIR` | positional | yes | Path to the package directory. |
+
+**Output on success:**
+
+```
+Signature valid: <dir>/package.toml
+```
+
+**Output on failure:**
+
+```
+Signature INVALID: <dir>/package.toml
+```
+
+Exits with code `1` on invalid signature.
+
+**Errors:** Fails if `package.toml` does not exist in the directory, or if
+the public key or signature file is malformed.
+
+---
+
 ## See Also
 
 - [Host API Reference](./host-api.md) -- programmatic API used by `inspect`
 - [ABI Specification](./abi-specification.md) -- descriptor layout shown by `inspect`
-- [Errors Reference](./errors.md) -- `LoadError` variants that can occur during `inspect` and `verify`
+- [Errors Reference](./errors.md) -- `LoadError` and `PackageError` variants
+- [Package Manifest Reference](./package-manifest.md) -- `package.toml` format and Rust types

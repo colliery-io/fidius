@@ -221,6 +221,74 @@ so that plugin authors have a single dependency. This pattern exists because:
 See also: [Interface Evolution](interface-evolution.md) for how changes to the
 interface crate affect compatibility.
 
+## The Package Layer
+
+On top of the plugin layer sits the **package layer**, which adds source
+distribution, manifest-driven metadata, and a build workflow.
+
+### Source distribution
+
+Rather than distributing compiled dylibs (which are platform- and
+architecture-specific), packages distribute source code alongside a
+`package.toml` manifest. The consumer builds the cdylib locally, ensuring
+binary compatibility with their host. This is the "source package" model.
+
+### Manifest and schema validation
+
+Every source package contains a `package.toml` with a fixed header
+(`name`, `version`, `interface`, `interface_version`) and an extensible
+`[metadata]` section. The `[metadata]` section is validated at load time
+against a host-defined Rust struct via serde deserialization — if the TOML
+does not match the struct, `PackageError::ParseError` is returned.
+
+This means the host application defines its own metadata contract. For
+example, an image editor might require `category` and `min_host_version`
+fields, while a game engine might require `asset_format` and `engine_version`.
+The contract is enforced at the type level through the generic parameter on
+`PackageManifest<M>`.
+
+### Build flow
+
+The package build flow has three stages:
+
+1. **Discover** — `discover_packages(dir)` scans a directory for
+   subdirectories containing `package.toml`.
+2. **Validate** — `load_package_manifest::<M>(dir)` parses the manifest and
+   validates metadata against the host's schema.
+3. **Build** — `build_package(dir, release)` runs `cargo build` and returns
+   the path to the compiled cdylib.
+
+After building, the resulting dylib is loaded through the normal plugin
+pipeline (Stage 5 above): `dlopen`, validate, wrap in `PluginHandle`.
+
+### LoadPolicy enforcement
+
+When loading plugins, `PluginHost` enforces a `LoadPolicy`:
+
+- **`Strict`** (default) — signature verification failures and validation
+  mismatches are hard errors. The plugin is not loaded.
+- **`Lenient`** — signature failures are downgraded to warnings printed to
+  stderr. Useful during development when you do not want to sign every
+  build.
+
+The policy is set via `PluginHostBuilder::load_policy(LoadPolicy::Strict)`.
+
+### Where packages fit in the crate hierarchy
+
+```
+fidius-cli           package validate / build / inspect / sign / verify
+    │
+    ▼
+fidius-host          discover_packages, load_package_manifest, build_package
+    │
+    ▼
+fidius-core          PackageManifest<M>, PackageHeader, PackageError, load_manifest
+```
+
+`fidius-core` defines the manifest types and parsing. `fidius-host` adds
+host-side conveniences (discovery, building). `fidius-cli` exposes the
+workflow as `fidius package *` subcommands.
+
 ---
 
 *Related reference documentation:*
@@ -228,3 +296,5 @@ interface crate affect compatibility.
 - [fidius-core API](../api/rust/fidius-core.md) — descriptor types, wire format, hashing
 - [fidius-macro API](../api/rust/fidius-macro.md) — proc macro attributes and generated code
 - [fidius-host API](../api/rust/fidius-host.md) — loading, validation, `PluginHandle`
+- [Package Manifest Reference](../reference/package-manifest.md) — `package.toml` format
+- [Tutorial: Source Packages](../tutorials/source-packages.md) — end-to-end walkthrough

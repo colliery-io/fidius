@@ -31,6 +31,20 @@
 - **`Sign`** - Sign a plugin dylib
 - **`Verify`** - Verify a plugin dylib signature
 - **`Inspect`** - Inspect a plugin dylib's registry
+- **`Package`** - Package management commands
+
+
+
+### `fidius-cli::PackageCommands` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+#### Variants
+
+- **`Validate`** - Validate a package manifest
+- **`Build`** - Build a package (compile the cdylib)
+- **`Inspect`** - Inspect a package manifest
+- **`Sign`** - Sign a package manifest
+- **`Verify`** - Verify a package manifest signature
 
 
 
@@ -76,6 +90,13 @@ fn main() {
         Commands::Sign { key, dylib } => commands::sign(&key, &dylib),
         Commands::Verify { key, dylib } => commands::verify(&key, &dylib),
         Commands::Inspect { dylib } => commands::inspect(&dylib),
+        Commands::Package { command } => match command {
+            PackageCommands::Validate { dir } => commands::package_validate(&dir),
+            PackageCommands::Build { dir, debug } => commands::package_build(&dir, !debug),
+            PackageCommands::Inspect { dir } => commands::package_inspect(&dir),
+            PackageCommands::Sign { key, dir } => commands::package_sign(&key, &dir),
+            PackageCommands::Verify { key, dir } => commands::package_verify(&key, &dir),
+        },
     };
 
     if let Err(e) = result {

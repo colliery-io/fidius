@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T13:49:42Z | 37 files | Rust
+> Generated: 2026-03-29T14:44:51Z | 40 files | Rust
 
 ## Project Structure
 
@@ -21,6 +21,7 @@
 │   │   ├── error.rs
 │   │   ├── hash.rs
 │   │   ├── lib.rs
+│   │   ├── package.rs
 │   │   ├── registry.rs
 │   │   ├── status.rs
 │   │   └── wire.rs
@@ -34,11 +35,13 @@
 │   │   ├── host.rs
 │   │   ├── lib.rs
 │   │   ├── loader.rs
+│   │   ├── package.rs
 │   │   ├── signing.rs
 │   │   └── types.rs
 │   └── tests/
 │       ├── e2e.rs
-│       └── integration.rs
+│       ├── integration.rs
+│       └── package_e2e.rs
 ├── fidius-macro/
 │   ├── src/
 │   │   ├── impl_macro.rs
@@ -76,6 +79,11 @@
 - pub `sign` function L214-234 — `(key_path: &Path, dylib_path: &Path) -> Result`
 - pub `verify` function L238-273 — `(key_path: &Path, dylib_path: &Path) -> Result`
 - pub `inspect` function L277-297 — `(dylib_path: &Path) -> Result`
+- pub `package_validate` function L301-322 — `(dir: &Path) -> Result`
+- pub `package_build` function L326-357 — `(dir: &Path, release: bool) -> Result`
+- pub `package_inspect` function L361-386 — `(dir: &Path) -> Result`
+- pub `package_sign` function L390-396 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L400-406 — `(key_path: &Path, dir: &Path) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
 -  `resolve_dep` function L30-52 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
 -  `check_crates_io` function L55-70 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
@@ -84,8 +92,9 @@
 
 -  `commands` module L20 — `-`
 -  `Cli` struct L24-27 — `{ command: Commands }`
--  `Commands` enum L30-89 — `InitInterface | InitPlugin | Keygen | Sign | Verify | Inspect`
--  `main` function L91-124 — `()`
+-  `Commands` enum L30-94 — `InitInterface | InitPlugin | Keygen | Sign | Verify | Inspect | Package`
+-  `PackageCommands` enum L97-132 — `Validate | Build | Inspect | Sign | Verify`
+-  `main` function L134-174 — `()`
 
 ### fidius-cli/tests
 
@@ -162,10 +171,29 @@
 - pub `descriptor` module L15 — `-`
 - pub `error` module L16 — `-`
 - pub `hash` module L17 — `-`
-- pub `registry` module L18 — `-`
-- pub `status` module L19 — `-`
-- pub `wire` module L20 — `-`
-- pub `async_runtime` module L23 — `-`
+- pub `package` module L18 — `-`
+- pub `registry` module L19 — `-`
+- pub `status` module L20 — `-`
+- pub `wire` module L21 — `-`
+- pub `async_runtime` module L24 — `-`
+
+#### fidius-core/src/package.rs
+
+- pub `PackageManifest` struct L33-41 — `{ package: PackageHeader, dependencies: BTreeMap<String, String>, metadata: M }` — A parsed package manifest, generic over the host-defined metadata schema.
+- pub `PackageHeader` struct L45-56 — `{ name: String, version: String, interface: String, interface_version: u32, sour...` — Fixed header fields that every package manifest must have.
+- pub `PackageError` enum L60-77 — `ManifestNotFound | ParseError | Io | BuildFailed` — Errors that can occur when loading a package manifest.
+- pub `load_manifest` function L97-109 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
+- pub `load_manifest_untyped` function L115-119 — `( dir: &Path, ) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
+-  `tests` module L122-292 — `-` — host-defined schema type.
+-  `write_manifest` function L127-129 — `(dir: &Path, content: &str)` — host-defined schema type.
+-  `TestMeta` struct L132-136 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
+-  `valid_manifest_parses` function L139-164 — `()` — host-defined schema type.
+-  `manifest_with_dependencies` function L167-191 — `()` — host-defined schema type.
+-  `missing_required_metadata_field_fails` function L194-215 — `()` — host-defined schema type.
+-  `missing_manifest_returns_not_found` function L218-222 — `()` — host-defined schema type.
+-  `extra_metadata_fields_ignored` function L225-246 — `()` — host-defined schema type.
+-  `untyped_manifest_accepts_any_metadata` function L249-270 — `()` — host-defined schema type.
+-  `source_hash_is_optional` function L273-291 — `()` — host-defined schema type.
 
 #### fidius-core/src/registry.rs
 
@@ -285,8 +313,9 @@
 - pub `handle` module L17 — `-`
 - pub `host` module L18 — `-`
 - pub `loader` module L19 — `-`
-- pub `signing` module L20 — `-`
-- pub `types` module L21 — `-`
+- pub `package` module L20 — `-`
+- pub `signing` module L21 — `-`
+- pub `types` module L22 — `-`
 
 #### fidius-host/src/loader.rs
 
@@ -299,6 +328,12 @@
 -  `LoadedPlugin` type L52-59 — `= LoadedPlugin` — Core plugin loading and descriptor validation.
 -  `fmt` function L53-58 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — Core plugin loading and descriptor validation.
 -  `validate_descriptor` function L118-150 — `( desc: &PluginDescriptor, library: &Arc<Library>, ) -> Result<LoadedPlugin, Loa...` — Validate a single descriptor and copy to owned types.
+
+#### fidius-host/src/package.rs
+
+- pub `load_package_manifest` function L40-44 — `( dir: &Path, ) -> Result<PackageManifest<M>, PackageError>` — Load and validate a package manifest against a host-defined schema.
+- pub `discover_packages` function L50-70 — `(dir: &Path) -> Result<Vec<PathBuf>, PackageError>` — Discover packages in a directory.
+- pub `build_package` function L75-121 — `(dir: &Path, release: bool) -> Result<PathBuf, PackageError>` — Build a package by running `cargo build` inside the package directory.
 
 #### fidius-host/src/signing.rs
 
@@ -348,6 +383,19 @@
 -  `call_multiply_method_via_handle` function L114-129 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
 -  `plugin_info_is_correct` function L132-150 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
 -  `load_nonexistent_plugin_returns_not_found` function L153-163 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+
+#### fidius-host/tests/package_e2e.rs
+
+-  `test_package_dir` function L23-25 — `() -> PathBuf` — End-to-end package tests: validate, build, load, call.
+-  `TestSchema` struct L28-31 — `{ category: String, description: String }` — End-to-end package tests: validate, build, load, call.
+-  `StrictSchema` struct L34-38 — `{ category: String, description: String, required_field: String }` — End-to-end package tests: validate, build, load, call.
+-  `load_manifest_with_schema` function L41-51 — `()` — End-to-end package tests: validate, build, load, call.
+-  `schema_mismatch_fails` function L54-64 — `()` — End-to-end package tests: validate, build, load, call.
+-  `build_and_load_package` function L67-95 — `()` — End-to-end package tests: validate, build, load, call.
+-  `AddInput` struct L89 — `{ a: i64, b: i64 }` — End-to-end package tests: validate, build, load, call.
+-  `AddOutput` struct L91 — `{ result: i64 }` — End-to-end package tests: validate, build, load, call.
+-  `discover_packages_finds_fixture` function L98-112 — `()` — End-to-end package tests: validate, build, load, call.
+-  `missing_manifest_returns_error` function L115-119 — `()` — End-to-end package tests: validate, build, load, call.
 
 ### fidius-macro/src
 

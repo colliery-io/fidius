@@ -15,6 +15,7 @@ nav:
     - fidius-core::descriptor: rust/fidius-core/descriptor.md
     - fidius-core::error: rust/fidius-core/error.md
     - fidius-core::hash: rust/fidius-core/hash.md
+    - fidius-core::package: rust/fidius-core/package.md
     - fidius-core::registry: rust/fidius-core/registry.md
     - fidius-core::status: rust/fidius-core/status.md
     - fidius-core::wire: rust/fidius-core/wire.md
@@ -24,6 +25,7 @@ nav:
     - fidius-host::handle: rust/fidius-host/handle.md
     - fidius-host::host: rust/fidius-host/host.md
     - fidius-host::loader: rust/fidius-host/loader.md
+    - fidius-host::package: rust/fidius-host/package.md
     - fidius-host::signing: rust/fidius-host/signing.md
     - fidius-host::types: rust/fidius-host/types.md
     - fidius-macro: rust/fidius-macro.md

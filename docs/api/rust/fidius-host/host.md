@@ -143,7 +143,13 @@ with the given name. Returns the loaded plugin ready for calling.
 
                 // Verify signature if required
                 if self.require_signature {
-                    signing::verify_signature(&path, &self.trusted_keys)?;
+                    match signing::verify_signature(&path, &self.trusted_keys) {
+                        Ok(()) => {}
+                        Err(e) if self.load_policy == LoadPolicy::Lenient => {
+                            eprintln!("fidius warning: {e}");
+                        }
+                        Err(e) => return Err(e),
+                    }
                 }
 
                 match loader::load_library(&path) {
