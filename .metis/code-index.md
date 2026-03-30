@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T23:22:32Z | 41 files | Rust
+> Generated: 2026-03-30T01:32:20Z | 41 files | Rust
 
 ## Project Structure
 
@@ -80,11 +80,11 @@
 - pub `sign` function L220-240 — `(key_path: &Path, dylib_path: &Path) -> Result`
 - pub `verify` function L244-276 — `(key_path: &Path, dylib_path: &Path) -> Result`
 - pub `inspect` function L280-300 — `(dylib_path: &Path) -> Result`
-- pub `package_validate` function L304-316 — `(dir: &Path) -> Result`
-- pub `package_build` function L320-351 — `(dir: &Path, release: bool) -> Result`
-- pub `package_inspect` function L355-371 — `(dir: &Path) -> Result`
-- pub `package_sign` function L375-392 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_verify` function L396-424 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_validate` function L304-319 — `(dir: &Path) -> Result`
+- pub `package_build` function L323-354 — `(dir: &Path, release: bool) -> Result`
+- pub `package_inspect` function L358-374 — `(dir: &Path) -> Result`
+- pub `package_sign` function L378-399 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L403-431 — `(key_path: &Path, dir: &Path) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
 -  `resolve_dep` function L30-52 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
 -  `check_crates_io` function L55-70 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
@@ -104,20 +104,20 @@
 #### fidius-cli/tests/cli.rs
 
 -  `fidius_cmd` function L23-25 — `() -> Command` — CLI integration tests using assert_cmd.
--  `build_test_plugin` function L27-39 — `() -> PathBuf` — CLI integration tests using assert_cmd.
--  `smoke_dylib_name` function L41-49 — `() -> &'static str` — CLI integration tests using assert_cmd.
--  `help_works` function L52-63 — `()` — CLI integration tests using assert_cmd.
--  `init_interface_creates_files` function L66-95 — `()` — CLI integration tests using assert_cmd.
--  `init_interface_errors_if_exists` function L98-127 — `()` — CLI integration tests using assert_cmd.
--  `init_plugin_creates_files` function L130-162 — `()` — CLI integration tests using assert_cmd.
--  `keygen_sign_verify_roundtrip` function L165-200 — `()` — CLI integration tests using assert_cmd.
--  `inspect_shows_plugin_info` function L203-214 — `()` — CLI integration tests using assert_cmd.
+-  `build_test_plugin` function L27-51 — `() -> PathBuf` — CLI integration tests using assert_cmd.
+-  `smoke_dylib_name` function L53-61 — `() -> &'static str` — CLI integration tests using assert_cmd.
+-  `help_works` function L64-75 — `()` — CLI integration tests using assert_cmd.
+-  `init_interface_creates_files` function L78-107 — `()` — CLI integration tests using assert_cmd.
+-  `init_interface_errors_if_exists` function L110-139 — `()` — CLI integration tests using assert_cmd.
+-  `init_plugin_creates_files` function L142-174 — `()` — CLI integration tests using assert_cmd.
+-  `keygen_sign_verify_roundtrip` function L177-212 — `()` — CLI integration tests using assert_cmd.
+-  `inspect_shows_plugin_info` function L215-226 — `()` — CLI integration tests using assert_cmd.
 
 #### fidius-cli/tests/full_pipeline.rs
 
 -  `fides_cmd` function L23-25 — `() -> Command` — Everything is generated from scratch by the CLI.
 -  `workspace_fidius_path` function L28-30 — `() -> PathBuf` — Path to the workspace root's `fidius` facade crate (for local dep resolution).
--  `full_pipeline_scaffold_package_build_sign_load_call` function L34-270 — `()` — Everything is generated from scratch by the CLI.
+-  `full_pipeline_scaffold_package_build_sign_load_call` function L33-276 — `()` — Everything is generated from scratch by the CLI.
 
 ### fidius-core/src
 
@@ -195,20 +195,20 @@
 - pub `PackageHeader` struct L41-50 — `{ name: String, version: String, interface: String, interface_version: u32 }` — Fixed header fields that every package manifest must have.
 - pub `PackageError` enum L54-79 — `ManifestNotFound | ParseError | Io | BuildFailed | SignatureNotFound | Signature...` — Errors that can occur when loading a package manifest.
 - pub `load_manifest` function L99-111 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
-- pub `load_manifest_untyped` function L117-121 — `( dir: &Path, ) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
-- pub `package_digest` function L131-152 — `(dir: &Path) -> Result<[u8; 32], PackageError>` — Compute a deterministic SHA-256 digest over all package source files.
--  `collect_files` function L155-186 — `(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError>` — Recursively collect file paths relative to `root`, skipping excluded dirs/files.
--  `tests` module L189-351 — `-` — host-defined schema type.
--  `write_manifest` function L193-195 — `(dir: &Path, content: &str)` — host-defined schema type.
--  `TestMeta` struct L198-202 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
--  `valid_manifest_parses` function L205-229 — `()` — host-defined schema type.
--  `missing_required_metadata_field_fails` function L232-253 — `()` — host-defined schema type.
--  `missing_manifest_returns_not_found` function L256-260 — `()` — host-defined schema type.
--  `extra_metadata_fields_ignored` function L263-284 — `()` — host-defined schema type.
--  `untyped_manifest_accepts_any_metadata` function L287-308 — `()` — host-defined schema type.
--  `digest_is_deterministic` function L311-319 — `()` — host-defined schema type.
--  `digest_changes_on_file_modification` function L322-333 — `()` — host-defined schema type.
--  `digest_excludes_target_and_sig` function L336-350 — `()` — host-defined schema type.
+- pub `load_manifest_untyped` function L117-119 — `(dir: &Path) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
+- pub `package_digest` function L129-150 — `(dir: &Path) -> Result<[u8; 32], PackageError>` — Compute a deterministic SHA-256 digest over all package source files.
+-  `collect_files` function L153-184 — `(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError>` — Recursively collect file paths relative to `root`, skipping excluded dirs/files.
+-  `tests` module L187-352 — `-` — host-defined schema type.
+-  `write_manifest` function L191-193 — `(dir: &Path, content: &str)` — host-defined schema type.
+-  `TestMeta` struct L196-200 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
+-  `valid_manifest_parses` function L203-227 — `()` — host-defined schema type.
+-  `missing_required_metadata_field_fails` function L230-254 — `()` — host-defined schema type.
+-  `missing_manifest_returns_not_found` function L257-261 — `()` — host-defined schema type.
+-  `extra_metadata_fields_ignored` function L264-285 — `()` — host-defined schema type.
+-  `untyped_manifest_accepts_any_metadata` function L288-309 — `()` — host-defined schema type.
+-  `digest_is_deterministic` function L312-320 — `()` — host-defined schema type.
+-  `digest_changes_on_file_modification` function L323-334 — `()` — host-defined schema type.
+-  `digest_excludes_target_and_sig` function L337-351 — `()` — host-defined schema type.
 
 #### fidius-core/src/registry.rs
 
@@ -292,13 +292,13 @@
 
 - pub `PluginHandle` struct L42-55 — `{ _library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exte...` — A handle to a loaded plugin, ready for calling methods.
 - pub `from_loaded` function L90-99 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a PluginHandle from a LoadedPlugin.
-- pub `call_method` function L109-207 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `has_capability` function L212-217 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L220-222 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `call_method` function L109-205 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `has_capability` function L210-215 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L218-220 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
 -  `FfiFn` type L32 — `= unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32` — Type alias for the PluginAllocated FFI function pointer signature.
 -  `PluginHandle` type L65 — `impl Send for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
 -  `PluginHandle` type L66 — `impl Sync for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L68-223 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `PluginHandle` type L68-221 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
 -  `new` function L71-87 — `( library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exter...` — Create a new PluginHandle.
 
 #### fidius-host/src/host.rs
@@ -347,8 +347,8 @@
 #### fidius-host/src/package.rs
 
 - pub `load_package_manifest` function L41-45 — `( dir: &Path, ) -> Result<PackageManifest<M>, PackageError>` — Load and validate a package manifest against a host-defined schema.
-- pub `discover_packages` function L51-71 — `(dir: &Path) -> Result<Vec<PathBuf>, PackageError>` — Discover packages in a directory.
-- pub `verify_package` function L82-108 — `(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), PackageError>` — Verify a source package's signature against trusted public keys.
+- pub `discover_packages` function L51-70 — `(dir: &Path) -> Result<Vec<PathBuf>, PackageError>` — Discover packages in a directory.
+- pub `verify_package` function L81-108 — `(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), PackageError>` — Verify a source package's signature against trusted public keys.
 - pub `build_package` function L113-162 — `(dir: &Path, release: bool) -> Result<PathBuf, PackageError>` — Build a package by running `cargo build` inside the package directory.
 
 #### fidius-host/src/signing.rs
@@ -374,35 +374,35 @@
 
 #### fidius-host/tests/e2e.rs
 
--  `build_test_plugin` function L24-40 — `() -> PathBuf` — Build the test plugin and return the directory containing the cdylib.
--  `dylib_path` function L42-44 — `(dir: &PathBuf) -> PathBuf` — End-to-end validation tests: signing, negative cases.
--  `sign_dylib` function L46-51 — `(dylib: &PathBuf, key: &SigningKey)` — End-to-end validation tests: signing, negative cases.
--  `cleanup_sig` function L53-56 — `(dylib: &PathBuf)` — End-to-end validation tests: signing, negative cases.
--  `signed_plugin_loads_with_correct_key` function L59-79 — `()` — End-to-end validation tests: signing, negative cases.
--  `signed_plugin_fails_with_wrong_key` function L82-106 — `()` — End-to-end validation tests: signing, negative cases.
--  `unsigned_plugin_fails_when_signature_required` function L109-131 — `()` — End-to-end validation tests: signing, negative cases.
--  `unsigned_plugin_loads_without_signature_requirement` function L134-159 — `()` — End-to-end validation tests: signing, negative cases.
--  `AddInput` struct L148-151 — `{ a: i64, b: i64 }` — End-to-end validation tests: signing, negative cases.
--  `AddOutput` struct L153-155 — `{ result: i64 }` — End-to-end validation tests: signing, negative cases.
--  `lenient_policy_still_enforces_signatures` function L162-185 — `()` — End-to-end validation tests: signing, negative cases.
--  `lenient_policy_still_rejects_wrong_key` function L188-213 — `()` — End-to-end validation tests: signing, negative cases.
+-  `build_test_plugin` function L24-52 — `() -> PathBuf` — Build the test plugin and return the directory containing the cdylib.
+-  `dylib_path` function L54-63 — `(dir: &PathBuf) -> PathBuf` — End-to-end validation tests: signing, negative cases.
+-  `sign_dylib` function L65-71 — `(dylib: &PathBuf, key: &SigningKey)` — End-to-end validation tests: signing, negative cases.
+-  `cleanup_sig` function L73-77 — `(dylib: &PathBuf)` — End-to-end validation tests: signing, negative cases.
+-  `signed_plugin_loads_with_correct_key` function L80-100 — `()` — End-to-end validation tests: signing, negative cases.
+-  `signed_plugin_fails_with_wrong_key` function L103-127 — `()` — End-to-end validation tests: signing, negative cases.
+-  `unsigned_plugin_fails_when_signature_required` function L130-152 — `()` — End-to-end validation tests: signing, negative cases.
+-  `unsigned_plugin_loads_without_signature_requirement` function L155-180 — `()` — End-to-end validation tests: signing, negative cases.
+-  `AddInput` struct L169-172 — `{ a: i64, b: i64 }` — End-to-end validation tests: signing, negative cases.
+-  `AddOutput` struct L174-176 — `{ result: i64 }` — End-to-end validation tests: signing, negative cases.
+-  `lenient_policy_still_enforces_signatures` function L183-206 — `()` — End-to-end validation tests: signing, negative cases.
+-  `lenient_policy_still_rejects_wrong_key` function L209-234 — `()` — End-to-end validation tests: signing, negative cases.
 
 #### fidius-host/tests/integration.rs
 
--  `build_test_plugin` function L24-40 — `() -> PathBuf` — Build the test plugin and return the directory containing the cdylib.
--  `AddInput` struct L43-46 — `{ a: i64, b: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `AddOutput` struct L49-51 — `{ result: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `MulInput` struct L54-57 — `{ a: i64, b: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `MulOutput` struct L60-62 — `{ result: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `discover_finds_plugin` function L65-80 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `load_plugin_by_name` function L83-94 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `call_add_method_via_handle` function L97-111 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `call_multiply_method_via_handle` function L114-129 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `plugin_info_is_correct` function L132-150 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `load_nonexistent_plugin_returns_not_found` function L153-163 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `out_of_bounds_vtable_index_returns_error` function L166-187 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `Dummy` struct L178 — `-` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
--  `has_capability_returns_false_for_high_bits` function L190-206 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `build_test_plugin` function L24-52 — `() -> PathBuf` — Build the test plugin and return the directory containing the cdylib.
+-  `AddInput` struct L55-58 — `{ a: i64, b: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `AddOutput` struct L61-63 — `{ result: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `MulInput` struct L66-69 — `{ a: i64, b: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `MulOutput` struct L72-74 — `{ result: i64 }` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `discover_finds_plugin` function L77-92 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `load_plugin_by_name` function L95-106 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `call_add_method_via_handle` function L109-123 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `call_multiply_method_via_handle` function L126-141 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `plugin_info_is_correct` function L144-162 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `load_nonexistent_plugin_returns_not_found` function L165-175 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `out_of_bounds_vtable_index_returns_error` function L178-199 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `Dummy` struct L190 — `-` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
+-  `has_capability_returns_false_for_high_bits` function L202-218 — `()` — Integration test: load the test-plugin-smoke cdylib via fidius-host API.
 
 #### fidius-host/tests/package_e2e.rs
 
@@ -411,11 +411,11 @@
 -  `StrictSchema` struct L34-38 — `{ category: String, description: String, required_field: String }` — End-to-end package tests: validate, build, load, call.
 -  `load_manifest_with_schema` function L41-51 — `()` — End-to-end package tests: validate, build, load, call.
 -  `schema_mismatch_fails` function L54-64 — `()` — End-to-end package tests: validate, build, load, call.
--  `build_and_load_package` function L67-95 — `()` — End-to-end package tests: validate, build, load, call.
--  `AddInput` struct L89 — `{ a: i64, b: i64 }` — End-to-end package tests: validate, build, load, call.
--  `AddOutput` struct L91 — `{ result: i64 }` — End-to-end package tests: validate, build, load, call.
--  `discover_packages_finds_fixture` function L98-112 — `()` — End-to-end package tests: validate, build, load, call.
--  `missing_manifest_returns_error` function L115-119 — `()` — End-to-end package tests: validate, build, load, call.
+-  `build_and_load_package` function L67-105 — `()` — End-to-end package tests: validate, build, load, call.
+-  `AddInput` struct L94-97 — `{ a: i64, b: i64 }` — End-to-end package tests: validate, build, load, call.
+-  `AddOutput` struct L99-101 — `{ result: i64 }` — End-to-end package tests: validate, build, load, call.
+-  `discover_packages_finds_fixture` function L108-122 — `()` — End-to-end package tests: validate, build, load, call.
+-  `missing_manifest_returns_error` function L125-129 — `()` — End-to-end package tests: validate, build, load, call.
 
 ### fidius-macro/src
 
@@ -487,7 +487,7 @@
 - pub `MyProcessor` struct L25 — `-` — Test that async methods work with the fidius macros.
 -  `MyProcessor` type L28-33 — `impl AsyncProcessor for MyProcessor` — Test that async methods work with the fidius macros.
 -  `process` function L29-32 — `(&self, input: String) -> String` — Test that async methods work with the fidius macros.
--  `can_call_async_method_via_vtable` function L38-67 — `()` — Test that async methods work with the fidius macros.
+-  `can_call_async_method_via_vtable` function L38-68 — `()` — Test that async methods work with the fidius macros.
 
 #### fidius-macro/tests/impl_basic.rs
 
@@ -497,8 +497,8 @@
 -  `greet` function L29-31 — `(&self, name: String) -> String` — Test that #[plugin_impl] compiles and generates expected items.
 -  `get_registry` function L37-39 — `() -> &'static fidius_core::descriptor::PluginRegistry` — Test that #[plugin_impl] compiles and generates expected items.
 -  `registry_exists_and_is_valid` function L42-47 — `()` — Test that #[plugin_impl] compiles and generates expected items.
--  `descriptor_fields_are_correct` function L50-58 — `()` — Test that #[plugin_impl] compiles and generates expected items.
--  `can_call_shim_via_vtable` function L61-93 — `()` — Test that #[plugin_impl] compiles and generates expected items.
+-  `descriptor_fields_are_correct` function L50-61 — `()` — Test that #[plugin_impl] compiles and generates expected items.
+-  `can_call_shim_via_vtable` function L64-96 — `()` — Test that #[plugin_impl] compiles and generates expected items.
 
 #### fidius-macro/tests/interface_basic.rs
 
@@ -520,14 +520,14 @@
 -  `GoodbyeGreeter` type L39-43 — `impl Greeter for GoodbyeGreeter` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
 -  `greet` function L40-42 — `(&self, name: String) -> String` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
 -  `registry_has_two_plugins` function L49-54 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `both_descriptors_are_valid` function L57-77 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
--  `can_call_both_plugins` function L80-117 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `both_descriptors_are_valid` function L57-80 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
+-  `can_call_both_plugins` function L83-120 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
 
 #### fidius-macro/tests/smoke_cdylib.rs
 
--  `load_cdylib_and_call_plugin` function L23-115 — `()` — loads it via dlopen/dlsym and verifies the registry and vtable work.
--  `AddInput` struct L75-78 — `{ a: i64, b: i64 }` — loads it via dlopen/dlsym and verifies the registry and vtable work.
--  `AddOutput` struct L80-82 — `{ result: i64 }` — loads it via dlopen/dlsym and verifies the registry and vtable work.
+-  `load_cdylib_and_call_plugin` function L23-131 — `()` — loads it via dlopen/dlsym and verifies the registry and vtable work.
+-  `AddInput` struct L91-94 — `{ a: i64, b: i64 }` — loads it via dlopen/dlsym and verifies the registry and vtable work.
+-  `AddOutput` struct L96-98 — `{ result: i64 }` — loads it via dlopen/dlsym and verifies the registry and vtable work.
 
 #### fidius-macro/tests/trybuild.rs
 
