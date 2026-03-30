@@ -40,18 +40,27 @@ fn build_test_plugin() -> PathBuf {
 }
 
 fn dylib_path(dir: &PathBuf) -> PathBuf {
-    dir.join("libtest_plugin_smoke.dylib")
+    let name = if cfg!(target_os = "macos") {
+        "libtest_plugin_smoke.dylib"
+    } else if cfg!(target_os = "windows") {
+        "test_plugin_smoke.dll"
+    } else {
+        "libtest_plugin_smoke.so"
+    };
+    dir.join(name)
 }
 
 fn sign_dylib(dylib: &PathBuf, key: &SigningKey) {
     let content = std::fs::read(dylib).unwrap();
     let signature = key.sign(&content);
-    let sig_path = dylib.with_extension("dylib.sig");
+    let ext = dylib.extension().unwrap().to_str().unwrap();
+    let sig_path = dylib.with_extension(format!("{ext}.sig"));
     std::fs::write(sig_path, signature.to_bytes()).unwrap();
 }
 
 fn cleanup_sig(dylib: &PathBuf) {
-    let sig_path = dylib.with_extension("dylib.sig");
+    let ext = dylib.extension().unwrap().to_str().unwrap();
+    let sig_path = dylib.with_extension(format!("{ext}.sig"));
     let _ = std::fs::remove_file(sig_path);
 }
 

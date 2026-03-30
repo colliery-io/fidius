@@ -38,7 +38,14 @@ fn load_cdylib_and_call_plugin() {
     );
 
     // Load the dylib
-    let dylib_path = "../tests/test-plugin-smoke/target/debug/libtest_plugin_smoke.dylib";
+    let dylib_name = if cfg!(target_os = "macos") {
+        "libtest_plugin_smoke.dylib"
+    } else if cfg!(target_os = "windows") {
+        "test_plugin_smoke.dll"
+    } else {
+        "libtest_plugin_smoke.so"
+    };
+    let dylib_path = format!("../tests/test-plugin-smoke/target/debug/{dylib_name}");
     let lib = unsafe { libloading::Library::new(dylib_path) }.expect("failed to load cdylib");
 
     // Get the registry via fidius_get_registry function
