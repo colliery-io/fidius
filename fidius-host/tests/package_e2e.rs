@@ -67,8 +67,9 @@ fn schema_mismatch_fails() {
 fn build_and_load_package() {
     let dir = test_package_dir();
 
-    // Build
-    let dylib_path = package::build_package(&dir, false).unwrap();
+    // Build in the same profile as the test binary so wire formats match
+    let release = !cfg!(debug_assertions);
+    let dylib_path = package::build_package(&dir, release).unwrap();
     assert!(
         dylib_path.exists(),
         "built dylib should exist at {:?}",
