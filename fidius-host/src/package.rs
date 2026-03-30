@@ -55,8 +55,7 @@ pub fn discover_packages(dir: &Path) -> Result<Vec<PathBuf>, PackageError> {
         return Ok(packages);
     }
 
-    let entries =
-        std::fs::read_dir(dir).map_err(PackageError::Io)?;
+    let entries = std::fs::read_dir(dir).map_err(PackageError::Io)?;
 
     for entry in entries {
         let entry = entry.map_err(PackageError::Io)?;
@@ -87,11 +86,12 @@ pub fn verify_package(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), P
         });
     }
 
-    let sig_bytes: [u8; 64] = std::fs::read(&sig_path)?
-        .try_into()
-        .map_err(|_| PackageError::SignatureInvalid {
-            path: dir.display().to_string(),
-        })?;
+    let sig_bytes: [u8; 64] =
+        std::fs::read(&sig_path)?
+            .try_into()
+            .map_err(|_| PackageError::SignatureInvalid {
+                path: dir.display().to_string(),
+            })?;
 
     let signature = Signature::from_bytes(&sig_bytes);
     let digest = fidius_core::package::package_digest(dir)?;

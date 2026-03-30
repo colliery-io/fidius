@@ -69,7 +69,11 @@ fn build_and_load_package() {
 
     // Build
     let dylib_path = package::build_package(&dir, false).unwrap();
-    assert!(dylib_path.exists(), "built dylib should exist at {:?}", dylib_path);
+    assert!(
+        dylib_path.exists(),
+        "built dylib should exist at {:?}",
+        dylib_path
+    );
 
     // Load via PluginHost
     let dylib_dir = dylib_path.parent().unwrap();
@@ -86,9 +90,14 @@ fn build_and_load_package() {
     let handle = fidius_host::PluginHandle::from_loaded(loaded);
 
     #[derive(serde::Serialize)]
-    struct AddInput { a: i64, b: i64 }
+    struct AddInput {
+        a: i64,
+        b: i64,
+    }
     #[derive(serde::Deserialize, Debug, PartialEq)]
-    struct AddOutput { result: i64 }
+    struct AddOutput {
+        result: i64,
+    }
 
     let output: AddOutput = handle.call_method(0, &AddInput { a: 5, b: 3 }).unwrap();
     assert_eq!(output, AddOutput { result: 8 });

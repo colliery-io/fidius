@@ -1,4 +1,2 @@
-/Users/dstorey/Desktop/fides/fidius-macro/src/interface.rs
-/Users/dstorey/Desktop/fides/fidius-host/src/handle.rs
-/Users/dstorey/Desktop/fides/fidius-macro/src/impl_macro.rs
-/Users/dstorey/Desktop/fides/fidius-macro/tests/interface_basic.rs
+/Users/dstorey/Desktop/fides/fidius-host/tests/e2e.rs
+/Users/dstorey/Desktop/fides/fidius-macro/tests/smoke_cdylib.rs

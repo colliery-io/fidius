@@ -38,7 +38,8 @@ fidius_core::fidius_plugin_registry!();
 fn can_call_async_method_via_vtable() {
     let reg = fidius_core::registry::get_registry();
     let desc = unsafe { &**reg.descriptors };
-    let vtable = unsafe { &*(desc.vtable as *const __fidius_AsyncProcessor::AsyncProcessor_VTable) };
+    let vtable =
+        unsafe { &*(desc.vtable as *const __fidius_AsyncProcessor::AsyncProcessor_VTable) };
 
     let input = "hello".to_string();
     let input_bytes = fidius_core::wire::serialize(&input).unwrap();

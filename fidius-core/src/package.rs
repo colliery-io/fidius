@@ -114,9 +114,7 @@ pub fn load_manifest<M: DeserializeOwned>(dir: &Path) -> Result<PackageManifest<
 ///
 /// Uses `toml::Value` as the metadata type so any `[metadata]` section is accepted.
 /// Useful for CLI tools that validate structure without knowing the host's schema.
-pub fn load_manifest_untyped(
-    dir: &Path,
-) -> Result<PackageManifest<toml::Value>, PackageError> {
+pub fn load_manifest_untyped(dir: &Path) -> Result<PackageManifest<toml::Value>, PackageError> {
     load_manifest::<toml::Value>(dir)
 }
 
@@ -249,7 +247,10 @@ mod tests {
         let result = load_manifest::<TestMeta>(tmp.path());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("category"), "error should mention missing field: {err}");
+        assert!(
+            err.contains("category"),
+            "error should mention missing field: {err}"
+        );
     }
 
     #[test]

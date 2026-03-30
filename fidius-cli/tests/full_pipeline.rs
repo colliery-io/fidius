@@ -29,7 +29,6 @@ fn workspace_fidius_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fidius")
 }
 
-
 #[test]
 fn full_pipeline_scaffold_package_build_sign_load_call() {
     let tmp = TempDir::new().unwrap();
@@ -167,12 +166,7 @@ description = "E2E test plugin"
     // is part of the signed digest.
     eprintln!("Step 6: fidius package build --debug");
     fides_cmd()
-        .args([
-            "package",
-            "build",
-            plugin_dir.to_str().unwrap(),
-            "--debug",
-        ])
+        .args(["package", "build", plugin_dir.to_str().unwrap(), "--debug"])
         .assert()
         .success()
         .stdout(predicates::str::contains("Build successful"));
@@ -215,10 +209,7 @@ description = "E2E test plugin"
     let dylib_dir = plugin_dir.join("target/debug");
 
     // Read the public key for PluginHost
-    let key_bytes: [u8; 32] = std::fs::read(&public_key)
-        .unwrap()
-        .try_into()
-        .unwrap();
+    let key_bytes: [u8; 32] = std::fs::read(&public_key).unwrap().try_into().unwrap();
     let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&key_bytes).unwrap();
 
     // Sign the compiled dylib too (PluginHost checks dylib signatures, not manifests)
@@ -233,12 +224,7 @@ description = "E2E test plugin"
 
     // Sign the dylib for host loading
     fides_cmd()
-        .args([
-            "sign",
-            "--key",
-            &secret_key,
-            dylib_path.to_str().unwrap(),
-        ])
+        .args(["sign", "--key", &secret_key, dylib_path.to_str().unwrap()])
         .assert()
         .success();
 
@@ -264,7 +250,10 @@ description = "E2E test plugin"
     let result: String = handle.call_method(0, &input).unwrap();
     assert_eq!(result, "processed: hello");
 
-    eprintln!("  ✓ Plugin loaded: {} (interface: {})", loaded_name, loaded_iface);
+    eprintln!(
+        "  ✓ Plugin loaded: {} (interface: {})",
+        loaded_name, loaded_iface
+    );
     eprintln!("  ✓ call_method(0, \"hello\") returned: {:?}", result);
     eprintln!("\n=== ALL STEPS PASSED ===\n");
 }

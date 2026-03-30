@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-29T17:58:22Z | 41 files | Rust
+> Generated: 2026-03-29T23:22:32Z | 41 files | Rust
 
 ## Project Structure
 
@@ -74,17 +74,17 @@
 
 #### fidius-cli/src/commands.rs
 
-- pub `init_interface` function L74-121 — `( name: &str, trait_name: &str, path: Option<&Path>, version: Option<&str>, ) ->...`
-- pub `init_plugin` function L125-193 — `( name: &str, interface: &str, trait_name: &str, path: Option<&Path>, version: O...`
-- pub `keygen` function L197-218 — `(out: &str) -> Result`
-- pub `sign` function L222-242 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `verify` function L246-278 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `inspect` function L282-302 — `(dylib_path: &Path) -> Result`
-- pub `package_validate` function L306-327 — `(dir: &Path) -> Result`
-- pub `package_build` function L331-362 — `(dir: &Path, release: bool) -> Result`
-- pub `package_inspect` function L366-391 — `(dir: &Path) -> Result`
-- pub `package_sign` function L395-401 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_verify` function L405-411 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `init_interface` function L74-119 — `( name: &str, trait_name: &str, path: Option<&Path>, version: Option<&str>, ) ->...`
+- pub `init_plugin` function L123-191 — `( name: &str, interface: &str, trait_name: &str, path: Option<&Path>, version: O...`
+- pub `keygen` function L195-216 — `(out: &str) -> Result`
+- pub `sign` function L220-240 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `verify` function L244-276 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `inspect` function L280-300 — `(dylib_path: &Path) -> Result`
+- pub `package_validate` function L304-316 — `(dir: &Path) -> Result`
+- pub `package_build` function L320-351 — `(dir: &Path, release: bool) -> Result`
+- pub `package_inspect` function L355-371 — `(dir: &Path) -> Result`
+- pub `package_sign` function L375-392 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L396-424 — `(key_path: &Path, dir: &Path) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
 -  `resolve_dep` function L30-52 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
 -  `check_crates_io` function L55-70 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
@@ -105,19 +105,19 @@
 
 -  `fidius_cmd` function L23-25 — `() -> Command` — CLI integration tests using assert_cmd.
 -  `build_test_plugin` function L27-39 — `() -> PathBuf` — CLI integration tests using assert_cmd.
--  `help_works` function L42-53 — `()` — CLI integration tests using assert_cmd.
--  `init_interface_creates_files` function L56-85 — `()` — CLI integration tests using assert_cmd.
--  `init_interface_errors_if_exists` function L88-117 — `()` — CLI integration tests using assert_cmd.
--  `init_plugin_creates_files` function L120-152 — `()` — CLI integration tests using assert_cmd.
--  `keygen_sign_verify_roundtrip` function L155-189 — `()` — CLI integration tests using assert_cmd.
--  `inspect_shows_plugin_info` function L192-203 — `()` — CLI integration tests using assert_cmd.
+-  `smoke_dylib_name` function L41-49 — `() -> &'static str` — CLI integration tests using assert_cmd.
+-  `help_works` function L52-63 — `()` — CLI integration tests using assert_cmd.
+-  `init_interface_creates_files` function L66-95 — `()` — CLI integration tests using assert_cmd.
+-  `init_interface_errors_if_exists` function L98-127 — `()` — CLI integration tests using assert_cmd.
+-  `init_plugin_creates_files` function L130-162 — `()` — CLI integration tests using assert_cmd.
+-  `keygen_sign_verify_roundtrip` function L165-200 — `()` — CLI integration tests using assert_cmd.
+-  `inspect_shows_plugin_info` function L203-214 — `()` — CLI integration tests using assert_cmd.
 
 #### fidius-cli/tests/full_pipeline.rs
 
 -  `fides_cmd` function L23-25 — `() -> Command` — Everything is generated from scratch by the CLI.
 -  `workspace_fidius_path` function L28-30 — `() -> PathBuf` — Path to the workspace root's `fidius` facade crate (for local dep resolution).
--  `workspace_fidius_core_path` function L33-35 — `() -> PathBuf` — Path to the workspace root's `fidius-core` crate.
--  `full_pipeline_scaffold_package_build_sign_load_call` function L38-276 — `()` — Everything is generated from scratch by the CLI.
+-  `full_pipeline_scaffold_package_build_sign_load_call` function L34-270 — `()` — Everything is generated from scratch by the CLI.
 
 ### fidius-core/src
 
@@ -191,21 +191,24 @@
 
 #### fidius-core/src/package.rs
 
-- pub `PackageManifest` struct L33-41 — `{ package: PackageHeader, dependencies: BTreeMap<String, String>, metadata: M }` — A parsed package manifest, generic over the host-defined metadata schema.
-- pub `PackageHeader` struct L45-56 — `{ name: String, version: String, interface: String, interface_version: u32, sour...` — Fixed header fields that every package manifest must have.
-- pub `PackageError` enum L60-77 — `ManifestNotFound | ParseError | Io | BuildFailed` — Errors that can occur when loading a package manifest.
-- pub `load_manifest` function L97-109 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
-- pub `load_manifest_untyped` function L115-119 — `( dir: &Path, ) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
--  `tests` module L122-292 — `-` — host-defined schema type.
--  `write_manifest` function L127-129 — `(dir: &Path, content: &str)` — host-defined schema type.
--  `TestMeta` struct L132-136 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
--  `valid_manifest_parses` function L139-164 — `()` — host-defined schema type.
--  `manifest_with_dependencies` function L167-191 — `()` — host-defined schema type.
--  `missing_required_metadata_field_fails` function L194-215 — `()` — host-defined schema type.
--  `missing_manifest_returns_not_found` function L218-222 — `()` — host-defined schema type.
--  `extra_metadata_fields_ignored` function L225-246 — `()` — host-defined schema type.
--  `untyped_manifest_accepts_any_metadata` function L249-270 — `()` — host-defined schema type.
--  `source_hash_is_optional` function L273-291 — `()` — host-defined schema type.
+- pub `PackageManifest` struct L32-37 — `{ package: PackageHeader, metadata: M }` — A parsed package manifest, generic over the host-defined metadata schema.
+- pub `PackageHeader` struct L41-50 — `{ name: String, version: String, interface: String, interface_version: u32 }` — Fixed header fields that every package manifest must have.
+- pub `PackageError` enum L54-79 — `ManifestNotFound | ParseError | Io | BuildFailed | SignatureNotFound | Signature...` — Errors that can occur when loading a package manifest.
+- pub `load_manifest` function L99-111 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
+- pub `load_manifest_untyped` function L117-121 — `( dir: &Path, ) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
+- pub `package_digest` function L131-152 — `(dir: &Path) -> Result<[u8; 32], PackageError>` — Compute a deterministic SHA-256 digest over all package source files.
+-  `collect_files` function L155-186 — `(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError>` — Recursively collect file paths relative to `root`, skipping excluded dirs/files.
+-  `tests` module L189-351 — `-` — host-defined schema type.
+-  `write_manifest` function L193-195 — `(dir: &Path, content: &str)` — host-defined schema type.
+-  `TestMeta` struct L198-202 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
+-  `valid_manifest_parses` function L205-229 — `()` — host-defined schema type.
+-  `missing_required_metadata_field_fails` function L232-253 — `()` — host-defined schema type.
+-  `missing_manifest_returns_not_found` function L256-260 — `()` — host-defined schema type.
+-  `extra_metadata_fields_ignored` function L263-284 — `()` — host-defined schema type.
+-  `untyped_manifest_accepts_any_metadata` function L287-308 — `()` — host-defined schema type.
+-  `digest_is_deterministic` function L311-319 — `()` — host-defined schema type.
+-  `digest_changes_on_file_modification` function L322-333 — `()` — host-defined schema type.
+-  `digest_excludes_target_and_sig` function L336-350 — `()` — host-defined schema type.
 
 #### fidius-core/src/registry.rs
 
@@ -287,16 +290,16 @@
 
 #### fidius-host/src/handle.rs
 
-- pub `PluginHandle` struct L38-51 — `{ _library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exte...` — A handle to a loaded plugin, ready for calling methods.
-- pub `from_loaded` function L80-89 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a PluginHandle from a LoadedPlugin.
-- pub `call_method` function L99-197 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `has_capability` function L202-207 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L210-212 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `PluginHandle` struct L42-55 — `{ _library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exte...` — A handle to a loaded plugin, ready for calling methods.
+- pub `from_loaded` function L90-99 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a PluginHandle from a LoadedPlugin.
+- pub `call_method` function L109-207 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `has_capability` function L212-217 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L220-222 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
 -  `FfiFn` type L32 — `= unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32` — Type alias for the PluginAllocated FFI function pointer signature.
--  `PluginHandle` type L55 — `impl Send for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L56 — `impl Sync for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L58-213 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `new` function L61-77 — `( library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exter...` — Create a new PluginHandle.
+-  `PluginHandle` type L65 — `impl Send for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `PluginHandle` type L66 — `impl Sync for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `PluginHandle` type L68-223 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `new` function L71-87 — `( library: Arc<Library>, vtable: *const c_void, free_buffer: Option<unsafe exter...` — Create a new PluginHandle.
 
 #### fidius-host/src/host.rs
 
@@ -343,9 +346,10 @@
 
 #### fidius-host/src/package.rs
 
-- pub `load_package_manifest` function L40-44 — `( dir: &Path, ) -> Result<PackageManifest<M>, PackageError>` — Load and validate a package manifest against a host-defined schema.
-- pub `discover_packages` function L50-70 — `(dir: &Path) -> Result<Vec<PathBuf>, PackageError>` — Discover packages in a directory.
-- pub `build_package` function L75-124 — `(dir: &Path, release: bool) -> Result<PathBuf, PackageError>` — Build a package by running `cargo build` inside the package directory.
+- pub `load_package_manifest` function L41-45 — `( dir: &Path, ) -> Result<PackageManifest<M>, PackageError>` — Load and validate a package manifest against a host-defined schema.
+- pub `discover_packages` function L51-71 — `(dir: &Path) -> Result<Vec<PathBuf>, PackageError>` — Discover packages in a directory.
+- pub `verify_package` function L82-108 — `(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), PackageError>` — Verify a source package's signature against trusted public keys.
+- pub `build_package` function L113-162 — `(dir: &Path, release: bool) -> Result<PathBuf, PackageError>` — Build a package by running `cargo build` inside the package directory.
 
 #### fidius-host/src/signing.rs
 
@@ -427,16 +431,18 @@
 -  `parse` function L52-55 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
 -  `generate_shims` function L131-239 — `(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream` — Generate extern "C" shim functions for each method.
 -  `generate_vtable_static` function L245-266 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L269-332 — `(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L335-345 — `(impl_ident: &Ident) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+-  `generate_descriptor` function L269-334 — `(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L337-347 — `(impl_ident: &Ident) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### fidius-macro/src/interface.rs
 
-- pub `generate_interface` function L40-73 — `(ir: &InterfaceIR) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_interface]` invocation.
+- pub `generate_interface` function L40-81 — `(ir: &InterfaceIR) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_interface]` invocation.
 -  `strip_optional_attrs` function L27-37 — `(item: &ItemTrait) -> ItemTrait` — Strip `#[optional(...)]` attributes from trait methods so the emitted trait compiles.
--  `generate_vtable` function L76-141 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
--  `generate_constants` function L144-193 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
--  `generate_descriptor_builder` function L196-247 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
+-  `generate_vtable` function L84-149 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
+-  `generate_constants` function L152-201 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
+-  `generate_descriptor_builder` function L204-255 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
+-  `generate_method_indices` function L258-274 — `(ir: &InterfaceIR) -> TokenStream` — Generate method index constants.
+-  `_generate_client_deferred` function L280-370 — `(ir: &InterfaceIR) -> TokenStream` — capability bit constants, version/strategy constants, and a descriptor builder function.
 
 #### fidius-macro/src/ir.rs
 
@@ -502,6 +508,7 @@
 -  `interface_version_matches` function L42-44 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
 -  `buffer_strategy_matches` function L47-49 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
 -  `capability_constant_exists` function L52-55 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
+-  `method_index_constants_exist` function L58-61 — `()` — Basic test that #[plugin_interface] compiles and generates expected items.
 
 #### fidius-macro/tests/multi_plugin.rs
 

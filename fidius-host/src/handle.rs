@@ -113,9 +113,7 @@ impl PluginHandle {
     ) -> Result<O, CallError> {
         // Bounds check: ensure index is within the vtable
         if index >= self.method_count as usize {
-            return Err(CallError::NotImplemented {
-                bit: index as u32,
-            });
+            return Err(CallError::NotImplemented { bit: index as u32 });
         }
 
         // Serialize input

@@ -306,7 +306,10 @@ pub fn package_validate(dir: &Path) -> Result {
     let pkg = &manifest.package;
 
     println!("Package: {} v{}", pkg.name, pkg.version);
-    println!("  Interface: {} (version {})", pkg.interface, pkg.interface_version);
+    println!(
+        "  Interface: {} (version {})",
+        pkg.interface, pkg.interface_version
+    );
     println!(
         "  Metadata: {} field(s)",
         manifest.metadata.as_table().map_or(0, |t| t.len())
@@ -387,7 +390,11 @@ pub fn package_sign(key_path: &Path, dir: &Path) -> Result {
 
     let sig_path = dir.join("package.sig");
     std::fs::write(&sig_path, signature.to_bytes())?;
-    println!("Signed package: {} -> {}", dir.display(), sig_path.display());
+    println!(
+        "Signed package: {} -> {}",
+        dir.display(),
+        sig_path.display()
+    );
     Ok(())
 }
 

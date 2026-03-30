@@ -62,7 +62,10 @@ fn both_descriptors_are_valid() {
 
     for desc in &descs {
         assert_eq!(desc.abi_version, 2);
-        assert_eq!(desc.interface_hash, __fidius_Greeter::Greeter_INTERFACE_HASH);
+        assert_eq!(
+            desc.interface_hash,
+            __fidius_Greeter::Greeter_INTERFACE_HASH
+        );
         assert_eq!(desc.buffer_strategy, 1);
         assert!(desc.free_buffer.is_some());
     }
