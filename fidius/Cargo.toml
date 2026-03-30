@@ -1,6 +1,6 @@
 [package]
 name = "fidius"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 description = "Fidius — a Rust plugin framework for trait-to-dylib plugin systems"
 license = "Apache-2.0"
@@ -10,5 +10,5 @@ repository = "https://github.com/colliery-io/fidius"
 async = ["fidius-core/async"]
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.0.2" }
-fidius-macro = { path = "../fidius-macro", version = "0.0.2" }
+fidius-core = { path = "../fidius-core", version = "0.0.3" }
+fidius-macro = { path = "../fidius-macro", version = "0.0.3" }

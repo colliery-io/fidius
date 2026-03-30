@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-03-30T01:32:20Z | 41 files | Rust
+> Generated: 2026-03-30T02:20:58Z | 41 files | Rust
 
 ## Project Structure
 
@@ -74,20 +74,20 @@
 
 #### fidius-cli/src/commands.rs
 
-- pub `init_interface` function L74-119 — `( name: &str, trait_name: &str, path: Option<&Path>, version: Option<&str>, ) ->...`
-- pub `init_plugin` function L123-191 — `( name: &str, interface: &str, trait_name: &str, path: Option<&Path>, version: O...`
-- pub `keygen` function L195-216 — `(out: &str) -> Result`
-- pub `sign` function L220-240 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `verify` function L244-276 — `(key_path: &Path, dylib_path: &Path) -> Result`
-- pub `inspect` function L280-300 — `(dylib_path: &Path) -> Result`
-- pub `package_validate` function L304-319 — `(dir: &Path) -> Result`
-- pub `package_build` function L323-354 — `(dir: &Path, release: bool) -> Result`
-- pub `package_inspect` function L358-374 — `(dir: &Path) -> Result`
-- pub `package_sign` function L378-399 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_verify` function L403-431 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `init_interface` function L78-123 — `( name: &str, trait_name: &str, path: Option<&Path>, version: Option<&str>, ) ->...`
+- pub `init_plugin` function L127-195 — `( name: &str, interface: &str, trait_name: &str, path: Option<&Path>, version: O...`
+- pub `keygen` function L199-220 — `(out: &str) -> Result`
+- pub `sign` function L224-244 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `verify` function L248-280 — `(key_path: &Path, dylib_path: &Path) -> Result`
+- pub `inspect` function L284-304 — `(dylib_path: &Path) -> Result`
+- pub `package_validate` function L308-323 — `(dir: &Path) -> Result`
+- pub `package_build` function L327-358 — `(dir: &Path, release: bool) -> Result`
+- pub `package_inspect` function L362-378 — `(dir: &Path) -> Result`
+- pub `package_sign` function L382-403 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L407-435 — `(key_path: &Path, dir: &Path) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
--  `resolve_dep` function L30-52 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
--  `check_crates_io` function L55-70 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
+-  `resolve_dep` function L30-56 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
+-  `check_crates_io` function L59-74 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
 
 #### fidius-cli/src/main.rs
 
