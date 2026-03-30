@@ -165,15 +165,20 @@ description = "E2E test plugin"
     // Build before signing — cargo build may create/update Cargo.lock which
     // is part of the signed digest.
     // Build in the same profile as the test binary so wire formats match
-    // (debug=JSON, release=bincode).
-    let build_flag = if cfg!(debug_assertions) {
-        "--debug"
+    // (debug=JSON, release=bincode). The CLI defaults to release; --debug
+    // switches to debug mode.
+    let mut build_args = vec!["package", "build", plugin_dir.to_str().unwrap()];
+    if cfg!(debug_assertions) {
+        build_args.push("--debug");
+    }
+    let profile_label = if cfg!(debug_assertions) {
+        "debug"
     } else {
-        "--release"
+        "release"
     };
-    eprintln!("Step 6: fidius package build {build_flag}");
+    eprintln!("Step 6: fidius package build ({profile_label})");
     fides_cmd()
-        .args(["package", "build", plugin_dir.to_str().unwrap(), build_flag])
+        .args(&build_args)
         .assert()
         .success()
         .stdout(predicates::str::contains("Build successful"));
