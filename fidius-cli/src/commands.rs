@@ -30,6 +30,10 @@ type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn resolve_dep(value: &str, version_override: Option<&str>) -> String {
     // Check if it's a filesystem path
     if Path::new(value).exists() {
+        // Canonicalize so the path works from any crate directory
+        if let Ok(abs) = std::fs::canonicalize(value) {
+            return format!("{{ path = \"{}\" }}", abs.display());
+        }
         return format!("{{ path = \"{}\" }}", value);
     }
 
