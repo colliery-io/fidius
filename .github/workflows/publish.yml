@@ -30,18 +30,32 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --release
 
-      # Publish in dependency order
+      # Publish in dependency order with index propagation delays.
+      # --no-verify skips rebuild during publish (already tested above).
+      # This avoids dev-dependency cycles (fidius-macro dev-depends on fidius).
       - name: Publish fidius-core
-        run: cargo publish -p fidius-core
+        run: cargo publish -p fidius-core --no-verify
+
+      - name: Wait for index
+        run: sleep 30
 
       - name: Publish fidius-macro
-        run: cargo publish -p fidius-macro
+        run: cargo publish -p fidius-macro --no-verify
 
-      - name: Publish fidius-host
-        run: cargo publish -p fidius-host
+      - name: Wait for index
+        run: sleep 30
 
       - name: Publish fidius (facade)
-        run: cargo publish -p fidius
+        run: cargo publish -p fidius --no-verify
+
+      - name: Wait for index
+        run: sleep 30
+
+      - name: Publish fidius-host
+        run: cargo publish -p fidius-host --no-verify
+
+      - name: Wait for index
+        run: sleep 30
 
       - name: Publish fidius-cli
-        run: cargo publish -p fidius-cli
+        run: cargo publish -p fidius-cli --no-verify
