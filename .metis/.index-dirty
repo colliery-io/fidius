@@ -2,3 +2,4 @@
 /Users/dstorey/Desktop/fides/fidius-macro/tests/smoke_cdylib.rs
 /Users/dstorey/Desktop/fides/fidius-cli/tests/full_pipeline.rs
 /Users/dstorey/Desktop/fides/fidius-cli/tests/cli.rs
+/Users/dstorey/Desktop/fides/fidius-host/tests/integration.rs

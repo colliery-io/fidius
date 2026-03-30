@@ -25,8 +25,13 @@ fn build_test_plugin() -> PathBuf {
     let manifest =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/test-plugin-smoke/Cargo.toml");
 
+    let mut args = vec!["build", "--manifest-path", manifest.to_str().unwrap()];
+    if !cfg!(debug_assertions) {
+        args.push("--release");
+    }
+
     let output = Command::new("cargo")
-        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
+        .args(&args)
         .output()
         .expect("failed to run cargo build");
 
@@ -36,7 +41,14 @@ fn build_test_plugin() -> PathBuf {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/test-plugin-smoke/target/debug")
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/test-plugin-smoke/target")
+        .join(profile)
 }
 
 #[derive(Serialize)]
