@@ -164,9 +164,16 @@ description = "E2E test plugin"
     // ── Step 6: Build the package ─────────────────────────────────────────
     // Build before signing — cargo build may create/update Cargo.lock which
     // is part of the signed digest.
-    eprintln!("Step 6: fidius package build --debug");
+    // Build in the same profile as the test binary so wire formats match
+    // (debug=JSON, release=bincode).
+    let build_flag = if cfg!(debug_assertions) {
+        "--debug"
+    } else {
+        "--release"
+    };
+    eprintln!("Step 6: fidius package build {build_flag}");
     fides_cmd()
-        .args(["package", "build", plugin_dir.to_str().unwrap(), "--debug"])
+        .args(["package", "build", plugin_dir.to_str().unwrap(), build_flag])
         .assert()
         .success()
         .stdout(predicates::str::contains("Build successful"));
@@ -206,7 +213,12 @@ description = "E2E test plugin"
 
     // ── Step 9: Load via PluginHost and call a method ─────────────────────
     eprintln!("Step 9: Sign dylib + load via PluginHost + call method");
-    let dylib_dir = plugin_dir.join("target/debug");
+    let profile_dir = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let dylib_dir = plugin_dir.join("target").join(profile_dir);
 
     // Read the public key for PluginHost
     let key_bytes: [u8; 32] = std::fs::read(&public_key).unwrap().try_into().unwrap();

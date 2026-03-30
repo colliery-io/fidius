@@ -21,13 +21,17 @@ use std::process::Command;
 
 #[test]
 fn load_cdylib_and_call_plugin() {
-    // Build the test plugin cdylib
+    // Build the test plugin cdylib in the same profile as the test binary
+    let mut args = vec![
+        "build",
+        "--manifest-path",
+        "../tests/test-plugin-smoke/Cargo.toml",
+    ];
+    if !cfg!(debug_assertions) {
+        args.push("--release");
+    }
     let build = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            "../tests/test-plugin-smoke/Cargo.toml",
-        ])
+        .args(&args)
         .output()
         .expect("failed to run cargo build");
 
@@ -45,7 +49,12 @@ fn load_cdylib_and_call_plugin() {
     } else {
         "libtest_plugin_smoke.so"
     };
-    let dylib_path = format!("../tests/test-plugin-smoke/target/debug/{dylib_name}");
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let dylib_path = format!("../tests/test-plugin-smoke/target/{profile}/{dylib_name}");
     let lib = unsafe { libloading::Library::new(dylib_path) }.expect("failed to load cdylib");
 
     // Get the registry via fidius_get_registry function

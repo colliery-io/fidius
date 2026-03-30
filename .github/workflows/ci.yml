@@ -34,6 +34,7 @@ jobs:
     name: Test (${{ matrix.os }}, ${{ matrix.profile }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         profile: [dev, release]
