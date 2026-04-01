@@ -169,18 +169,43 @@ fidius package sign --key publisher.secret ./calc-plugin
 
 This signs the `package.toml` file and writes a `.sig` file alongside it.
 
-## 8. Distribute the package
+## 8. Pack the package for distribution
 
-Distribute the package directory (source code + `package.toml` + optional
-`.sig` file) to consumers. They receive the source and build locally.
-
-## 9. Consumer: verify and build
-
-On the consumer side, verify the signature and build:
+Pack the signed package into a `.fid` archive for distribution:
 
 ```bash
-fidius package verify --key publisher.public ./calc-plugin
-fidius package build ./calc-plugin
+fidius package pack ./calc-plugin
+```
+
+Expected output:
+
+```
+Packed: calc-plugin-1.0.0.fid (12.4 KB)
+```
+
+The `.fid` file is a bzip2-compressed tar archive containing all source files
+plus the `package.sig`. Distribute this single file via GitHub Releases, artifact
+stores, or any file-based channel.
+
+> **Note:** If you pack without signing first, a warning is emitted:
+> `warning: package is unsigned (no package.sig found)`
+
+### Custom file extensions
+
+Interface authors can define a custom extension via
+`fidius init-interface --extension <ext>`. This writes a `fidius.toml` in the
+interface crate, which `fidius init-plugin` propagates into the plugin's
+`package.toml`. For example, with `extension = "cloacina"`, the pack command
+produces `calc-plugin-1.0.0.cloacina` instead of `.fid`.
+
+## 9. Consumer: unpack, verify, and build
+
+On the consumer side, unpack the archive, verify the signature, and build:
+
+```bash
+fidius package unpack calc-plugin-1.0.0.fid --dest ./plugins
+fidius package verify --key publisher.public ./plugins/calc-plugin-1.0.0
+fidius package build ./plugins/calc-plugin-1.0.0
 ```
 
 ## 10. Consumer: load the built plugin
@@ -210,6 +235,9 @@ failures to warnings.
 - `fidius package inspect` shows all manifest fields
 - `fidius package build` compiles the cdylib from source
 - `fidius package sign` / `fidius package verify` provide integrity checking
+- `fidius package pack` creates a distributable `.fid` archive (warns if unsigned)
+- `fidius package unpack` extracts an archive for building
+- Interface authors can set a custom archive extension via `--extension`
 - `LoadPolicy::Strict` vs `LoadPolicy::Lenient` controls enforcement at load time
 
 ## Next steps

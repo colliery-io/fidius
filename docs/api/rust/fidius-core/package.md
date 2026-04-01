@@ -50,7 +50,28 @@ Fixed header fields that every package manifest must have.
 | `version` | `String` | Package version (e.g., `"1.2.0"`). |
 | `interface` | `String` | Name of the interface crate this package implements. |
 | `interface_version` | `u32` | Expected interface version. |
+| `extension` | `Option < String >` | Custom file extension for archives (e.g., `"cloacina"`). Defaults to `"fid"`. |
 | `source_hash` | `Option < String >` | Optional SHA-256 hash of the source directory contents. |
+
+#### Methods
+
+- `extension(&self) -> &str` — Returns the package extension, defaulting to `"fid"`.
+
+
+### `fidius-core::package::PackResult`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+**Derives:** `Debug`
+
+Result of packing a package, including any warnings.
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `path` | `PathBuf` | Path to the created `.fid` archive. |
+| `unsigned` | `bool` | Whether the package was unsigned (no `package.sig` found). |
 
 
 
@@ -68,6 +89,10 @@ Errors that can occur when loading a package manifest.
 schema validation (the `[metadata]` section didn't match `M`).
 - **`Io`** - An I/O error occurred reading the manifest file.
 - **`BuildFailed`** - Build failed.
+- **`SignatureNotFound`** - Package signature file not found.
+- **`SignatureInvalid`** - Package signature is invalid (no trusted key verified it).
+- **`ArchiveError`** - Error creating or reading an archive.
+- **`InvalidArchive`** - Archive does not contain a valid package.
 
 
 
@@ -150,6 +175,40 @@ pub fn load_manifest_untyped(
 ```
 
 </details>
+
+
+
+### `fidius-core::package::pack_package`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn pack_package (dir : & Path , output : Option < & Path >) -> Result < PackResult , PackageError >
+```
+
+Create a `.fid` archive (tar + bzip2) from a package directory. The archive
+contains a single top-level directory `{name}-{version}/` with all source files.
+Excludes `target/` and `.git/` directories. Includes `package.sig` if present.
+
+If `output` is `None`, the archive is written to the current directory as
+`{name}-{version}.{ext}` where `ext` comes from the manifest's `extension`
+field (defaulting to `"fid"`).
+
+
+
+### `fidius-core::package::unpack_package`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn unpack_package (archive : & Path , dest : & Path) -> Result < PathBuf , PackageError >
+```
+
+Extract a `.fid` archive (tar + bzip2) to a destination directory. Returns the
+path to the extracted top-level package directory. Validates that a
+`package.toml` exists in the extracted contents.
 
 
 

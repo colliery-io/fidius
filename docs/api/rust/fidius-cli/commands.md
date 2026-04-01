@@ -96,7 +96,7 @@ fn check_crates_io(name: &str) -> Option<String> {
 
 
 ```rust
-fn init_interface (name : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > ,) -> Result
+fn init_interface (name : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > , extension : Option < & str > ,) -> Result
 ```
 
 <details>
@@ -600,5 +600,32 @@ pub fn package_verify(key_path: &Path, dir: &Path) -> Result {
 
 </details>
 
+
+
+### `fidius-cli::commands::package_pack`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn package_pack (dir : & Path , output : Option < & Path >) -> Result
+```
+
+Pack a package directory into a `.fid` archive. Prints the output path and
+file size. Emits a warning to stderr if the package is unsigned.
+
+
+
+### `fidius-cli::commands::package_unpack`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn package_unpack (archive : & Path , dest : Option < & Path >) -> Result
+```
+
+Extract a `.fid` archive to a destination directory (defaults to current
+directory). Prints the path to the extracted package directory.
 
 

@@ -163,3 +163,24 @@ pub fn build_package(dir: &Path, release: bool) -> Result<PathBuf, PackageError>
 
 
 
+### `fidius-host::package::unpack_fid`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn unpack_fid (archive : & Path , dest : & Path) -> Result < PathBuf , PackageError >
+```
+
+Extract a `.fid` archive and validate its contents. Delegates to
+`fidius_core::package::unpack_package` and emits a `tracing::warn!` if the
+unpacked package has no `package.sig` (requires the `tracing` feature).
+
+**Examples:**
+
+```ignore
+let pkg_dir = unpack_fid(Path::new("blur-filter-1.0.0.fid"), Path::new("./plugins/"))?;
+let manifest = load_package_manifest::<MySchema>(&pkg_dir)?;
+```
+
+

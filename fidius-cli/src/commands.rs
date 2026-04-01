@@ -80,6 +80,7 @@ pub fn init_interface(
     trait_name: &str,
     path: Option<&Path>,
     version: Option<&str>,
+    extension: Option<&str>,
 ) -> Result {
     let base = path.unwrap_or_else(|| Path::new("."));
     let crate_dir = base.join(name);
@@ -117,6 +118,12 @@ pub trait {trait_name}: Send + Sync {{
 
     std::fs::write(crate_dir.join("Cargo.toml"), cargo_toml)?;
     std::fs::write(src_dir.join("lib.rs"), lib_rs)?;
+
+    // Write fidius.toml with interface metadata (extension, etc.)
+    if let Some(ext) = extension {
+        let fidius_toml = format!("extension = \"{ext}\"\n");
+        std::fs::write(crate_dir.join("fidius.toml"), fidius_toml)?;
+    }
 
     println!("Created interface crate: {}", crate_dir.display());
     Ok(())
@@ -189,6 +196,41 @@ fidius::fidius_plugin_registry!();
 
     std::fs::write(crate_dir.join("Cargo.toml"), cargo_toml)?;
     std::fs::write(src_dir.join("lib.rs"), lib_rs)?;
+
+    // Read interface's fidius.toml for extension (if interface is a local path)
+    let interface_path = Path::new(interface);
+    let extension = if interface_path.is_dir() {
+        let fidius_toml_path = interface_path.join("fidius.toml");
+        if fidius_toml_path.exists() {
+            let content = std::fs::read_to_string(&fidius_toml_path)?;
+            let table: toml::Table = content.parse().unwrap_or_default();
+            table
+                .get("extension")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Generate package.toml
+    let ext_line = match &extension {
+        Some(ext) => format!("\nextension = \"{ext}\""),
+        None => String::new(),
+    };
+    let package_toml = format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+interface = "{interface_crate}"
+interface_version = 1{ext_line}
+
+[metadata]
+"#
+    );
+    std::fs::write(crate_dir.join("package.toml"), package_toml)?;
 
     println!("Created plugin crate: {}", crate_dir.display());
     Ok(())
@@ -432,4 +474,35 @@ pub fn package_verify(key_path: &Path, dir: &Path) -> Result {
         }
         Err(_) => Err(format!("Package signature INVALID: {}", dir.display()).into()),
     }
+}
+
+// ─── package pack ───────────────────────────────────────────────────────────
+
+pub fn package_pack(dir: &Path, output: Option<&Path>) -> Result {
+    let result = fidius_core::package::pack_package(dir, output)?;
+
+    if result.unsigned {
+        eprintln!("warning: package is unsigned (no package.sig found)");
+    }
+
+    let size = std::fs::metadata(&result.path)?.len();
+    let human_size = if size >= 1024 * 1024 {
+        format!("{:.1} MB", size as f64 / (1024.0 * 1024.0))
+    } else if size >= 1024 {
+        format!("{:.1} KB", size as f64 / 1024.0)
+    } else {
+        format!("{size} B")
+    };
+
+    println!("Packed: {} ({human_size})", result.path.display());
+    Ok(())
+}
+
+// ─── package unpack ─────────────────────────────────────────────────────────
+
+pub fn package_unpack(archive: &Path, dest: Option<&Path>) -> Result {
+    let dest = dest.unwrap_or_else(|| Path::new("."));
+    let pkg_dir = fidius_core::package::unpack_package(archive, dest)?;
+    println!("Unpacked: {}", pkg_dir.display());
+    Ok(())
 }

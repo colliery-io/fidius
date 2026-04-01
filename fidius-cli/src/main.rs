@@ -41,6 +41,9 @@ enum Commands {
         /// Pin fidius dependency version (checks crates.io if not a local path)
         #[arg(long)]
         version: Option<String>,
+        /// Custom file extension for package archives (default: "fid")
+        #[arg(long)]
+        extension: Option<String>,
     },
     /// Scaffold a new plugin implementation crate
     InitPlugin {
@@ -129,6 +132,22 @@ enum PackageCommands {
         /// Path to the package directory
         dir: PathBuf,
     },
+    /// Pack a package directory into a .fid archive
+    Pack {
+        /// Path to the package directory
+        dir: PathBuf,
+        /// Output file path (default: {name}-{version}.fid in current dir)
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Unpack a .fid archive
+    Unpack {
+        /// Path to the .fid archive
+        archive: PathBuf,
+        /// Destination directory (default: current dir)
+        #[arg(long)]
+        dest: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -140,7 +159,14 @@ fn main() {
             trait_name,
             path,
             version,
-        } => commands::init_interface(&name, &trait_name, path.as_deref(), version.as_deref()),
+            extension,
+        } => commands::init_interface(
+            &name,
+            &trait_name,
+            path.as_deref(),
+            version.as_deref(),
+            extension.as_deref(),
+        ),
         Commands::InitPlugin {
             name,
             interface,
@@ -164,6 +190,12 @@ fn main() {
             PackageCommands::Inspect { dir } => commands::package_inspect(&dir),
             PackageCommands::Sign { key, dir } => commands::package_sign(&key, &dir),
             PackageCommands::Verify { key, dir } => commands::package_verify(&key, &dir),
+            PackageCommands::Pack { dir, output } => {
+                commands::package_pack(&dir, output.as_deref())
+            }
+            PackageCommands::Unpack { archive, dest } => {
+                commands::package_unpack(&archive, dest.as_deref())
+            }
         },
     };
 

@@ -25,6 +25,7 @@ section.
 | `version` | string | yes | Package version (e.g., `"1.2.0"`). |
 | `interface` | string | yes | Name of the interface crate this package implements. |
 | `interface_version` | integer | yes | Expected interface version number. |
+| `extension` | string | no | Custom file extension for `.fid` archives (e.g., `"cloacina"`). Defaults to `"fid"` when absent. Set by the interface author via `fidius init-interface --extension`. |
 | `source_hash` | string | no | SHA-256 hash of the source directory contents. Used for integrity verification. |
 
 Example:
@@ -35,6 +36,7 @@ name = "calc-plugin"
 version = "1.0.0"
 interface = "calculator-interface"
 interface_version = 1
+extension = "cloacina"
 source_hash = "a1b2c3d4..."
 ```
 
@@ -115,11 +117,31 @@ pub struct PackageHeader {
     pub version: String,
     pub interface: String,
     pub interface_version: u32,
+    pub extension: Option<String>,
     pub source_hash: Option<String>,
 }
 ```
 
 Fixed fields required by fidius. Present in every `package.toml`.
+
+The `extension()` method returns the package extension, defaulting to `"fid"`:
+
+```rust
+header.extension() // "fid" when None, or the custom value
+```
+
+### `PackResult`
+
+```rust
+#[derive(Debug)]
+pub struct PackResult {
+    pub path: PathBuf,
+    pub unsigned: bool,
+}
+```
+
+Returned by `pack_package`. Contains the path to the created archive and
+whether the package was unsigned (no `package.sig` found).
 
 **Crate:** `fidius_core::package`
 
@@ -182,6 +204,48 @@ The function locates the output cdylib by scanning the target directory for a
 file with the platform-appropriate extension (`.dylib` on macOS, `.so` on Linux,
 `.dll` on Windows).
 
+### `fidius_core::package::pack_package(dir, output)`
+
+Create a `.fid` archive (tar + bzip2) from a package directory. The archive
+contains a single top-level directory `{name}-{version}/` with all source files.
+Excludes `target/` and `.git/` directories. Includes `package.sig` if present.
+
+```rust
+pub fn pack_package(
+    dir: &Path,
+    output: Option<&Path>,
+) -> Result<PackResult, PackageError>
+```
+
+If `output` is `None`, the archive is written to the current directory as
+`{name}-{version}.{ext}` where `ext` is the manifest's `extension` field
+(defaulting to `"fid"`). Returns a `PackResult` with `unsigned: true` if
+`package.sig` was not found.
+
+### `fidius_core::package::unpack_package(archive, dest)`
+
+Extract a `.fid` archive to a destination directory. Returns the path to the
+extracted top-level package directory. Validates that `package.toml` exists.
+
+```rust
+pub fn unpack_package(
+    archive: &Path,
+    dest: &Path,
+) -> Result<PathBuf, PackageError>
+```
+
+### `fidius_host::package::unpack_fid(archive, dest)`
+
+Host-side wrapper for `unpack_package`. Emits a `tracing::warn!` when the
+unpacked package has no `package.sig` (requires the `tracing` feature).
+
+```rust
+pub fn unpack_fid(
+    archive: &Path,
+    dest: &Path,
+) -> Result<PathBuf, PackageError>
+```
+
 ---
 
 ## `PackageError`
@@ -203,6 +267,18 @@ pub enum PackageError {
 
     #[error("package build failed: {0}")]
     BuildFailed(String),
+
+    #[error("package.sig not found in {path}")]
+    SignatureNotFound { path: String },
+
+    #[error("package signature invalid for {path}")]
+    SignatureInvalid { path: String },
+
+    #[error("archive error: {0}")]
+    ArchiveError(String),
+
+    #[error("invalid archive: {0}")]
+    InvalidArchive(String),
 }
 ```
 
@@ -212,6 +288,10 @@ pub enum PackageError {
 | `ParseError` | TOML syntax error or `[metadata]` schema validation failure (the metadata did not deserialize into the host's schema type `M`). | Fix the TOML syntax or add the missing metadata fields. |
 | `Io` | Filesystem error reading the manifest file. | Check file permissions and that the path exists. |
 | `BuildFailed` | `cargo build` returned a non-zero exit code, or `Cargo.toml` was not found in the package directory. | Fix compilation errors or ensure `Cargo.toml` is present. |
+| `SignatureNotFound` | No `package.sig` in the package directory. | Sign the package with `fidius package sign`. |
+| `SignatureInvalid` | No trusted key verified the signature. | Ensure the correct public key is being used. |
+| `ArchiveError` | Error creating or reading a `.fid` archive. | Check file permissions and disk space. |
+| `InvalidArchive` | Archive does not contain a valid package (no `package.toml`). | Ensure the archive was created with `fidius package pack`. |
 
 See also the [Errors Reference](errors.md) for `LoadError` and other error types.
 
@@ -229,6 +309,8 @@ argument details see the [CLI Reference](cli.md#package).
 | `fidius package inspect <DIR>` | Print all manifest fields including metadata values. |
 | `fidius package sign --key <SECRET_KEY> <DIR>` | Sign the `package.toml` with an Ed25519 key. |
 | `fidius package verify --key <PUBLIC_KEY> <DIR>` | Verify the `package.toml` signature. |
+| `fidius package pack <DIR> [--output <PATH>]` | Pack source into a `.fid` archive. Warns if unsigned. |
+| `fidius package unpack <ARCHIVE> [--dest <DIR>]` | Extract a `.fid` archive. |
 
 ---
 

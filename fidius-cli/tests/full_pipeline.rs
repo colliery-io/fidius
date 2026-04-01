@@ -49,9 +49,17 @@ fn full_pipeline_scaffold_package_build_sign_load_call() {
             "Processor",
             "--path",
             work_dir.to_str().unwrap(),
+            "--extension",
+            "testpkg",
         ])
         .assert()
         .success();
+
+    // Verify fidius.toml was written with the extension
+    let fidius_toml = work_dir.join("test-api/fidius.toml");
+    assert!(fidius_toml.exists(), "fidius.toml should exist");
+    let fidius_toml_content = std::fs::read_to_string(&fidius_toml).unwrap();
+    assert!(fidius_toml_content.contains("testpkg"), "fidius.toml should contain extension");
 
     // Overwrite the interface Cargo.toml to use local workspace paths
     let iface_cargo = work_dir.join("test-api/Cargo.toml");
@@ -117,6 +125,8 @@ fidius = {{ path = "{}" }}
     eprintln!("  ✓ Plugin crate scaffolded + patched for local deps\n");
 
     // ── Step 3: Write package.toml ────────────────────────────────────────
+    // init-plugin now generates a package.toml with extension from the interface.
+    // Overwrite with test-specific content but keep the custom extension.
     eprintln!("Step 3: Write package.toml");
     let package_toml = work_dir.join("test-plugin/package.toml");
     std::fs::write(
@@ -126,6 +136,7 @@ name = "test-processor"
 version = "0.1.0"
 interface = "test-api"
 interface_version = 1
+extension = "testpkg"
 
 [metadata]
 category = "testing"
@@ -201,23 +212,85 @@ description = "E2E test plugin"
 
     eprintln!("  ✓ Package signed\n");
 
-    // ── Step 8: Verify the signature ──────────────────────────────────────
-    eprintln!("Step 8: fidius package verify");
+    // ── Step 8: Pack the package into a .fid archive ─────────────────────
+    eprintln!("Step 8: fidius package pack (custom .testpkg extension)");
+    let fid_path = work_dir.join("test-processor-0.1.0.testpkg");
+    fides_cmd()
+        .args([
+            "package",
+            "pack",
+            plugin_dir.to_str().unwrap(),
+            "--output",
+            fid_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Packed:"));
+
+    assert!(fid_path.exists(), ".fid archive should exist");
+    assert!(fid_path.metadata().unwrap().len() > 0, ".fid should be non-empty");
+
+    eprintln!("  ✓ Package packed: {}\n", fid_path.display());
+
+    // ── Step 9: Unpack the .fid archive ──────────────────────────────────
+    eprintln!("Step 9: fidius package unpack");
+    let unpack_dest = work_dir.join("unpacked");
+    std::fs::create_dir(&unpack_dest).unwrap();
+    fides_cmd()
+        .args([
+            "package",
+            "unpack",
+            fid_path.to_str().unwrap(),
+            "--dest",
+            unpack_dest.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Unpacked:"));
+
+    let unpacked_dir = unpack_dest.join("test-processor-0.1.0");
+    assert!(unpacked_dir.join("package.toml").exists(), "unpacked should have package.toml");
+    assert!(unpacked_dir.join("package.sig").exists(), "unpacked should have package.sig");
+    assert!(unpacked_dir.join("src/lib.rs").exists(), "unpacked should have source files");
+
+    eprintln!("  ✓ Package unpacked: {}\n", unpacked_dir.display());
+
+    // ── Step 10: Verify the unpacked package signature ────────────────────
+    eprintln!("Step 10: fidius package verify (unpacked)");
     fides_cmd()
         .args([
             "package",
             "verify",
             "--key",
             &public_key,
-            plugin_dir.to_str().unwrap(),
+            unpacked_dir.to_str().unwrap(),
         ])
         .assert()
         .success();
 
-    eprintln!("  ✓ Package signature verified\n");
+    eprintln!("  ✓ Unpacked package signature verified\n");
 
-    // ── Step 9: Load via PluginHost and call a method ─────────────────────
-    eprintln!("Step 9: Sign dylib + load via PluginHost + call method");
+    // ── Step 11: Test unsigned pack warning ───────────────────────────────
+    eprintln!("Step 11: fidius package pack (unsigned — expect warning)");
+    // Remove the sig from unpacked dir and re-pack
+    std::fs::remove_file(unpacked_dir.join("package.sig")).unwrap();
+    let unsigned_fid = work_dir.join("unsigned.fid");
+    fides_cmd()
+        .args([
+            "package",
+            "pack",
+            unpacked_dir.to_str().unwrap(),
+            "--output",
+            unsigned_fid.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("warning: package is unsigned"));
+
+    eprintln!("  ✓ Unsigned warning emitted\n");
+
+    // ── Step 12: Load via PluginHost and call a method ────────────────────
+    eprintln!("Step 12: Sign dylib + load via PluginHost + call method");
     let profile_dir = if cfg!(debug_assertions) {
         "debug"
     } else {

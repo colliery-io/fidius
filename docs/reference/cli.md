@@ -37,7 +37,7 @@ For `fidius verify`, signature validation failure exits with code `1` and prints
 Scaffold a new plugin interface crate.
 
 ```
-fidius init-interface <NAME> --trait <TRAIT_NAME> [--path <DIR>] [--version <VERSION>]
+fidius init-interface <NAME> --trait <TRAIT_NAME> [--path <DIR>] [--version <VERSION>] [--extension <EXT>]
 ```
 
 | Argument / Flag | Type | Required | Description |
@@ -46,15 +46,22 @@ fidius init-interface <NAME> --trait <TRAIT_NAME> [--path <DIR>] [--version <VER
 | `--trait` | string | yes | Trait name to generate (e.g., `MyFilter`). |
 | `--path` | path | no | Output directory. Default: current directory. |
 | `--version` | string | no | Pin the `fidius` dependency version. Overrides auto-detection. |
+| `--extension` | string | no | Custom file extension for package archives. Written to `fidius.toml` in the interface crate. Propagated to plugins via `init-plugin`. Default: `"fid"`. |
 
 **Generated files:**
 
 ```
 <NAME>/
   Cargo.toml
+  fidius.toml       # only if --extension is set
   src/
     lib.rs
 ```
+
+When `--extension` is provided, a `fidius.toml` file is written containing
+`extension = "<EXT>"`. This is read by `init-plugin` when scaffolding plugins
+that implement this interface, and the extension is propagated into the plugin's
+`package.toml`.
 
 **`Cargo.toml`** contains a `[dependencies]` entry for `fidius`. **`src/lib.rs`** contains a skeleton trait with `#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]`, a single `fn process(&self, input: String) -> String` method, and re-exports of `fidius::plugin_impl` and `fidius::PluginError` so plugin crates only need to depend on the interface crate.
 
@@ -98,13 +105,16 @@ fidius init-plugin <NAME> --interface <INTERFACE> --trait <TRAIT_NAME> [--path <
 ```
 <NAME>/
   Cargo.toml
+  package.toml
   src/
     lib.rs
 ```
 
-**`Cargo.toml`** sets `crate-type = ["cdylib"]` and includes dependencies on the interface crate and `fidius-core`. The interface crate name is extracted from the `--interface` value (file name component), and hyphens are converted to underscores for the Rust module name.
+**`Cargo.toml`** sets `crate-type = ["cdylib"]` and includes dependencies on the interface crate and `fidius`. The interface crate name is extracted from the `--interface` value (file name component), and hyphens are converted to underscores for the Rust module name.
 
-**`src/lib.rs`** contains a struct `My{TraitName}`, a `#[plugin_impl(TraitName)]` block with a `todo!()` method, and `fidius_core::fidius_plugin_registry!()`.
+**`src/lib.rs`** contains a struct `My{TraitName}`, a `#[plugin_impl(TraitName)]` block with a stub method, and `fidius::fidius_plugin_registry!()`.
+
+**`package.toml`** is generated with the package name, version `0.1.0`, and the interface name/version. If the interface crate is a local path containing a `fidius.toml` with an `extension` field, that extension is propagated into the generated `package.toml`.
 
 **Dependency resolution** for the interface follows the same algorithm as `init-interface`.
 
@@ -394,6 +404,65 @@ Exits with code `1` on invalid signature.
 
 **Errors:** Fails if `package.toml` does not exist in the directory, or if
 the public key or signature file is malformed.
+
+---
+
+#### `package pack`
+
+Pack a package directory into a `.fid` archive (tar + bzip2). The archive
+contains all source files, excluding `target/` and `.git/` directories.
+Includes `package.sig` if present.
+
+```
+fidius package pack <DIR> [--output <PATH>]
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `DIR` | positional | yes | Path to the package directory. |
+| `--output` | path | no | Output file path. Default: `{name}-{version}.{ext}` in the current directory, where `ext` is the manifest's `extension` field (default `"fid"`). |
+
+**Output on success:**
+
+```
+Packed: <output_path> (<size>)
+```
+
+**Warning:** If `package.sig` is not found in the package directory, a warning
+is printed to stderr:
+
+```
+warning: package is unsigned (no package.sig found)
+```
+
+**Errors:** Fails if `package.toml` does not exist in the directory.
+
+---
+
+#### `package unpack`
+
+Extract a `.fid` archive to a destination directory.
+
+```
+fidius package unpack <ARCHIVE> [--dest <DIR>]
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `ARCHIVE` | positional | yes | Path to the `.fid` archive. |
+| `--dest` | path | no | Destination directory. Default: current directory. |
+
+**Output on success:**
+
+```
+Unpacked: <extracted_dir>
+```
+
+The archive is extracted into a subdirectory named `{name}-{version}/` within
+the destination directory.
+
+**Errors:** Fails if the archive cannot be read, or if the extracted contents
+do not contain a `package.toml`.
 
 ---
 

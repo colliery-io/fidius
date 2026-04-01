@@ -107,6 +107,31 @@ pub fn verify_package(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), P
     })
 }
 
+/// Extract a `.fid` archive and validate its contents.
+///
+/// Delegates to [`fidius_core::package::unpack_package`] and emits a
+/// `tracing::warn!` if the unpacked package has no `package.sig`.
+///
+/// # Example
+///
+/// ```ignore
+/// let pkg_dir = unpack_fid(Path::new("blur-filter-1.0.0.fid"), Path::new("./plugins/"))?;
+/// let manifest = load_package_manifest::<MySchema>(&pkg_dir)?;
+/// ```
+pub fn unpack_fid(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError> {
+    let pkg_dir = fidius_core::package::unpack_package(archive, dest)?;
+
+    if !pkg_dir.join("package.sig").exists() {
+        #[cfg(feature = "tracing")]
+        tracing::warn!(
+            package = %pkg_dir.display(),
+            "unpacked package is unsigned (no package.sig found)"
+        );
+    }
+
+    Ok(pkg_dir)
+}
+
 /// Build a package by running `cargo build` inside the package directory.
 ///
 /// Returns the path to the compiled cdylib on success.
