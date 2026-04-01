@@ -203,7 +203,11 @@ fn collect_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), P
 }
 
 /// Recursively collect file paths for archiving (includes `.sig` files).
-fn collect_archive_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError> {
+fn collect_archive_files(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<String>,
+) -> Result<(), PackageError> {
     let entries = std::fs::read_dir(dir)?;
     for entry in entries {
         let entry = entry?;

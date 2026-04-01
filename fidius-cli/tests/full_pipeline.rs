@@ -59,7 +59,10 @@ fn full_pipeline_scaffold_package_build_sign_load_call() {
     let fidius_toml = work_dir.join("test-api/fidius.toml");
     assert!(fidius_toml.exists(), "fidius.toml should exist");
     let fidius_toml_content = std::fs::read_to_string(&fidius_toml).unwrap();
-    assert!(fidius_toml_content.contains("testpkg"), "fidius.toml should contain extension");
+    assert!(
+        fidius_toml_content.contains("testpkg"),
+        "fidius.toml should contain extension"
+    );
 
     // Overwrite the interface Cargo.toml to use local workspace paths
     let iface_cargo = work_dir.join("test-api/Cargo.toml");
@@ -228,7 +231,10 @@ description = "E2E test plugin"
         .stdout(predicates::str::contains("Packed:"));
 
     assert!(fid_path.exists(), ".fid archive should exist");
-    assert!(fid_path.metadata().unwrap().len() > 0, ".fid should be non-empty");
+    assert!(
+        fid_path.metadata().unwrap().len() > 0,
+        ".fid should be non-empty"
+    );
 
     eprintln!("  ✓ Package packed: {}\n", fid_path.display());
 
@@ -249,9 +255,18 @@ description = "E2E test plugin"
         .stdout(predicates::str::contains("Unpacked:"));
 
     let unpacked_dir = unpack_dest.join("test-processor-0.1.0");
-    assert!(unpacked_dir.join("package.toml").exists(), "unpacked should have package.toml");
-    assert!(unpacked_dir.join("package.sig").exists(), "unpacked should have package.sig");
-    assert!(unpacked_dir.join("src/lib.rs").exists(), "unpacked should have source files");
+    assert!(
+        unpacked_dir.join("package.toml").exists(),
+        "unpacked should have package.toml"
+    );
+    assert!(
+        unpacked_dir.join("package.sig").exists(),
+        "unpacked should have package.sig"
+    );
+    assert!(
+        unpacked_dir.join("src/lib.rs").exists(),
+        "unpacked should have source files"
+    );
 
     eprintln!("  ✓ Package unpacked: {}\n", unpacked_dir.display());
 
