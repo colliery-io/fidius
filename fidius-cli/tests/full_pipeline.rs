@@ -348,10 +348,9 @@ description = "E2E test plugin"
 
     let handle = fidius_host::PluginHandle::from_loaded(loaded);
 
-    let input = "hello".to_string();
-    let _input_bytes = fidius_core::wire::serialize(&input).unwrap();
+    let input = ("hello".to_string(),);
 
-    // call_method(0, ...) — the scaffolded process method
+    // call_method(0, ...) — the scaffolded process method (tuple-encoded args)
     let result: String = handle.call_method(0, &input).unwrap();
     assert_eq!(result, "processed: hello");
 

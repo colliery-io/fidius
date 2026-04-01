@@ -20,13 +20,20 @@
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse::Parse, parse::ParseStream, Ident, ImplItem, ItemImpl, ReturnType, Type};
+use syn::{
+    parse::Parse, parse::ParseStream, FnArg, Ident, ImplItem, ItemImpl, LitStr, Pat, Path,
+    ReturnType, Token, Type,
+};
 
 /// Info about an impl method, extracted from the impl block.
 struct MethodInfo<'a> {
     name: &'a Ident,
     is_async: bool,
     returns_result: bool,
+    /// Argument types (excluding `self`).
+    arg_types: Vec<&'a Type>,
+    /// Argument names (excluding `self`).
+    arg_names: Vec<Ident>,
 }
 
 /// Check if a return type looks like `Result<T, ...>`.
@@ -43,15 +50,35 @@ fn is_result_type(ty: &Type) -> bool {
     }
 }
 
-/// Arguments to `#[plugin_impl(TraitName)]`.
+/// Arguments to `#[plugin_impl(TraitName)]` or `#[plugin_impl(TraitName, crate = "...")]`.
 pub struct PluginImplAttrs {
     pub trait_name: Ident,
+    /// The path to the fidius crate. Defaults to `fidius` when not specified.
+    pub crate_path: Path,
 }
 
 impl Parse for PluginImplAttrs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let trait_name: Ident = input.parse()?;
-        Ok(PluginImplAttrs { trait_name })
+        let mut crate_path = None;
+
+        while !input.is_empty() {
+            let _comma: Token![,] = input.parse()?;
+            if input.peek(Token![crate]) {
+                let _kw: Token![crate] = input.parse()?;
+                let _eq: Token![=] = input.parse()?;
+                let lit: LitStr = input.parse()?;
+                let path: Path = lit.parse()?;
+                crate_path = Some(path);
+            }
+        }
+
+        let crate_path = crate_path.unwrap_or_else(|| syn::parse_str::<Path>("fidius").unwrap());
+
+        Ok(PluginImplAttrs {
+            trait_name,
+            crate_path,
+        })
     }
 }
 
@@ -74,10 +101,24 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                     ReturnType::Type(_, ty) => is_result_type(ty),
                     ReturnType::Default => false,
                 };
+                let mut arg_types = Vec::new();
+                let mut arg_names = Vec::new();
+                for arg in &method.sig.inputs {
+                    if let FnArg::Typed(pat_type) = arg {
+                        arg_types.push(pat_type.ty.as_ref());
+                        if let Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
+                            arg_names.push(pat_ident.ident.clone());
+                        } else {
+                            arg_names.push(format_ident!("_arg"));
+                        }
+                    }
+                }
                 Some(MethodInfo {
                     name: &method.sig.ident,
                     is_async: method.sig.asyncness.is_some(),
                     returns_result,
+                    arg_types,
+                    arg_names,
                 })
             } else {
                 None
@@ -88,8 +129,10 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let method_names: Vec<&Ident> = impl_methods.iter().map(|m| m.name).collect();
     let _has_async = impl_methods.iter().any(|m| m.is_async);
 
+    let crate_path = &attrs.crate_path;
+
     // Generate shim functions
-    let shims = generate_shims(&impl_ident, &impl_methods);
+    let shims = generate_shims(&impl_ident, &impl_methods, crate_path);
 
     // Generate static instance
     let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
@@ -111,10 +154,10 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     };
 
     // Generate descriptor
-    let descriptor = generate_descriptor(trait_name, &impl_ident, &method_names);
+    let descriptor = generate_descriptor(trait_name, &impl_ident, &method_names, crate_path);
 
     // Register descriptor via inventory for multi-plugin collection
-    let registration = generate_inventory_registration(&impl_ident);
+    let registration = generate_inventory_registration(&impl_ident, crate_path);
 
     Ok(quote! {
         #item
@@ -128,7 +171,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
 }
 
 /// Generate extern "C" shim functions for each method.
-fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
+fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path) -> TokenStream {
     let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
 
     let shim_fns: Vec<TokenStream> = methods
@@ -137,15 +180,26 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
             let method_name = method.name;
             let shim_name = format_ident!("__fidius_shim_{}_{}", impl_ident, method_name);
 
+            let arg_types = &method.arg_types;
+            let arg_names = &method.arg_names;
+
+            // Deserialize input as a tuple of all argument types
+            let deserialize_args = quote! {
+                let (#(#arg_names,)*) = match #crate_path::wire::deserialize::<(#(#arg_types,)*)>(in_slice) {
+                    Ok(v) => v,
+                    Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
+                };
+            };
+
             // The method call — either sync or async via block_on
             let method_call = if method.is_async {
                 quote! {
-                    fidius::async_runtime::FIDIUS_RUNTIME.block_on(
-                        #instance_name.#method_name(args)
+                    #crate_path::async_runtime::FIDIUS_RUNTIME.block_on(
+                        #instance_name.#method_name(#(#arg_names),*)
                     )
                 }
             } else {
-                quote! { #instance_name.#method_name(args) }
+                quote! { #instance_name.#method_name(#(#arg_names),*) }
             };
 
             // Generate the output handling based on whether the method returns Result
@@ -153,24 +207,24 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                 quote! {
                     match output {
                         Ok(val) => {
-                            match fidius::wire::serialize(&val) {
-                                Ok(v) => (v, fidius::status::STATUS_OK),
-                                Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
+                            match #crate_path::wire::serialize(&val) {
+                                Ok(v) => (v, #crate_path::status::STATUS_OK),
+                                Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
                             }
                         }
                         Err(err) => {
-                            match fidius::wire::serialize(&err) {
-                                Ok(v) => (v, fidius::status::STATUS_PLUGIN_ERROR),
-                                Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
+                            match #crate_path::wire::serialize(&err) {
+                                Ok(v) => (v, #crate_path::status::STATUS_PLUGIN_ERROR),
+                                Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
                             }
                         }
                     }
                 }
             } else {
                 quote! {
-                    match fidius::wire::serialize(&output) {
-                        Ok(v) => (v, fidius::status::STATUS_OK),
-                        Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
+                    match #crate_path::wire::serialize(&output) {
+                        Ok(v) => (v, #crate_path::status::STATUS_OK),
+                        Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
                     }
                 }
             };
@@ -184,10 +238,7 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                 ) -> i32 {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
-                        let args = match fidius::wire::deserialize(in_slice) {
-                            Ok(v) => v,
-                            Err(_) => return fidius::status::STATUS_SERIALIZATION_ERROR,
-                        };
+                        #deserialize_args
 
                         let output = #method_call;
 
@@ -216,7 +267,7 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                                 .or_else(|| panic_payload.downcast_ref::<String>().cloned())
                                 .unwrap_or_else(|| "unknown panic".to_string());
 
-                            if let Ok(msg_bytes) = fidius::wire::serialize(&msg) {
+                            if let Ok(msg_bytes) = #crate_path::wire::serialize(&msg) {
                                 let mut msg_bytes = msg_bytes;
                                 msg_bytes.shrink_to_fit();
                                 let len = msg_bytes.len();
@@ -227,7 +278,7 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                                     *out_len = len as u32;
                                 }
                             }
-                            fidius::status::STATUS_PANIC
+                            #crate_path::status::STATUS_PANIC
                         }
                     }
                 }
@@ -266,7 +317,12 @@ fn generate_vtable_static(
 }
 
 /// Generate the PluginDescriptor static.
-fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream {
+fn generate_descriptor(
+    trait_name: &Ident,
+    impl_ident: &Ident,
+    methods: &[&Ident],
+    crate_path: &Path,
+) -> TokenStream {
     let companion = format_ident!("__fidius_{}", trait_name);
     let vtable_name = format_ident!("__FIDIUS_VTABLE_{}", impl_ident);
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
@@ -287,7 +343,7 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
             std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#impl_name_str, "\0").as_bytes())
         };
 
-        static #descriptor_name: fidius::descriptor::PluginDescriptor = unsafe {
+        static #descriptor_name: #crate_path::descriptor::PluginDescriptor = unsafe {
             // Compute capabilities inline: check which impl'd methods
             // appear in the optional methods list.
             // Uses manual byte-by-byte comparison because stable Rust does not
@@ -334,12 +390,12 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
 }
 
 /// Register the descriptor via inventory for multi-plugin support.
-fn generate_inventory_registration(impl_ident: &Ident) -> TokenStream {
+fn generate_inventory_registration(impl_ident: &Ident, crate_path: &Path) -> TokenStream {
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
 
     quote! {
-        fidius::inventory::submit! {
-            fidius::registry::DescriptorEntry {
+        #crate_path::inventory::submit! {
+            #crate_path::registry::DescriptorEntry {
                 descriptor: &#descriptor_name,
             }
         }

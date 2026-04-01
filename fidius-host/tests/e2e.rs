@@ -175,7 +175,9 @@ fn unsigned_plugin_loads_without_signature_requirement() {
         result: i64,
     }
 
-    let output: AddOutput = handle.call_method(0, &AddInput { a: 100, b: 200 }).unwrap();
+    let output: AddOutput = handle
+        .call_method(0, &(AddInput { a: 100, b: 200 },))
+        .unwrap();
     assert_eq!(output, AddOutput { result: 300 });
 }
 

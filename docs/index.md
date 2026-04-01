@@ -51,6 +51,7 @@ Practical recipes for common tasks.
 - [Inspect a Plugin](how-to/inspect-plugin.md)
 - [Development Workflow](how-to/development-workflow.md)
 - [Create a Package Metadata Schema](how-to/create-package-schema.md)
+- [White-Label a Plugin Interface](how-to/white-label-interface.md)
 
 ### [Reference](reference/cli.md) — Look up details
 

@@ -270,7 +270,8 @@ fn main() {
     let handle = PluginHandle::from_loaded(loaded);
 
     // Call add with a=3, b=7.
-    let input = AddInput { a: 3, b: 7 };
+    // Arguments are tuple-encoded: single arg wraps in (T,).
+    let input = (AddInput { a: 3, b: 7 },);
     let output: AddOutput = handle
         .call_method(ADD_METHOD, &input)
         .expect("add() call failed");
@@ -282,8 +283,11 @@ fn main() {
 
 Key points:
 
-- `handle.call_method::<AddInput, AddOutput>(ADD_METHOD, &input)` calls the method at
+- `handle.call_method(ADD_METHOD, &input)` calls the method at
   its vtable index (zero-based, declaration order).
+- Arguments are always **tuple-encoded**: single arg is `(T,)`, two args
+  is `(A, B)`, zero args is `()`. This matches how the `#[plugin_impl]`
+  macro deserializes input on the plugin side.
 
 See the [host API reference](../reference/host-api.md) for the full builder and handle API.
 

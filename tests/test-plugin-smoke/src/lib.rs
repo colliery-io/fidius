@@ -19,6 +19,10 @@ use serde::{Deserialize, Serialize};
 pub trait Calculator: Send + Sync {
     fn add(&self, input: AddInput) -> AddOutput;
 
+    fn add_direct(&self, a: i64, b: i64) -> i64;
+
+    fn version(&self) -> String;
+
     #[optional(since = 2)]
     fn multiply(&self, input: MulInput) -> MulOutput;
 }
@@ -53,6 +57,14 @@ impl Calculator for BasicCalculator {
         AddOutput {
             result: input.a + input.b,
         }
+    }
+
+    fn add_direct(&self, a: i64, b: i64) -> i64 {
+        a + b
+    }
+
+    fn version(&self) -> String {
+        "1.0.0".to_string()
     }
 
     fn multiply(&self, input: MulInput) -> MulOutput {

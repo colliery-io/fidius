@@ -117,7 +117,7 @@ fn call_add_method_via_handle() {
     let loaded = host.load("BasicCalculator").unwrap();
     let handle = PluginHandle::from_loaded(loaded);
 
-    let input = AddInput { a: 3, b: 7 };
+    let input = (AddInput { a: 3, b: 7 },);
     let output: AddOutput = handle.call_method(0, &input).unwrap();
     assert_eq!(output, AddOutput { result: 10 });
 }
@@ -134,10 +134,44 @@ fn call_multiply_method_via_handle() {
     let loaded = host.load("BasicCalculator").unwrap();
     let handle = PluginHandle::from_loaded(loaded);
 
-    // multiply is the optional method (index 1)
-    let input = MulInput { a: 4, b: 5 };
-    let output: MulOutput = handle.call_method(1, &input).unwrap();
+    // multiply is the optional method (index 3: add=0, add_direct=1, version=2, multiply=3)
+    let input = (MulInput { a: 4, b: 5 },);
+    let output: MulOutput = handle.call_method(3, &input).unwrap();
     assert_eq!(output, MulOutput { result: 20 });
+}
+
+#[test]
+fn call_multi_arg_add_direct() {
+    let plugin_dir = build_test_plugin();
+
+    let host = PluginHost::builder()
+        .search_path(&plugin_dir)
+        .build()
+        .unwrap();
+
+    let loaded = host.load("BasicCalculator").unwrap();
+    let handle = PluginHandle::from_loaded(loaded);
+
+    // add_direct takes two i64 args directly (index 1)
+    let output: i64 = handle.call_method(1, &(100i64, 200i64)).unwrap();
+    assert_eq!(output, 300);
+}
+
+#[test]
+fn call_zero_arg_version() {
+    let plugin_dir = build_test_plugin();
+
+    let host = PluginHost::builder()
+        .search_path(&plugin_dir)
+        .build()
+        .unwrap();
+
+    let loaded = host.load("BasicCalculator").unwrap();
+    let handle = PluginHandle::from_loaded(loaded);
+
+    // version takes zero args (index 2)
+    let output: String = handle.call_method(2, &()).unwrap();
+    assert_eq!(output, "1.0.0");
 }
 
 #[test]

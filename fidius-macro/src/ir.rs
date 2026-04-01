@@ -21,8 +21,8 @@ use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Attribute, FnArg, Ident, ItemTrait, LitInt, Pat, ReturnType, Token, TraitItem, TraitItemFn,
-    Type,
+    Attribute, FnArg, Ident, ItemTrait, LitInt, LitStr, Pat, Path, ReturnType, Token, TraitItem,
+    TraitItemFn, Type,
 };
 
 /// Parsed attributes from `#[plugin_interface(version = N, buffer = Strategy)]`.
@@ -30,6 +30,9 @@ use syn::{
 pub struct InterfaceAttrs {
     pub version: u32,
     pub buffer_strategy: BufferStrategyAttr,
+    /// The path to the fidius crate. Defaults to `fidius` when not specified.
+    /// Set via `crate = "my_crate::fidius"` in the attribute.
+    pub crate_path: Path,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,12 +46,20 @@ impl Parse for InterfaceAttrs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut version = None;
         let mut buffer = None;
+        let mut crate_path = None;
 
         while !input.is_empty() {
-            let ident: Ident = input.parse()?;
+            // `crate` is a keyword, so we need to handle it specially
+            let key_str = if input.peek(Token![crate]) {
+                let _kw: Token![crate] = input.parse()?;
+                "crate".to_string()
+            } else {
+                let ident: Ident = input.parse()?;
+                ident.to_string()
+            };
             let _eq: Token![=] = input.parse()?;
 
-            match ident.to_string().as_str() {
+            match key_str.as_str() {
                 "version" => {
                     let lit: LitInt = input.parse()?;
                     version = Some(lit.base10_parse::<u32>()?);
@@ -67,10 +78,17 @@ impl Parse for InterfaceAttrs {
                         }
                     });
                 }
+                "crate" => {
+                    let lit: LitStr = input.parse()?;
+                    let path: Path = lit.parse()?;
+                    crate_path = Some(path);
+                }
                 other => {
                     return Err(syn::Error::new(
-                        ident.span(),
-                        format!("unknown attribute `{other}`, expected `version` or `buffer`"),
+                        Span::call_site(),
+                        format!(
+                            "unknown attribute `{other}`, expected `version`, `buffer`, or `crate`"
+                        ),
                     ))
                 }
             }
@@ -80,11 +98,15 @@ impl Parse for InterfaceAttrs {
             }
         }
 
+        // Default crate path to `fidius`
+        let crate_path = crate_path.unwrap_or_else(|| syn::parse_str::<Path>("fidius").unwrap());
+
         Ok(InterfaceAttrs {
             version: version
                 .ok_or_else(|| syn::Error::new(Span::call_site(), "missing `version` attribute"))?,
             buffer_strategy: buffer
                 .ok_or_else(|| syn::Error::new(Span::call_site(), "missing `buffer` attribute"))?,
+            crate_path,
         })
     }
 }
@@ -277,6 +299,7 @@ mod tests {
         let attrs = InterfaceAttrs {
             version: 1,
             buffer_strategy: BufferStrategyAttr::PluginAllocated,
+            crate_path: syn::parse_str("fidius").unwrap(),
         };
         parse_interface(attrs, &item).expect("failed to parse interface")
     }
@@ -342,6 +365,7 @@ mod tests {
         let attrs = InterfaceAttrs {
             version: 1,
             buffer_strategy: BufferStrategyAttr::PluginAllocated,
+            crate_path: syn::parse_str("fidius").unwrap(),
         };
         let result = parse_interface(attrs, &item);
         assert!(result.is_err());
@@ -366,5 +390,23 @@ mod tests {
         let attrs: InterfaceAttrs = syn::parse_str("version = 3, buffer = Arena").unwrap();
         assert_eq!(attrs.version, 3);
         assert_eq!(attrs.buffer_strategy, BufferStrategyAttr::Arena);
+        // Default crate path
+        assert_eq!(attrs.crate_path.segments.last().unwrap().ident, "fidius");
+    }
+
+    #[test]
+    fn interface_attrs_with_crate_path() {
+        let attrs: InterfaceAttrs =
+            syn::parse_str(r#"version = 1, buffer = PluginAllocated, crate = "my_crate::fidius""#)
+                .unwrap();
+        assert_eq!(attrs.version, 1);
+        assert_eq!(attrs.buffer_strategy, BufferStrategyAttr::PluginAllocated);
+        let segments: Vec<String> = attrs
+            .crate_path
+            .segments
+            .iter()
+            .map(|s| s.ident.to_string())
+            .collect();
+        assert_eq!(segments, vec!["my_crate", "fidius"]);
     }
 }

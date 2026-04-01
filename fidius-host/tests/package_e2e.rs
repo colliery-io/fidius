@@ -100,7 +100,7 @@ fn build_and_load_package() {
         result: i64,
     }
 
-    let output: AddOutput = handle.call_method(0, &AddInput { a: 5, b: 3 }).unwrap();
+    let output: AddOutput = handle.call_method(0, &(AddInput { a: 5, b: 3 },)).unwrap();
     assert_eq!(output, AddOutput { result: 8 });
 }
 

@@ -149,7 +149,7 @@ pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, WireError>
 
 ```c
 int32_t method(
-    const uint8_t* in_ptr,    // serialized input
+    const uint8_t* in_ptr,    // serialized input (tuple-encoded arguments)
     uint32_t       in_len,    // input byte count
     uint8_t**      out_ptr,   // [out] pointer to plugin-allocated output
     uint32_t*      out_len    // [out] output byte count
@@ -163,6 +163,36 @@ unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32
 ```
 
 Required methods use this type directly. Optional methods use `Option<unsafe extern "C" fn(...)>`.
+
+### Argument Encoding
+
+All method arguments are **tuple-encoded** at the FFI boundary. The input buffer
+contains the serialized form of a tuple containing all arguments:
+
+| Arg count | Trait signature | Serialized input type | Example |
+|-----------|----------------|----------------------|---------|
+| 0 | `fn status(&self) -> String` | `()` | `serialize(&())` |
+| 1 | `fn process(&self, input: String) -> String` | `(String,)` | `serialize(&("hello".to_string(),))` |
+| 2 | `fn add(&self, a: i64, b: i64) -> i64` | `(i64, i64)` | `serialize(&(3i64, 7i64))` |
+| N | `fn foo(&self, a: A, b: B, c: C) -> R` | `(A, B, C)` | `serialize(&(a, b, c))` |
+
+This encoding is uniform — there are no special cases. The `#[plugin_impl]`
+macro generates the deserialization code automatically. Host-side callers using
+`call_method` must pass the tuple-encoded input:
+
+```rust
+// Zero args
+let result: String = handle.call_method(0, &()).unwrap();
+
+// One arg
+let result: String = handle.call_method(1, &("hello".to_string(),)).unwrap();
+
+// Two args
+let result: i64 = handle.call_method(2, &(3i64, 7i64)).unwrap();
+```
+
+**Breaking change (v0.0.5):** Prior to 0.0.5, single-argument methods used bare
+value encoding (not tuple-wrapped). All methods now use tuple encoding uniformly.
 
 ### Free Buffer
 

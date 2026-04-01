@@ -8,7 +8,11 @@ formats in debug and release builds, and what can go wrong.
 ## The Design Decision
 
 All data crossing the FFI boundary -- method arguments, return values, and
-error details -- is serialized via serde. Fidius uses two wire formats:
+error details -- is serialized via serde. Method arguments are always
+**tuple-encoded**: zero args serialize as `()`, one arg as `(T,)`, multiple
+args as `(A, B, C)`. This encoding is uniform regardless of arg count.
+
+Fidius uses two wire formats:
 
 | Build mode | Wire format | Library | Characteristics |
 |------------|-------------|---------|-----------------|

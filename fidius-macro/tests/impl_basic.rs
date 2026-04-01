@@ -66,8 +66,8 @@ fn can_call_shim_via_vtable() {
     let desc = unsafe { &**reg.descriptors };
     let vtable = unsafe { &*(desc.vtable as *const __fidius_Greeter::Greeter_VTable) };
 
-    // Serialize the input argument
-    let input = "World".to_string();
+    // Serialize the input argument as a 1-tuple (uniform tuple encoding)
+    let input = ("World".to_string(),);
     let input_bytes = fidius_core::wire::serialize(&input).unwrap();
 
     let mut out_ptr: *mut u8 = std::ptr::null_mut();

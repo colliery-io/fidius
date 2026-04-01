@@ -86,7 +86,7 @@ fn can_call_both_plugins() {
         .map(|i| unsafe { &**reg.descriptors.add(i as usize) })
         .collect();
 
-    let input = "World".to_string();
+    let input = ("World".to_string(),);
     let input_bytes = fidius_core::wire::serialize(&input).unwrap();
 
     let mut results: Vec<String> = Vec::new();

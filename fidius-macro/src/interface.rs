@@ -60,7 +60,6 @@ pub fn generate_interface(ir: &InterfaceIR) -> syn::Result<TokenStream> {
     let descriptor_builder = generate_descriptor_builder(ir);
     let method_indices = generate_method_indices(ir);
     let companion_mod = format_ident!("__fidius_{}", ir.trait_name);
-
     Ok(quote! {
         #cleaned_trait
         /// Generated companion module for the plugin interface.
@@ -203,6 +202,7 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
 /// Generate the descriptor builder function used by `#[plugin_impl]`.
 fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
     let trait_name = &ir.trait_name;
+    let crate_path = &ir.attrs.crate_path;
     let vtable_name = format_ident!("{}_VTable", trait_name);
     let fn_name = format_ident!(
         "__fidius_build_{}_descriptor",
@@ -236,14 +236,14 @@ fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
             capabilities: u64,
             free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
             method_count: u32,
-        ) -> fidius::descriptor::PluginDescriptor {
-            fidius::descriptor::PluginDescriptor {
-                abi_version: fidius::descriptor::ABI_VERSION,
+        ) -> #crate_path::descriptor::PluginDescriptor {
+            #crate_path::descriptor::PluginDescriptor {
+                abi_version: #crate_path::descriptor::ABI_VERSION,
                 interface_name: #interface_name_cstr_ident.as_ptr(),
                 interface_hash: #hash_name,
                 interface_version: #version_name,
                 capabilities,
-                wire_format: fidius::wire::WIRE_FORMAT as u8,
+                wire_format: #crate_path::wire::WIRE_FORMAT as u8,
                 buffer_strategy: #strategy_name,
                 plugin_name,
                 vtable: vtable as *const std::ffi::c_void,

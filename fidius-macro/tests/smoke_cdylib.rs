@@ -97,7 +97,7 @@ fn load_cdylib_and_call_plugin() {
         result: i64,
     }
 
-    let input = AddInput { a: 3, b: 7 };
+    let input = (AddInput { a: 3, b: 7 },);
     let input_bytes = fidius_core::wire::serialize(&input).unwrap();
 
     // The vtable's first function pointer is `add`
