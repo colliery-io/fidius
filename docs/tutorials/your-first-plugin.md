@@ -289,7 +289,7 @@ Key points:
   is `(A, B)`, zero args is `()`. This matches how the `#[plugin_impl]`
   macro deserializes input on the plugin side.
 
-See the [host API reference](../reference/host-api.md) for the full builder and handle API.
+See the [host API reference](../api/rust/fidius-host.md) for the full builder and handle API.
 
 ## Step 5: Build and run
 

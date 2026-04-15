@@ -460,7 +460,7 @@ package build failed: {0}
 
 ## See Also
 
-- [Host API Reference](./host-api.md) -- where these errors are returned
+- [Host API Reference](../api/rust/fidius-host.md) -- where these errors are returned
 - [ABI Specification](./abi-specification.md) -- status codes that map to `CallError` variants
-- [#[plugin_impl] Reference](./plugin-impl-macro.md) -- shim code that produces status codes
+- [#[plugin_impl] Reference](../api/rust/fidius-macro/impl_macro.md) -- shim code that produces status codes
 - [Package Manifest Reference](./package-manifest.md) -- `package.toml` format and functions that return `PackageError`

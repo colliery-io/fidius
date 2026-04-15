@@ -468,7 +468,7 @@ do not contain a `package.toml`.
 
 ## See Also
 
-- [Host API Reference](./host-api.md) -- programmatic API used by `inspect`
+- [Host API Reference](../api/rust/fidius-host.md) -- programmatic API used by `inspect`
 - [ABI Specification](./abi-specification.md) -- descriptor layout shown by `inspect`
 - [Errors Reference](./errors.md) -- `LoadError` and `PackageError` variants
 - [Package Manifest Reference](./package-manifest.md) -- `package.toml` format and Rust types

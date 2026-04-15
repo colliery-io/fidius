@@ -77,7 +77,7 @@ fidius_core::fidius_plugin_registry!();
 
 ## 4. Generated shim and runtime
 
-The macro generates a synchronous FFI shim that calls `block_on` on a per-dylib tokio runtime -- see the [ABI specification](../reference/abi-specification.md) for the generated code and the [async runtime explanation](../explanation/async-runtime.md) for runtime lifecycle details.
+The macro generates a synchronous FFI shim that calls `block_on` on a per-dylib tokio runtime -- see the [ABI specification](../reference/abi-specification.md) for the generated code and the [async runtime explanation](../api/rust/fidius-core/async_runtime.md) for runtime lifecycle details.
 
 ## Things to keep in mind
 

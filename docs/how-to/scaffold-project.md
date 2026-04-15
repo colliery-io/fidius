@@ -38,7 +38,7 @@ fidius = "0.3.2"
 ```
 
 The `fidius` dependency version is resolved automatically (see
-[Dependency resolution](#dependency-resolution) below).
+[Dependency resolution](#3-dependency-resolution) below).
 
 ### Generated `src/lib.rs`
 
