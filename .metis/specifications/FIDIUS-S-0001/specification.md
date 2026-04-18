@@ -4,14 +4,14 @@ level: specification
 title: "Fidius ABI and Wire Protocol Specification"
 short_code: "FIDIUS-S-0001"
 created_at: 2026-03-28T22:40:35.229889+00:00
-updated_at: 2026-03-29T00:26:08.595434+00:00
+updated_at: 2026-04-17T13:17:22.707074+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#specification"
-  - "#phase/drafting"
+  - "#phase/published"
 
 
 exit_criteria_met: false

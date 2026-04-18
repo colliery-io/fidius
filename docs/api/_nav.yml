@@ -21,6 +21,7 @@ nav:
     - fidius-core::wire: rust/fidius-core/wire.md
     - fidius-host: rust/fidius-host.md
     - fidius-host::arch: rust/fidius-host/arch.md
+    - fidius-host::arena: rust/fidius-host/arena.md
     - fidius-host::error: rust/fidius-host/error.md
     - fidius-host::handle: rust/fidius-host/handle.md
     - fidius-host::host: rust/fidius-host/host.md
@@ -32,3 +33,6 @@ nav:
     - fidius-macro::impl_macro: rust/fidius-macro/impl_macro.md
     - fidius-macro::interface: rust/fidius-macro/interface.md
     - fidius-macro::ir: rust/fidius-macro/ir.md
+    - fidius-test: rust/fidius-test.md
+    - fidius-test::dylib: rust/fidius-test/dylib.md
+    - fidius-test::signing: rust/fidius-test/signing.md

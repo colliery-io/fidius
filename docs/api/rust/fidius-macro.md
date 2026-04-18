@@ -17,14 +17,6 @@ Define a plugin interface from a trait.
 Generates a `#[repr(C)]` vtable struct, interface hash constant,
 capability bit constants, and a descriptor builder function.
 
-**Attributes:**
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `version` | integer | yes | Interface version number. |
-| `buffer` | ident | yes | Buffer strategy: `PluginAllocated`, `CallerAllocated`, or `Arena`. |
-| `crate` | string | no | Path to the fidius crate (default: `"fidius"`). For white-label interfaces that re-export fidius, use `crate = "crate"` so generated code resolves through the interface crate. |
-
 **Examples:**
 
 ```ignore
@@ -35,16 +27,7 @@ pub trait Greeter: Send + Sync {
     #[optional(since = 2)]
     fn greet_fancy(&self, name: String) -> String;
 }
-
-// White-label: resolve fidius through the current crate's re-export
-#[plugin_interface(version = 1, buffer = PluginAllocated, crate = "crate")]
-pub trait MyPlugin: Send + Sync {
-    fn execute(&self, input: String) -> String;
-}
 ```
-
-Methods can have zero, one, or multiple arguments. All arguments are
-tuple-encoded at the FFI boundary automatically by the generated shims.
 
 <details>
 <summary>Source</summary>
@@ -82,13 +65,6 @@ Implement a plugin interface for a concrete type.
 Generates extern "C" FFI shims, a static vtable, a plugin descriptor,
 and a plugin registry.
 
-**Attributes:**
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| (positional) | ident | yes | Trait name to implement. |
-| `crate` | string | no | Path to the fidius crate (default: `"fidius"`). Override for white-label scenarios where the plugin doesn't depend on fidius directly. |
-
 **Examples:**
 
 ```ignore
@@ -99,12 +75,6 @@ impl Greeter for MyGreeter {
     fn greet(&self, name: String) -> String {
         format!("Hello, {name}!")
     }
-}
-
-// White-label: fidius accessed through the interface crate
-#[plugin_impl(MyPlugin, crate = "my_interface::fidius")]
-impl MyPlugin for MyImpl {
-    fn execute(&self, input: String) -> String { ... }
 }
 ```
 

@@ -37,12 +37,13 @@ supports an optional method before calling it.
 ## Step 1: Add the optional method to the interface
 
 Open `calculator-interface/src/lib.rs` and add a `multiply` method annotated
-with `#[optional(since = 2)]`. Also add the necessary input/output types:
+with `#[optional(since = 2)]`. Bump the interface `version` to `2` to signal
+the addition. Also add the necessary input/output types:
 
 ```rust
 pub use fidius::{plugin_impl, PluginError};
 
-#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]
+#[fidius::plugin_interface(version = 2, buffer = PluginAllocated)]
 pub trait Calculator: Send + Sync {
     fn add(&self, input: AddInput) -> AddOutput;
 
@@ -78,10 +79,11 @@ pub struct MulOutput {
 Key points about `#[optional(since = 2)]`:
 
 - The `since` value is informational -- it documents which interface `version`
-  (from `#[plugin_interface(version = N, ...)]`) introduced the method. In this
-  example, `version = 1` is the original interface and `since = 2` means
-  "added in version 2." The `since` value does not change the interface hash
-  (only required methods contribute to the hash).
+  (from `#[plugin_interface(version = N, ...)]`) introduced the method. Here
+  the interface started at `version = 1` with only `add`; bumping to
+  `version = 2` and annotating `multiply` with `since = 2` documents the
+  evolution. The `since` value does not change the interface hash (only
+  required methods contribute to the hash).
 - Optional methods do not break backward compatibility. A plugin compiled
   against the old interface (without `multiply`) will still load and work for
   `add` calls.
@@ -126,33 +128,17 @@ and `multiply` appears in `Calculator_OPTIONAL_METHODS`, it sets the
 corresponding capability bit in the plugin descriptor. In this case, capability
 bit 0 is set, so the plugin's capabilities field becomes `0x1`.
 
-## Step 3: Check capabilities from the host
+## Step 3: Call the optional method from the host
 
-Open `calculator-host/src/main.rs` and update it to check for `multiply`
-support before calling:
+Open `calculator-host/src/main.rs`. With the typed `CalculatorClient`, the
+host just calls `client.multiply(...)`; the capability check happens inside
+the Client and returns `CallError::NotImplemented` if the plugin doesn't
+implement it:
 
 ```rust
-use fidius_host::{PluginHost, PluginHandle};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize)]
-struct AddInput { a: i64, b: i64 }
-
-#[derive(Deserialize, Debug)]
-struct AddOutput { result: i64 }
-
-#[derive(Serialize)]
-struct MulInput { a: i64, b: i64 }
-
-#[derive(Deserialize, Debug)]
-struct MulOutput { result: i64 }
-
-// Method indices (zero-based, declaration order across all methods).
-const ADD_METHOD: usize = 0;
-const MULTIPLY_METHOD: usize = 1;
-
-// Capability bit indices (zero-based among optional methods only).
-const MULTIPLY_CAP: u32 = 0;
+use calculator_interface::{AddInput, CalculatorClient, MulInput};
+use fidius::CallError;
+use fidius_host::{PluginHandle, PluginHost};
 
 fn main() {
     let plugin_dir = std::env::args()
@@ -169,37 +155,34 @@ fn main() {
         .expect("failed to load BasicCalculator");
 
     let handle = PluginHandle::from_loaded(loaded);
+    let client = CalculatorClient::from_handle(handle);
 
-    // Call add (always available -- required method).
-    let sum: AddOutput = handle
-        .call_method(ADD_METHOD, &AddInput { a: 3, b: 7 })
+    // Required method -- always present.
+    let sum = client
+        .add(&AddInput { a: 3, b: 7 })
         .expect("add() failed");
     println!("add(3, 7) = {}", sum.result);
 
-    // Check if multiply is supported before calling.
-    if handle.has_capability(MULTIPLY_CAP) {
-        let product: MulOutput = handle
-            .call_method(MULTIPLY_METHOD, &MulInput { a: 4, b: 5 })
-            .expect("multiply() failed");
-        println!("multiply(4, 5) = {}", product.result);
-    } else {
-        println!("multiply is not supported by this plugin");
+    // Optional method -- Client checks the capability bit internally.
+    match client.multiply(&MulInput { a: 4, b: 5 }) {
+        Ok(product) => println!("multiply(4, 5) = {}", product.result),
+        Err(CallError::NotImplemented { .. }) => {
+            println!("multiply is not supported by this plugin");
+        }
+        Err(e) => panic!("multiply failed: {e}"),
     }
 }
 ```
 
-`handle.has_capability(bit)` checks whether the given bit is set in the
-plugin's capability bitfield. The `bit` argument must be less than 64. It
-corresponds to the zero-based index among optional methods in declaration
-order.
+The generated `CalculatorClient::multiply` inspects the plugin's capability
+bitfield before dispatching. If the bit isn't set, it short-circuits with
+`CallError::NotImplemented { bit: ... }` — no FFI call is made.
 
-The method index passed to `call_method` counts all methods (both required and
-optional) in declaration order. In this example:
-
-| Method | Declaration index | Kind |
-|---|---|---|
-| `add` | 0 | required |
-| `multiply` | 1 | optional (capability bit 0) |
+If you need lower-level access, `PluginHandle::has_capability(bit)` and
+`PluginHandle::call_method(index, ...)` remain available. The capability bit
+is a zero-based index among optional methods (so `multiply` is bit 0). The
+method index is zero-based across all methods in declaration order
+(`add` = 0, `multiply` = 1).
 
 ## Step 4: Build and run
 

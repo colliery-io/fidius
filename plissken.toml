@@ -9,9 +9,10 @@ template = "mkdocs-material"
 
 [rust]
 crates = [
-    "fidius-core",
-    "fidius-macro",
-    "fidius-host",
-    "fidius-cli",
-    "fidius",
+    "crates/fidius-core",
+    "crates/fidius-macro",
+    "crates/fidius-host",
+    "crates/fidius-cli",
+    "crates/fidius",
+    "crates/fidius-test",
 ]

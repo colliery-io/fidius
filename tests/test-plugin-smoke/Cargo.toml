@@ -4,8 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+# cdylib for the subprocess plugin build; rlib so host-side tests (in
+# fidius-host) can dev-depend on this crate and use the generated
+# CalculatorClient type.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Enable host-side typed Client generation (CalculatorClient). Not enabled
+# by the plugin cdylib build — only host-side consumers turn this on.
+host = ["fidius/host"]
 
 [dependencies]
-fidius = { path = "../../fidius", features = ["async"] }
+fidius = { path = "../../crates/fidius", features = ["async"] }
 serde = { version = "1", features = ["derive"] }

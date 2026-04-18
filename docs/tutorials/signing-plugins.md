@@ -127,8 +127,8 @@ First, add `ed25519-dalek` to the host's `Cargo.toml`:
 
 ```toml
 [dependencies]
+calculator-interface = { path = "../calculator-interface", features = ["host"] }
 fidius-host = { version = "0.1" }
-serde = { version = "1", features = ["derive"] }
 ed25519-dalek = "2"
 ```
 
@@ -136,14 +136,8 @@ Then update `calculator-host/src/main.rs` to load the public key and require
 signature verification:
 
 ```rust
-use fidius_host::{PluginHost, PluginHandle};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize)]
-struct AddInput { a: i64, b: i64 }
-
-#[derive(Deserialize, Debug)]
-struct AddOutput { result: i64 }
+use calculator_interface::{AddInput, CalculatorClient};
+use fidius_host::{PluginHandle, PluginHost};
 
 fn main() {
     let plugin_dir = std::env::args()
@@ -171,14 +165,19 @@ fn main() {
         .expect("failed to load BasicCalculator");
 
     let handle = PluginHandle::from_loaded(loaded);
+    let client = CalculatorClient::from_handle(handle);
 
-    let output: AddOutput = handle
-        .call_method(0, &AddInput { a: 3, b: 7 })
+    let output = client
+        .add(&AddInput { a: 3, b: 7 })
         .expect("add() failed");
 
     println!("add(3, 7) = {}", output.result);
 }
 ```
+
+Make sure the host's `Cargo.toml` enables the interface crate's `host`
+feature so the `CalculatorClient` type is generated (see
+[Your First Plugin](your-first-plugin.md#step-4-create-the-host-binary)).
 
 The two builder methods that control signing:
 

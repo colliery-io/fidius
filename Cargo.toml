@@ -1,10 +1,11 @@
 [workspace]
 members = [
-    "fidius-core",
-    "fidius-macro",
-    "fidius-host",
-    "fidius-cli",
-    "fidius",
+    "crates/fidius-core",
+    "crates/fidius-macro",
+    "crates/fidius-host",
+    "crates/fidius-cli",
+    "crates/fidius",
+    "crates/fidius-test",
 ]
 exclude = ["tests/test-plugin-smoke"]
 resolver = "2"

@@ -4,7 +4,7 @@
 
 Wire protocol, binary layout, and ABI contract between Fidius hosts and plugins.
 
-**Source:** `fidius-core/src/descriptor.rs`, `fidius-core/src/status.rs`, `fidius-core/src/wire.rs`, `fidius-core/src/hash.rs`, `fidius-core/tests/layout_and_roundtrip.rs`
+**Source:** `crates/fidius-core/src/descriptor.rs`, `crates/fidius-core/src/status.rs`, `crates/fidius-core/src/wire.rs`, `crates/fidius-core/src/hash.rs`, `crates/fidius-core/tests/layout_and_roundtrip.rs`
 
 ---
 
@@ -23,9 +23,13 @@ The first 8 bytes of every `PluginRegistry`. Used by the host to verify the regi
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `REGISTRY_VERSION` | `1` | Layout version of the `PluginRegistry` struct. |
-| `ABI_VERSION` | `1` | Layout version of the `PluginDescriptor` struct. |
+| `ABI_VERSION` | `100` (at fidius-core 0.1.0) | Layout version of the `PluginDescriptor` struct. |
 
 Both are `u32`. The host rejects registries or descriptors with mismatched versions.
+
+`ABI_VERSION` is **derived from the `fidius-core` crate version** per [ADR-0002]. Pre-1.0 releases use `MAJOR * 10000 + MINOR * 100` (so every minor is a breaking change); post-1.0 releases use `MAJOR * 10000` only (minor releases must be ABI-additive).
+
+[ADR-0002]: https://github.com/colliery-io/fidius — see `.metis/adrs/FIDIUS-A-0002.md` in the source tree.
 
 ---
 
@@ -50,23 +54,32 @@ Each `PluginRegistry` is constructed once per dylib by `build_registry()` and ca
 
 ## PluginDescriptor Layout
 
-`#[repr(C)]`, 72 bytes, 8-byte aligned (on 64-bit platforms).
+`#[repr(C)]`, 104 bytes, 8-byte aligned (on 64-bit platforms).
 
 | Offset | Size | Field | Type | Description |
 |--------|------|-------|------|-------------|
-| 0 | 4 | `abi_version` | `u32` | Must equal `ABI_VERSION` (currently `1`). |
-| 4 | 4 | _(padding)_ | | Alignment padding before pointer. |
+| 0 | 4 | `descriptor_size` | `u32` | Size in bytes of this descriptor struct at plugin build time. Host reads this FIRST to detect fields added in later minor versions. See [ADR-0002]. |
+| 4 | 4 | `abi_version` | `u32` | Must equal `ABI_VERSION` (e.g., `100` for fidius-core 0.1.0). |
 | 8 | 8 | `interface_name` | `*const c_char` | Null-terminated UTF-8 C string. Interface trait name. |
 | 16 | 8 | `interface_hash` | `u64` | FNV-1a hash of required method signatures. |
 | 24 | 4 | `interface_version` | `u32` | User-specified version from `#[plugin_interface(version = N)]`. |
 | 28 | 4 | _(padding)_ | | Alignment padding before `u64`. |
 | 32 | 8 | `capabilities` | `u64` | Bitfield: bit N set means optional method N is implemented. |
-| 40 | 1 | `wire_format` | `u8` | `0` = Json, `1` = Bincode. See [Wire Format](#wireformat). |
-| 41 | 1 | `buffer_strategy` | `u8` | `0` = CallerAllocated, `1` = PluginAllocated, `2` = Arena. |
-| 42 | 6 | _(padding)_ | | Alignment padding before pointer. |
+| 40 | 1 | `buffer_strategy` | `u8` | `1` = PluginAllocated, `2` = Arena. (`0` was `CallerAllocated`, reserved since 0.1.0.) |
+| 41 | 7 | _(padding)_ | | Alignment padding before pointer. |
 | 48 | 8 | `plugin_name` | `*const c_char` | Null-terminated UTF-8 C string. Plugin implementation name. |
 | 56 | 8 | `vtable` | `*const c_void` | Opaque pointer to the interface-specific `#[repr(C)]` vtable. |
 | 64 | 8 | `free_buffer` | `Option<unsafe extern "C" fn(*mut u8, usize)>` | Buffer deallocation function. Must be `Some` for `PluginAllocated`. |
+| 72 | 4 | `method_count` | `u32` | Total number of methods in the vtable. |
+| 76 | 4 | _(padding)_ | | Alignment padding before pointer. |
+| 80 | 8 | `method_metadata` | `*const MethodMetaEntry` | Array of `method_count` per-method metadata entries, or null if no methods declared `#[method_meta]`. See [Method Metadata](../how-to/method-metadata.md). |
+| 88 | 8 | `trait_metadata` | `*const MetaKv` | Trait-level metadata array (`#[trait_meta]`), or null. |
+| 96 | 4 | `trait_metadata_count` | `u32` | Number of entries in `trait_metadata`. Zero when null. |
+| 100 | 4 | _(padding)_ | | Alignment padding to 104-byte total. |
+
+### Additive layout evolution (post-1.0)
+
+Fields added in later minor releases appear at offsets >= the current `descriptor_size`. Plugins built against an older minor release report a smaller `descriptor_size`, and host reads for newer fields must check `descriptor_size` before trusting the offset. See [ADR-0002] for the full discipline.
 
 ### PluginDescriptor Helper Methods
 
@@ -76,8 +89,7 @@ Each `PluginRegistry` is constructed once per dylib by `build_registry()` and ca
 |--------|-------------|-------------|
 | `interface_name_str()` | `&str` | Reads `interface_name` as a `CStr` and converts to `&str`. |
 | `plugin_name_str()` | `&str` | Reads `plugin_name` as a `CStr` and converts to `&str`. |
-| `buffer_strategy_kind()` | `BufferStrategyKind` | Converts the `buffer_strategy` `u8` to the enum. |
-| `wire_format_kind()` | `WireFormat` | Converts the `wire_format` `u8` to the enum. |
+| `buffer_strategy_kind()` | `Result<BufferStrategyKind, u8>` | Converts the `buffer_strategy` `u8` to the enum. Returns `Err(raw)` for unknown discriminants (e.g. `0`, reserved since 0.1.0). |
 | `has_capability(bit: u32)` | `bool` | Returns `true` if the given capability bit is set. |
 
 ---
@@ -88,64 +100,52 @@ Each `PluginRegistry` is constructed once per dylib by `build_registry()` and ca
 
 | Discriminant | Variant | Description |
 |--------------|---------|-------------|
-| `0` | `CallerAllocated` | Host allocates output buffer. Returns `-1` with needed size if too small. |
+| `0` | _(reserved)_ | Was `CallerAllocated`; removed in 0.1.0. Any plugin reporting `0` is rejected with `UnknownBufferStrategy`. |
 | `1` | `PluginAllocated` | Plugin allocates output. Host frees via `free_buffer`. |
-| `2` | `Arena` | Host provides pre-allocated arena. Data valid until next call. |
+| `2` | `Arena` | Host provides pre-allocated arena buffer. Plugin writes into it. Retry-on-too-small via `STATUS_BUFFER_TOO_SMALL`. Data valid until next call on the same thread. |
 
-Only `PluginAllocated` is currently supported by the macro.
-
----
-
-## WireFormat
-
-`#[repr(u8)]`, 1 byte.
-
-| Discriminant | Variant | Description |
-|--------------|---------|-------------|
-| `0` | `Json` | JSON via `serde_json`. Used in debug builds (`cfg(debug_assertions)`). |
-| `1` | `Bincode` | bincode. Used in release builds (`cfg(not(debug_assertions))`). |
+Both `PluginAllocated` and `Arena` are fully supported by the macro and host. See [Buffer Strategies](../explanation/buffer-strategies.md) for usage guidance.
 
 ---
 
-Layout sizes and offsets are regression-tested in `fidius-core/tests/layout_and_roundtrip.rs` to catch accidental ABI drift.
+Layout sizes and offsets are regression-tested in `crates/fidius-core/tests/layout_and_roundtrip.rs` to catch accidental ABI drift.
 
 ---
 
-## Wire Format Selection
+## Wire Format
 
-The wire format is determined at compile time. For a detailed explanation of the debug/release behavior and the rationale behind `PluginError.details`, see [Wire Format and Debug/Release Behavior](../explanation/wire-format.md).
+All data crossing the FFI boundary is serialized as **bincode** via `serde`.
+Wire format is a non-choice at runtime — there is no `WireFormat` enum and no
+`wire_format` field in the descriptor. Build profile (debug vs release) does
+not affect the bytes.
 
-```rust
-#[cfg(debug_assertions)]
-pub const WIRE_FORMAT: WireFormat = WireFormat::Json;
-
-#[cfg(not(debug_assertions))]
-pub const WIRE_FORMAT: WireFormat = WireFormat::Bincode;
-```
-
-The host rejects plugins whose `wire_format` field does not match its own `WIRE_FORMAT`. Both host and plugin must be compiled in the same mode (both debug or both release).
+See [Wire Format](../explanation/wire-format.md) for the full rationale
+(including why the earlier debug-mode JSON path was removed in 0.1.0).
 
 ### Serialization
 
 ```rust
-// Debug: serde_json::to_vec(val)
-// Release: bincode::serialize(val)
 pub fn serialize<T: Serialize>(val: &T) -> Result<Vec<u8>, WireError>
 ```
 
 ### Deserialization
 
 ```rust
-// Debug: serde_json::from_slice(bytes)
-// Release: bincode::deserialize(bytes)
 pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, WireError>
 ```
+
+Both functions are thin wrappers around `bincode::serialize` / `bincode::deserialize`.
 
 ---
 
 ## VTable Function Pointer Signatures
 
-### PluginAllocated (currently the only supported strategy)
+The vtable layout differs by buffer strategy. `PluginAllocated` and `Arena`
+use distinct C signatures; a plugin reports which one it uses via the
+descriptor's `buffer_strategy` field. Required methods use the function
+pointer type directly; optional methods use `Option<unsafe extern "C" fn(...)>`.
+
+### PluginAllocated
 
 ```c
 int32_t method(
@@ -162,7 +162,35 @@ Rust type:
 unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32
 ```
 
-Required methods use this type directly. Optional methods use `Option<unsafe extern "C" fn(...)>`.
+The plugin allocates the output buffer (typically via `Box::into_raw`) and
+the host calls the descriptor's `free_buffer` to release it.
+
+### Arena
+
+```c
+int32_t method(
+    const uint8_t* in_ptr,      // serialized input (tuple-encoded arguments)
+    uint32_t       in_len,      // input byte count
+    uint8_t*       arena_ptr,   // host-provided arena base
+    uint32_t       arena_cap,   // capacity of the arena buffer
+    uint32_t*      out_offset,  // [out] offset into arena where output starts
+    uint32_t*      out_len      // [out] output byte count (or required size on TOO_SMALL)
+) -> int32_t;                   // status code
+```
+
+Rust type:
+
+```rust
+unsafe extern "C" fn(*const u8, u32, *mut u8, u32, *mut u32, *mut u32) -> i32
+```
+
+The host provides a thread-local arena buffer of capacity `arena_cap`. The
+plugin writes its output at some `*out_offset` within the arena and sets
+`*out_len` to the byte count. If the arena is too small, the plugin returns
+`STATUS_BUFFER_TOO_SMALL`, writes the required size to `*out_len`, and the
+host grows the arena and retries exactly once. Arena plugins do not use
+`free_buffer` — the descriptor's field is null, and the arena is reused for
+subsequent calls on the same thread.
 
 ### Argument Encoding
 
@@ -194,7 +222,7 @@ let result: i64 = handle.call_method(2, &(3i64, 7i64)).unwrap();
 **Breaking change (v0.0.5):** Prior to 0.0.5, single-argument methods used bare
 value encoding (not tuple-wrapped). All methods now use tuple encoding uniformly.
 
-### Free Buffer
+### Free Buffer (PluginAllocated only)
 
 ```c
 void free_buffer(uint8_t* ptr, size_t len);
@@ -206,7 +234,10 @@ Rust type:
 unsafe extern "C" fn(*mut u8, usize)
 ```
 
-Called by the host after reading the output buffer. Reconstructs a `Vec<u8>` from `(ptr, len, len)` and drops it.
+Called by the host after reading the output buffer. Reconstructs a
+`Box<[u8]>` from `(ptr, len)` and drops it. For `Arena` plugins the
+descriptor's `free_buffer` field is null; the host reuses the arena buffer
+directly and does not call any deallocation hook.
 
 ---
 
@@ -217,7 +248,7 @@ All `i32`. Returned by vtable function pointers.
 | Code | Constant | Meaning |
 |------|----------|---------|
 | `0` | `STATUS_OK` | Success. Output buffer contains the serialized result. |
-| `-1` | `STATUS_BUFFER_TOO_SMALL` | Output buffer too small (CallerAllocated/Arena only). `out_len` contains the required size. |
+| `-1` | `STATUS_BUFFER_TOO_SMALL` | Output buffer too small (Arena only). `out_len` contains the required size; host grows arena and retries. |
 | `-2` | `STATUS_SERIALIZATION_ERROR` | Serialization or deserialization failed at the FFI boundary. |
 | `-3` | `STATUS_PLUGIN_ERROR` | Plugin returned an error. Output buffer contains a serialized `PluginError`. |
 | `-4` | `STATUS_PANIC` | Panic caught via `catch_unwind` at the `extern "C"` boundary. |
@@ -238,7 +269,7 @@ The host loads a plugin dylib through the following sequence:
    - **Validate ABI version** -- Compare `descriptor.abi_version` with `ABI_VERSION`. Reject on mismatch.
    - **Copy strings** -- Read `interface_name` and `plugin_name` as `CStr`, convert to owned `String`.
    - **Copy metadata** -- Build `PluginInfo` from descriptor fields.
-8. **Interface validation** (optional) -- If the host has expected values for `interface_hash`, `wire_format`, or `buffer_strategy`, compare each against the plugin's values.
+8. **Interface validation** (optional) -- If the host has expected values for `interface_hash` or `buffer_strategy`, compare each against the plugin's values.
 9. **Signature verification** (optional) -- If `require_signature` is set, verify the `.sig` file against trusted Ed25519 public keys.
 
 ---

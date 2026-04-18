@@ -33,7 +33,6 @@ Plugin Registry: path/to/libmy_plugin.dylib
       Interface hash: 0x1a2b3c4d5e6f7890
       Interface version: 1
       Buffer strategy: PluginAllocated
-      Wire format: Bincode
       Capabilities: 0x0000000000000000
 
   [1] GoodbyeGreeter
@@ -41,7 +40,6 @@ Plugin Registry: path/to/libmy_plugin.dylib
       Interface hash: 0x1a2b3c4d5e6f7890
       Interface version: 1
       Buffer strategy: PluginAllocated
-      Wire format: Bincode
       Capabilities: 0x0000000000000000
 ```
 
@@ -59,8 +57,8 @@ $ fidius inspect target/release/libmy_plugin.dylib
 Check that:
 
 - The plugin count matches what you expect.
-- The wire format is `Bincode` (release) not `Json` (debug).
 - The interface hash has not changed unexpectedly.
+- The buffer strategy matches what the host expects.
 
 ### Debug interface hash mismatches
 

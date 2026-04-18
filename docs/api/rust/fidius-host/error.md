@@ -18,9 +18,9 @@ Errors that can occur when loading a plugin.
 - **`IncompatibleRegistryVersion`**
 - **`IncompatibleAbiVersion`**
 - **`InterfaceHashMismatch`**
-- **`WireFormatMismatch`**
 - **`BufferStrategyMismatch`**
 - **`ArchitectureMismatch`**
+- **`UnknownBufferStrategy`**
 - **`SignatureInvalid`**
 - **`SignatureRequired`**
 - **`PluginNotFound`**
@@ -41,7 +41,11 @@ Errors that can occur when calling a plugin method.
 - **`Plugin`**
 - **`Panic`**
 - **`BufferTooSmall`**
-- **`NotImplemented`**
+- **`NotImplemented`** - Optional method is not implemented by this plugin — its capability bit is unset.
+Returned when a method marked `#[optional]` is called on a plugin that chose not
+to implement it. Not returned for out-of-range method indices; see `InvalidMethodIndex`.
+- **`InvalidMethodIndex`**
+- **`UnknownStatus`**
 
 
 

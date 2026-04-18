@@ -29,19 +29,16 @@ This enables three hooks that run on every commit:
 | `angreal build` | `cargo build --workspace` |
 | `angreal build --release` | Release build |
 | `angreal test` | `cargo test --workspace` |
-| `angreal test --release` | Test with bincode wire format (release mode) |
+| `angreal test --release` | `cargo test --workspace --release` |
 | `angreal check` | `cargo check --workspace` + `cargo clippy --workspace` |
 | `angreal lint` | `cargo fmt --all --check` + clippy |
 | `angreal license-header` | Add Apache 2.0 headers to all `.rs` files |
 | `angreal license-header --check` | Check headers without modifying files |
 
-## Testing Both Wire Formats
-
-Fidius uses JSON in debug builds and bincode in release builds. Run both:
-
-```bash
-angreal test && angreal test --release
-```
+The wire format is **bincode in both debug and release builds** (0.1.0+).
+There's no longer a profile-specific wire path to regression-test, so
+`angreal test` alone is sufficient for CI; `--release` is only useful when
+you want optimized builds in the loop.
 
 ## The Test Plugin
 
@@ -70,6 +67,7 @@ fidius-core/       Shared types (both host and plugin depend on this)
 fidius-macro/      Proc macros (#[plugin_interface], #[plugin_impl])
 fidius-host/       Host-side loading, validation, calling
 fidius-cli/        CLI binary (fidius)
+fidius-test/       Testing helpers (dylib_fixture, signing fixtures)
 fidius/            Facade crate re-exporting core + macro
 tests/             Test fixtures (test-plugin-smoke)
 docs/              Documentation (tutorials, how-to, reference, explanation, api)

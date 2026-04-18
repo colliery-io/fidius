@@ -4,14 +4,14 @@ level: task
 title: "Smoke test — compile and load a real cdylib plugin"
 short_code: "FIDIUS-T-0012"
 created_at: 2026-03-29T00:53:38.360267+00:00
-updated_at: 2026-03-29T01:13:35.951618+00:00
+updated_at: 2026-04-17T13:17:13.085218+00:00
 parent: FIDIUS-I-0002
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -27,6 +27,8 @@ initiative_id: FIDIUS-I-0002
 ## Objective
 
 Build a minimal end-to-end proof: define a trait with `#[plugin_interface]`, implement it with `#[plugin_impl]`, compile to a cdylib, then use `libloading` to dlopen it and verify the `FIDIUS_PLUGIN_REGISTRY` is correct. This is not the full fidius-host integration (that's FIDIUS-I-0003/I-0004) — just a raw dlsym smoke test to prove the macro output is a valid, loadable plugin.
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 

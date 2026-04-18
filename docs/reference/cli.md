@@ -5,7 +5,7 @@
 Complete reference for the `fidius` command-line tool.
 
 **Crate:** `fidius-cli`
-**Source:** `fidius-cli/src/main.rs`, `fidius-cli/src/commands.rs`
+**Source:** `crates/fidius-cli/src/main.rs`, `crates/fidius-cli/src/commands.rs`
 
 ---
 
@@ -128,6 +128,51 @@ Created plugin crate: <path>/<NAME>
 
 ---
 
+### `init-host`
+
+Scaffold a new host application crate that loads plugins via the generated typed Client.
+
+```
+fidius init-host <NAME> --interface <INTERFACE> --trait <TRAIT_NAME> [--path <DIR>] [--version <VERSION>]
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `NAME` | positional | yes | Crate name for the host binary (e.g., `my-host`). |
+| `--interface` | string | yes | Interface crate: a local path, crates.io name, or crate name. |
+| `--trait` | string | yes | Trait name from the interface crate (used to reference the generated `{Trait}Client`). |
+| `--path` | path | no | Output directory. Default: current directory. |
+| `--version` | string | no | Pin dependency versions. |
+
+**Generated files:**
+
+```
+<NAME>/
+  Cargo.toml
+  src/main.rs
+```
+
+The interface crate dependency is added with `features = ["host"]` so the
+generated `{Trait}Client` is visible. The `main.rs` stub uses
+`PluginHost::builder().search_path(...)`, discovers plugins, and wraps the
+first discovered plugin in `{Trait}Client::from_handle(...)`. `fidius-test`
+is added as a dev-dependency so tests can use `dylib_fixture` out of the box.
+
+**Output on success:**
+
+```
+Created host crate: <path>/<NAME>
+
+Next steps:
+  1. Adjust search_path in src/main.rs to your plugins directory
+  2. Fill in the TODO with actual method calls on _client
+  3. Run: cd <NAME> && cargo run
+```
+
+**Error:** If the target directory already exists, prints `error: directory '<path>' already exists` and exits with code `1`.
+
+---
+
 ### `keygen`
 
 Generate an Ed25519 signing keypair.
@@ -242,8 +287,12 @@ Plugin Registry: <dylib_path>
       Interface hash: 0x<16-digit hex>
       Interface version: <version>
       Buffer strategy: <Debug repr>
-      Wire format: <Debug repr>
       Capabilities: 0x<16-digit hex>
+      Trait metadata:            # only if #[trait_meta] present
+        <key> = <value>
+      Method metadata:           # only if any method has #[method_meta]
+        [<idx>]:
+          <key> = <value>
 ```
 
 One block per plugin, 0-indexed.
@@ -251,6 +300,34 @@ One block per plugin, 0-indexed.
 **Errors:**
 
 - Load failure: `"failed to load <path>: <load_error>"`.
+
+---
+
+### `test`
+
+Smoke-test a plugin package: build it, load it, and invoke every method with
+a zero-arg input. Intended for a quick sanity check during development — the
+test is intentionally shallow (ignores per-method input/output schemas).
+
+```
+fidius test <DIR> [--debug]
+```
+
+| Argument / Flag | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `DIR` | positional | yes | Path to the plugin package directory. |
+| `--debug` | flag | no | Build in debug mode instead of release. |
+
+**Behavior:**
+
+- Runs `fidius_host::package::build_package(dir, release)` to compile the cdylib.
+- Loads the resulting library and iterates through every plugin in the registry.
+- For each method, calls it with a zero-arg tuple-encoded input (`serialize(&())`).
+- Reports per-method outcomes; methods that return `CallError::NotImplemented`
+  (for unimplemented optional methods) are counted as expected skips, not failures.
+
+**Exit code:** `0` if every non-skipped method succeeded; `1` if any method
+failed or if the package failed to build.
 
 ---
 

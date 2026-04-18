@@ -63,6 +63,8 @@ nav:
     - Source Packages: tutorials/source-packages.md
   - How-To Guides:
     - Scaffold a Project: how-to/scaffold-project.md
+    - Test Plugins: how-to/test-plugins.md
+    - Method Metadata: how-to/method-metadata.md
     - Async Methods: how-to/async-methods.md
     - Multiple Plugins per Dylib: how-to/multiple-plugins-per-dylib.md
     - Inspect a Plugin: how-to/inspect-plugin.md

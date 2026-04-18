@@ -5,8 +5,8 @@
 Complete reference for the `package.toml` manifest format, the `PackageError`
 type, and the `fidius package` CLI commands.
 
-**Source:** `fidius-core/src/package.rs`, `fidius-host/src/package.rs`,
-`fidius-cli/src/commands.rs`
+**Source:** `crates/fidius-core/src/package.rs`, `crates/fidius-host/src/package.rs`,
+`crates/fidius-cli/src/commands.rs`
 
 ---
 

@@ -5,6 +5,35 @@ Ed25519 signature verification for plugin dylibs.
 
 ## Functions
 
+### `fidius-host::signing::sig_path_for`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn sig_path_for (path : & Path) -> std :: path :: PathBuf
+```
+
+Compute the detached signature file path for a given file.
+
+Appends `.sig` to the full filename (e.g., `foo.dylib` → `foo.dylib.sig`).
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn sig_path_for(path: &Path) -> std::path::PathBuf {
+    path.with_extension(format!(
+        "{}.sig",
+        path.extension().and_then(|e| e.to_str()).unwrap_or("")
+    ))
+}
+```
+
+</details>
+
+
+
 ### `fidius-host::signing::verify_signature`
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
@@ -23,8 +52,8 @@ the Ed25519 signature against each trusted key until one matches.
 
 | Exception | Description |
 |-----------|-------------|
-| `LoadError::SignatureRequired` | if the `.sig` file doesn't exist |
-| `LoadError::SignatureInvalid` | if no trusted key verifies the signature |
+| `LoadError::SignatureRequired` | — if the `.sig` file doesn't exist |
+| `LoadError::SignatureInvalid` | — if no trusted key verifies the signature |
 
 
 <details>
@@ -33,15 +62,7 @@ the Ed25519 signature against each trusted key until one matches.
 ```rust
 pub fn verify_signature(dylib_path: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), LoadError> {
     let path_str = dylib_path.display().to_string();
-
-    // Build the .sig path
-    let sig_path = dylib_path.with_extension(format!(
-        "{}.sig",
-        dylib_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-    ));
+    let sig_path = sig_path_for(dylib_path);
 
     // Read the sig file
     let sig_bytes = std::fs::read(&sig_path).map_err(|e| {

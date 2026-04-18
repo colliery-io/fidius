@@ -22,6 +22,26 @@ Parsed attributes from `#[plugin_interface(version = N, buffer = Strategy)]`.
 |------|------|-------------|
 | `version` | `u32` |  |
 | `buffer_strategy` | `BufferStrategyAttr` |  |
+| `crate_path` | `Path` | The path to the fidius crate. Defaults to `fidius` when not specified.
+Set via `crate = "my_crate::fidius"` in the attribute. |
+
+
+
+### `fidius-macro::ir::MetaKvAttr`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+**Derives:** `Debug`, `Clone`
+
+A static metadata key/value pair parsed from a `#[method_meta(...)]` or `#[trait_meta(...)]` attribute. Both values are string literals.
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `key` | `String` |  |
+| `value` | `String` |  |
 
 
 
@@ -41,6 +61,7 @@ Full IR for a parsed interface trait.
 | `trait_name` | `Ident` |  |
 | `attrs` | `InterfaceAttrs` |  |
 | `methods` | `Vec < MethodIR >` |  |
+| `trait_metas` | `Vec < MetaKvAttr >` | Trait-level metadata from `#[trait_meta(...)]` attributes on the trait. |
 | `original_trait` | `ItemTrait` | The original trait item, for re-emission. |
 
 
@@ -66,6 +87,7 @@ IR for a single trait method.
 | `optional_since` | `Option < u32 >` | If `#[optional(since = N)]`, the version it was added. |
 | `signature_string` | `String` | Canonical signature string for interface hashing.
 Format: `"name:arg_type_1,arg_type_2->return_type"` |
+| `method_metas` | `Vec < MetaKvAttr >` | Metadata from `#[method_meta("k", "v")]` attributes. Preserves declaration order. |
 
 #### Methods
 
@@ -98,15 +120,82 @@ Whether this is a required (non-optional) method.
 ### `fidius-macro::ir::BufferStrategyAttr` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
+Discriminants match `fidius_core::descriptor::BufferStrategyKind` — values `1` (PluginAllocated) and `2` (Arena). `0` is reserved for the removed `CallerAllocated` strategy.
+
 #### Variants
 
-- **`CallerAllocated`**
 - **`PluginAllocated`**
 - **`Arena`**
 
 
 
 ## Functions
+
+### `fidius-macro::ir::parse_meta_attrs`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn parse_meta_attrs (attrs : & [Attribute] , ident : & str) -> syn :: Result < Vec < MetaKvAttr > >
+```
+
+Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]` attributes with the given name from an attribute list into a `Vec<MetaKvAttr>`. Validates string-literal only, non-empty keys, no duplicate keys, and rejects keys in the reserved `fidius.*` namespace.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn parse_meta_attrs(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>> {
+    let mut out = Vec::new();
+    for attr in attrs {
+        if !attr.path().is_ident(ident) {
+            continue;
+        }
+        // Parse two comma-separated string literals: #[attr("key", "value")]
+        let (key_lit, value_lit): (LitStr, LitStr) =
+            attr.parse_args_with(|input: syn::parse::ParseStream| {
+                let k: LitStr = input.parse()?;
+                let _: Token![,] = input.parse()?;
+                let v: LitStr = input.parse()?;
+                Ok((k, v))
+            })?;
+        let key = key_lit.value();
+        let value = value_lit.value();
+
+        if key.is_empty() {
+            return Err(syn::Error::new(
+                key_lit.span(),
+                format!("#[{ident}(key, value)] key must not be empty"),
+            ));
+        }
+        if key.trim() != key {
+            return Err(syn::Error::new(
+                key_lit.span(),
+                format!("#[{ident}(key, value)] key must not have leading or trailing whitespace"),
+            ));
+        }
+        if key.starts_with("fidius.") {
+            return Err(syn::Error::new(
+                key_lit.span(),
+                format!("the `fidius.*` key namespace is reserved for framework use; got `{key}`"),
+            ));
+        }
+        if out.iter().any(|existing: &MetaKvAttr| existing.key == key) {
+            return Err(syn::Error::new(
+                key_lit.span(),
+                format!("duplicate #[{ident}] key `{key}`"),
+            ));
+        }
+        out.push(MetaKvAttr { key, value });
+    }
+    Ok(out)
+}
+```
+
+</details>
+
+
 
 ### `fidius-macro::ir::parse_optional_attr`
 
@@ -338,6 +427,7 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
         let arg_types = extract_arg_types(method);
         let arg_names = extract_arg_names(method);
         let return_type = extract_return_type(method);
+        let method_metas = parse_meta_attrs(&method.attrs, "method_meta")?;
 
         methods.push(MethodIR {
             name: method.sig.ident.clone(),
@@ -347,13 +437,17 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             is_async,
             optional_since,
             signature_string,
+            method_metas,
         });
     }
+
+    let trait_metas = parse_meta_attrs(&item.attrs, "trait_meta")?;
 
     Ok(InterfaceIR {
         trait_name,
         attrs,
         methods,
+        trait_metas,
         original_trait: item.clone(),
     })
 }

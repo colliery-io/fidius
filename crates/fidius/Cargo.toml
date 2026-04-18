@@ -1,0 +1,19 @@
+[package]
+name = "fidius"
+version = "0.1.0"
+edition = "2021"
+description = "Fidius — a Rust plugin framework for trait-to-dylib plugin systems"
+license = "Apache-2.0"
+repository = "https://github.com/colliery-io/fidius"
+
+[features]
+async = ["fidius-core/async"]
+# Opt-in host-side API surface. Enables re-export of fidius-host loader,
+# handle, and error types. Interface crates that want a generated typed
+# Client (for host consumers) should declare this feature.
+host = ["dep:fidius-host"]
+
+[dependencies]
+fidius-core = { path = "../fidius-core", version = "0.1.0" }
+fidius-macro = { path = "../fidius-macro", version = "0.1.0" }
+fidius-host = { path = "../fidius-host", version = "0.1.0", optional = true }

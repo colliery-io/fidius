@@ -84,9 +84,9 @@ for info in &plugins {
 ```
 
 Each `PluginInfo` contains the plugin name, interface name, interface hash,
-version, capabilities, wire format, and buffer strategy. Two plugins from the
-same dylib will share the same interface hash and version but have different
-names (e.g., `"HelloGreeter"` and `"GoodbyeGreeter"`).
+version, capabilities, and buffer strategy. Two plugins from the same dylib
+will share the same interface hash and version but have different names
+(e.g., `"HelloGreeter"` and `"GoodbyeGreeter"`).
 
 To load a specific plugin by name:
 

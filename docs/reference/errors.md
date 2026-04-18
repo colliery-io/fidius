@@ -4,7 +4,7 @@
 
 All error types in the Fidius plugin framework, with causes and resolutions.
 
-**Source:** `fidius-host/src/error.rs`, `fidius-core/src/wire.rs`, `fidius-core/src/error.rs`, `fidius-core/src/package.rs`
+**Source:** `crates/fidius-host/src/error.rs`, `crates/fidius-core/src/wire.rs`, `crates/fidius-core/src/error.rs`, `crates/fidius-core/src/package.rs`
 
 ---
 
@@ -22,7 +22,6 @@ pub enum LoadError {
     IncompatibleRegistryVersion { got: u32, expected: u32 },
     IncompatibleAbiVersion { got: u32, expected: u32 },
     InterfaceHashMismatch { got: u64, expected: u64 },
-    WireFormatMismatch { got: u8, expected: u8 },
     BufferStrategyMismatch { got: u8, expected: u8 },
     ArchitectureMismatch { expected: String, got: String },
     SignatureInvalid { path: String },
@@ -107,18 +106,6 @@ interface hash mismatch: got {got:#x}, expected {expected:#x}
 | **Fields** | `got: u64`, `expected: u64` (displayed as hex). |
 | **Resolution** | Rebuild the plugin against the current version of the interface crate. Only changes to required method signatures affect the hash. |
 
-#### `WireFormatMismatch`
-
-```
-wire format mismatch: got {got}, expected {expected}
-```
-
-| | |
-|---|---|
-| **Trigger** | The plugin's `wire_format` does not match the expected format. Typically caused by mixing debug and release builds. |
-| **Fields** | `got: u8`, `expected: u8`. Values: `0` = Json, `1` = Bincode. |
-| **Resolution** | Compile both host and plugin in the same mode (both debug or both release). |
-
 #### `BufferStrategyMismatch`
 
 ```
@@ -128,7 +115,7 @@ buffer strategy mismatch: got {got}, expected {expected}
 | | |
 |---|---|
 | **Trigger** | The plugin's `buffer_strategy` does not match the expected strategy. |
-| **Fields** | `got: u8`, `expected: u8`. Values: `0` = CallerAllocated, `1` = PluginAllocated, `2` = Arena. |
+| **Fields** | `got: u8`, `expected: u8`. Values: `1` = PluginAllocated, `2` = Arena. (`0` is reserved — previously `CallerAllocated`, removed in 0.1.0.) |
 | **Resolution** | Ensure the plugin implements the same interface with the same `buffer` attribute. |
 
 #### `ArchitectureMismatch`
@@ -219,6 +206,8 @@ pub enum CallError {
     Panic,
     BufferTooSmall,
     NotImplemented { bit: u32 },
+    InvalidMethodIndex { index: usize, count: u32 },
+    UnknownStatus { code: i32 },
 }
 ```
 
@@ -246,7 +235,7 @@ deserialization error: {0}
 |---|---|
 | **Trigger** | Output deserialization failed after a successful FFI call (`STATUS_OK`), or `PluginError` deserialization failed when handling `STATUS_PLUGIN_ERROR`. |
 | **Fields** | `String` -- error description. |
-| **Resolution** | Ensure the output type parameter `O` matches the type the plugin method actually returns. Verify host and plugin use the same wire format. |
+| **Resolution** | Ensure the output type parameter `O` matches the type the plugin method actually returns. Both host and plugin always use bincode, so type mismatch is the usual cause. |
 
 #### `Plugin`
 
@@ -280,9 +269,9 @@ buffer too small
 
 | | |
 |---|---|
-| **Trigger** | The plugin returned `STATUS_BUFFER_TOO_SMALL` (`-1`). Only relevant for `CallerAllocated` and `Arena` buffer strategies (not currently used with `PluginAllocated`). |
+| **Trigger** | The plugin returned `STATUS_BUFFER_TOO_SMALL` (`-1`). Only used with the `Arena` buffer strategy — the host retries once with a larger buffer before surfacing this error. The retry is automatic, so `CallError::BufferTooSmall` usually indicates a bug in the plugin's size reporting or a pathological case (output larger than the arena max). `PluginAllocated` plugins never return this status. |
 | **Fields** | None. |
-| **Resolution** | Retry with a larger buffer (for CallerAllocated/Arena strategies). |
+| **Resolution** | Check the plugin's Arena write logic: it must report the required byte count in `*out_cap` when returning `STATUS_BUFFER_TOO_SMALL`, and must succeed on the retry with that size. |
 
 #### `NotImplemented`
 
@@ -292,9 +281,33 @@ method not implemented (capability bit {bit} not set)
 
 | | |
 |---|---|
-| **Trigger** | An optional method was called but the plugin does not implement it (the corresponding capability bit is not set). `call_method` does **not** automatically check capabilities -- the caller must check `has_capability(bit)` before calling. If the caller skips the check and the vtable entry is `None`, the host returns this error. |
+| **Trigger** | An optional method was called but the plugin does not implement it (the corresponding capability bit is not set). This variant is reserved for that exact case — not for out-of-range method indices (see `InvalidMethodIndex`). |
 | **Fields** | `bit: u32` -- the capability bit index. |
 | **Resolution** | Check `PluginHandle::has_capability(bit)` before calling optional methods. Use a plugin that implements the required optional method. |
+
+#### `InvalidMethodIndex`
+
+```
+invalid method index {index} (plugin has {count} method(s))
+```
+
+| | |
+|---|---|
+| **Trigger** | `call_method` was invoked with a method index greater than or equal to the plugin's `method_count`. Indicates a programming error in the caller (typo, stale constant, wrong plugin). |
+| **Fields** | `index: usize` -- the index passed. `count: u32` -- the plugin's actual method count. |
+| **Resolution** | Fix the caller. Use the `METHOD_*` constants from the interface's generated companion module rather than hard-coded indices. |
+
+#### `UnknownStatus`
+
+```
+unknown FFI status code: {code}
+```
+
+| | |
+|---|---|
+| **Trigger** | The plugin's FFI shim returned a status code the host does not recognize. Usually indicates a version mismatch between host and plugin. |
+| **Fields** | `code: i32` -- the unrecognized status value. |
+| **Resolution** | Ensure host and plugin are built against compatible fidius versions. |
 
 ---
 
@@ -306,23 +319,11 @@ Derives `Debug` and `thiserror::Error`.
 
 ```rust
 pub enum WireError {
-    Json(serde_json::Error),
     Bincode(bincode::Error),
 }
 ```
 
 ### Variant Details
-
-#### `Json`
-
-```
-json wire error: {0}
-```
-
-| | |
-|---|---|
-| **Trigger** | `serde_json` serialization or deserialization failed. Active in debug builds. |
-| **Fields** | Inner `serde_json::Error`. |
 
 #### `Bincode`
 
@@ -332,7 +333,7 @@ bincode wire error: {0}
 
 | | |
 |---|---|
-| **Trigger** | `bincode` serialization or deserialization failed. Active in release builds. |
+| **Trigger** | `bincode` serialization or deserialization failed. This is the only wire format — build profile has no effect. |
 | **Fields** | Inner `bincode::Error`. |
 
 ---
@@ -378,7 +379,7 @@ pub fn with_details(
 ) -> Self
 ```
 
-Create a `PluginError` with structured details. The `serde_json::Value` is serialized to a JSON string for storage (ensuring it serializes correctly under both JSON and bincode wire formats).
+Create a `PluginError` with structured details. The `serde_json::Value` is serialized to a JSON string for storage — bincode cannot deserialize a free-form `serde_json::Value` directly (no `deserialize_any`), so storing it as a `String` keeps the error struct bincode-compatible.
 
 ### Accessors
 

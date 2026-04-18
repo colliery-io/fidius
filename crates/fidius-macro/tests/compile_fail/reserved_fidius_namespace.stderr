@@ -1,0 +1,5 @@
+error: the `fidius.*` key namespace is reserved for framework use; got `fidius.reserved`
+ --> tests/compile_fail/reserved_fidius_namespace.rs:8:19
+  |
+8 |     #[method_meta("fidius.reserved", "nope")]
+  |                   ^^^^^^^^^^^^^^^^^

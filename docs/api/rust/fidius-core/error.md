@@ -14,10 +14,12 @@ Error types for the Fidius plugin framework.
 
 Error returned by plugin method implementations to signal business logic failures.
 
-Serialized across the FFI boundary via the wire format. The host deserializes
+Serialized as bincode across the FFI boundary. The host deserializes
 this from the output buffer when the FFI shim returns `STATUS_PLUGIN_ERROR`.
 The `details` field is stored as a JSON string (not `serde_json::Value`)
-so that it serializes correctly under both JSON and bincode wire formats.
+because bincode cannot deserialize a free-form `serde_json::Value`
+(it lacks `deserialize_any`). Storing it as a `String` keeps the error
+struct bincode-compatible.
 
 #### Fields
 

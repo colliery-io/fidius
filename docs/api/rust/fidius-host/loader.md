@@ -35,6 +35,10 @@ A single validated plugin from a loaded library.
 | `info` | `PluginInfo` | Owned metadata copied from the FFI descriptor. |
 | `vtable` | `* const c_void` | Raw vtable pointer (points into the loaded library's memory). |
 | `free_buffer` | `Option < unsafe extern "C" fn (* mut u8 , usize) >` | Free function for plugin-allocated buffers. |
+| `method_count` | `u32` | Total number of methods in the vtable. |
+| `descriptor` | `* const PluginDescriptor` | Raw pointer to the plugin's descriptor in library memory. Kept so the
+host can read metadata fields (`method_metadata`, `trait_metadata`)
+without re-walking the registry. Valid for the lifetime of `library`. |
 | `library` | `Arc < Library >` | Reference to the library to keep it alive. |
 
 
@@ -61,6 +65,9 @@ and all descriptors, copies FFI data to owned types.
 ```rust
 pub fn load_library(path: &Path) -> Result<LoadedLibrary, LoadError> {
     let path_str = path.display().to_string();
+
+    #[cfg(feature = "tracing")]
+    tracing::debug!(path = %path_str, "loading library");
 
     // Check architecture before dlopen
     crate::arch::check_architecture(path)?;
@@ -153,14 +160,17 @@ fn validate_descriptor(
         interface_hash: desc.interface_hash,
         interface_version: desc.interface_version,
         capabilities: desc.capabilities,
-        wire_format: desc.wire_format_kind(),
-        buffer_strategy: desc.buffer_strategy_kind(),
+        buffer_strategy: desc
+            .buffer_strategy_kind()
+            .map_err(|v| LoadError::UnknownBufferStrategy { value: v })?,
     };
 
     Ok(LoadedPlugin {
         info,
         vtable: desc.vtable,
         free_buffer: desc.free_buffer,
+        method_count: desc.method_count,
+        descriptor: desc as *const PluginDescriptor,
         library: Arc::clone(library),
     })
 }
@@ -176,7 +186,7 @@ fn validate_descriptor(
 
 
 ```rust
-fn validate_against_interface (plugin : & LoadedPlugin , expected_hash : Option < u64 > , expected_wire : Option < WireFormat > , expected_strategy : Option < BufferStrategyKind > ,) -> Result < () , LoadError >
+fn validate_against_interface (plugin : & LoadedPlugin , expected_hash : Option < u64 > , expected_strategy : Option < BufferStrategyKind > ,) -> Result < () , LoadError >
 ```
 
 Validate a loaded plugin against expected interface parameters.
@@ -188,7 +198,6 @@ Validate a loaded plugin against expected interface parameters.
 pub fn validate_against_interface(
     plugin: &LoadedPlugin,
     expected_hash: Option<u64>,
-    expected_wire: Option<WireFormat>,
     expected_strategy: Option<BufferStrategyKind>,
 ) -> Result<(), LoadError> {
     if let Some(hash) = expected_hash {
@@ -200,20 +209,11 @@ pub fn validate_against_interface(
         }
     }
 
-    if let Some(wire) = expected_wire {
-        if plugin.info.wire_format != wire {
-            return Err(LoadError::WireFormatMismatch {
-                got: plugin.info.wire_format as u8,
-                expected: wire as u8,
-            });
-        }
-    }
-
     if let Some(strategy) = expected_strategy {
         if plugin.info.buffer_strategy != strategy {
             return Err(LoadError::BufferStrategyMismatch {
-                got: plugin.info.buffer_strategy as u8,
-                expected: strategy as u8,
+                got: plugin.info.buffer_strategy,
+                expected: strategy,
             });
         }
     }

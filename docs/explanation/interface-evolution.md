@@ -21,13 +21,13 @@ time and checked by the host at load time.
 
 ### How the Hash Is Computed
 
-The proc macro (`fidius-macro/src/interface.rs`) calls
+The proc macro (`crates/fidius-macro/src/interface.rs`) calls
 `fidius_core::hash::interface_hash()` during expansion:
 
 1. Collect the signature strings of all **required** methods (those without
    `#[optional]`).
 2. Each signature has the format: `name:arg_type_1,arg_type_2->return_type`
-   (built by `build_signature_string()` in `fidius-macro/src/ir.rs`).
+   (built by `build_signature_string()` in `crates/fidius-macro/src/ir.rs`).
 3. Sort the signatures lexicographically.
 4. Join them with `\n`.
 5. Hash the combined bytes with FNV-1a 64-bit.
@@ -136,9 +136,9 @@ and checks `capabilities & (1u64 << bit) != 0`.
 | Remove required method | **Yes** | `interface_hash` changes | Recompile all plugins |
 | Change required method signature | **Yes** | `interface_hash` changes | Recompile all plugins |
 | Reorder methods in source | **Yes** | `interface_hash` unchanged (hash is order-independent), but vtable indices follow declaration order -- so reordering silently changes which function pointer each index maps to | Avoid; treat as breaking |
-| Change wire format | **Yes** | `wire_format` mismatch at load | Build everything in same mode |
 | Change buffer strategy | **Yes** | `buffer_strategy` mismatch at load | Recompile all plugins |
 | Bump `version` attribute | No | Informational; host can check if desired | Update interface crate |
+| Add/change/remove `#[method_meta]` or `#[trait_meta]` | No | Metadata is a host-readable side channel; does **not** participate in `interface_hash` | None — metadata changes are always backward-compatible at the ABI level |
 
 ### "Additive and Free"
 
@@ -187,29 +187,30 @@ realize were breaking. For example:
 ## Load-Time Validation Sequence
 
 The host validates plugins through `validate_against_interface()` in
-`fidius-host/src/loader.rs`:
+`crates/fidius-host/src/loader.rs`:
 
 ```
 load_library(path)
+  ├─ check magic bytes == FIDIUS_MAGIC
+  ├─ check registry_version == REGISTRY_VERSION
   ├─ check abi_version == ABI_VERSION (descriptor layout compatibility)
   └─ copy descriptor fields to owned PluginInfo
 
-validate_against_interface(plugin, expected_hash, expected_wire, expected_strategy)
+validate_against_interface(plugin, expected_hash, expected_strategy)
   ├─ if expected_hash is set:
   │     reject if plugin.interface_hash != expected_hash
-  ├─ if expected_wire is set:
-  │     reject if plugin.wire_format != expected_wire
   └─ if expected_strategy is set:
         reject if plugin.buffer_strategy != expected_strategy
 ```
 
-All three checks are optional -- the host configures which ones to enforce
-via the `PluginHostBuilder`. In strict mode, all are checked. This allows
-development workflows where you might want to load debug-built plugins from
-a release-built host temporarily.
+Both interface-level checks are optional — the host configures which ones
+to enforce via the `PluginHostBuilder`. `abi_version` and magic-bytes
+checks are always enforced. `ABI_VERSION` itself is derived from the
+`fidius-core` crate version per ADR-0002 (pre-1.0: `MAJOR*10000 + MINOR*100`;
+post-1.0: `MAJOR*10000`), so ABI compatibility tracks the release process.
 
-Each mismatch produces a specific `LoadError` variant with both the expected
-and actual values, making diagnosis straightforward.
+Each mismatch produces a specific `LoadError` variant with both the
+expected and actual values, making diagnosis straightforward.
 
 ---
 

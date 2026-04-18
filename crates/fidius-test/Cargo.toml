@@ -1,0 +1,18 @@
+[package]
+name = "fidius-test"
+version = "0.1.0"
+edition = "2021"
+description = "Testing helpers for Fidius plugin authors and hosts"
+license = "Apache-2.0"
+repository = "https://github.com/colliery-io/fidius"
+
+[dependencies]
+fidius-core = { path = "../fidius-core", version = "0.1.0" }
+fidius-host = { path = "../fidius-host", version = "0.1.0" }
+fidius-macro = { path = "../fidius-macro", version = "0.1.0" }
+ed25519-dalek = { workspace = true }
+
+[dev-dependencies]
+# For the self-test: exercise helpers against the test-plugin-smoke fixture
+test-plugin-smoke = { path = "../../tests/test-plugin-smoke", features = ["host"] }
+tempfile = "3"

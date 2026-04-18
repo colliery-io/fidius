@@ -23,6 +23,8 @@ Info about an impl method, extracted from the impl block.
 | `name` | `& 'a Ident` |  |
 | `is_async` | `bool` |  |
 | `returns_result` | `bool` |  |
+| `arg_types` | `Vec < & 'a Type >` | Argument types (excluding `self`). |
+| `arg_names` | `Vec < Ident >` | Argument names (excluding `self`). |
 
 
 
@@ -31,13 +33,18 @@ Info about an impl method, extracted from the impl block.
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
-Arguments to `#[plugin_impl(TraitName)]`.
+Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`, or `#[plugin_impl(TraitName, buffer = Arena)]`.
 
 #### Fields
 
 | Name | Type | Description |
 |------|------|-------------|
 | `trait_name` | `Ident` |  |
+| `crate_path` | `Path` | The path to the fidius crate. Defaults to `fidius` when not specified. |
+| `buffer_strategy` | `BufferStrategyAttr` | Must match the interface's `buffer` attribute. Defaults to
+`PluginAllocated`. Mismatches produce a vtable fn-pointer type error
+at compile time (the emitted shim's signature won't match the
+generated vtable's field type). |
 
 
 
@@ -109,10 +116,24 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                     ReturnType::Type(_, ty) => is_result_type(ty),
                     ReturnType::Default => false,
                 };
+                let mut arg_types = Vec::new();
+                let mut arg_names = Vec::new();
+                for arg in &method.sig.inputs {
+                    if let FnArg::Typed(pat_type) = arg {
+                        arg_types.push(pat_type.ty.as_ref());
+                        if let Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
+                            arg_names.push(pat_ident.ident.clone());
+                        } else {
+                            arg_names.push(format_ident!("_arg"));
+                        }
+                    }
+                }
                 Some(MethodInfo {
                     name: &method.sig.ident,
                     is_async: method.sig.asyncness.is_some(),
                     returns_result,
+                    arg_types,
+                    arg_names,
                 })
             } else {
                 None
@@ -123,8 +144,11 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let method_names: Vec<&Ident> = impl_methods.iter().map(|m| m.name).collect();
     let _has_async = impl_methods.iter().any(|m| m.is_async);
 
-    // Generate shim functions
-    let shims = generate_shims(&impl_ident, &impl_methods);
+    let crate_path = &attrs.crate_path;
+    let buffer_strategy = attrs.buffer_strategy;
+
+    // Generate shim functions (signature and body vary by buffer strategy)
+    let shims = generate_shims(&impl_ident, &impl_methods, crate_path, buffer_strategy);
 
     // Generate static instance
     let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
@@ -135,21 +159,37 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     // Generate vtable static
     let vtable = generate_vtable_static(trait_name, &impl_ident, &method_names);
 
-    // Generate free_buffer function
+    // free_buffer is only needed for PluginAllocated — Arena doesn't allocate
+    // output, it writes into the host-provided arena, so nothing to free.
     let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
-    let free_buffer = quote! {
-        unsafe extern "C" fn #free_fn_name(ptr: *mut u8, len: usize) {
-            if !ptr.is_null() && len > 0 {
-                drop(unsafe { Vec::from_raw_parts(ptr, len, len) });
+    let free_buffer = match buffer_strategy {
+        BufferStrategyAttr::PluginAllocated => quote! {
+            unsafe extern "C" fn #free_fn_name(ptr: *mut u8, len: usize) {
+                if !ptr.is_null() && len > 0 {
+                    // Reconstruct the Box<[u8]> from its raw parts. Safe because the
+                    // shim emitted by generate_shims always allocates output as a
+                    // Box<[u8]> (cap == len by construction — no mismatch possible).
+                    unsafe {
+                        let slice = std::slice::from_raw_parts_mut(ptr, len);
+                        drop(Box::from_raw(slice as *mut [u8]));
+                    }
+                }
             }
-        }
+        },
+        BufferStrategyAttr::Arena => quote! {},
     };
 
-    // Generate descriptor
-    let descriptor = generate_descriptor(trait_name, &impl_ident, &method_names);
+    // Generate descriptor (free_buffer field is None for Arena)
+    let descriptor = generate_descriptor(
+        trait_name,
+        &impl_ident,
+        &method_names,
+        crate_path,
+        buffer_strategy,
+    );
 
     // Register descriptor via inventory for multi-plugin collection
-    let registration = generate_inventory_registration(&impl_ident);
+    let registration = generate_inventory_registration(&impl_ident, crate_path);
 
     Ok(quote! {
         #item
@@ -173,16 +213,21 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
 
 
 ```rust
-fn generate_shims (impl_ident : & Ident , methods : & [MethodInfo]) -> TokenStream
+fn generate_shims (impl_ident : & Ident , methods : & [MethodInfo] , crate_path : & Path , buffer_strategy : BufferStrategyAttr ,) -> TokenStream
 ```
 
-Generate extern "C" shim functions for each method.
+Generate extern "C" shim functions for each method. Shim signatures and bodies vary by buffer strategy — see the two emit paths below.
 
 <details>
 <summary>Source</summary>
 
 ```rust
-fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
+fn generate_shims(
+    impl_ident: &Ident,
+    methods: &[MethodInfo],
+    crate_path: &Path,
+    buffer_strategy: BufferStrategyAttr,
+) -> TokenStream {
     let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
 
     let shim_fns: Vec<TokenStream> = methods
@@ -191,15 +236,26 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
             let method_name = method.name;
             let shim_name = format_ident!("__fidius_shim_{}_{}", impl_ident, method_name);
 
+            let arg_types = &method.arg_types;
+            let arg_names = &method.arg_names;
+
+            // Deserialize input as a tuple of all argument types
+            let deserialize_args = quote! {
+                let (#(#arg_names,)*) = match #crate_path::wire::deserialize::<(#(#arg_types,)*)>(in_slice) {
+                    Ok(v) => v,
+                    Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
+                };
+            };
+
             // The method call — either sync or async via block_on
             let method_call = if method.is_async {
                 quote! {
-                    fidius_core::async_runtime::FIDIUS_RUNTIME.block_on(
-                        #instance_name.#method_name(args)
+                    #crate_path::async_runtime::FIDIUS_RUNTIME.block_on(
+                        #instance_name.#method_name(#(#arg_names),*)
                     )
                 }
             } else {
-                quote! { #instance_name.#method_name(args) }
+                quote! { #instance_name.#method_name(#(#arg_names),*) }
             };
 
             // Generate the output handling based on whether the method returns Result
@@ -207,29 +263,82 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                 quote! {
                     match output {
                         Ok(val) => {
-                            match fidius_core::wire::serialize(&val) {
-                                Ok(v) => (v, fidius_core::status::STATUS_OK),
-                                Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                            match #crate_path::wire::serialize(&val) {
+                                Ok(v) => (v, #crate_path::status::STATUS_OK),
+                                Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
                             }
                         }
                         Err(err) => {
-                            match fidius_core::wire::serialize(&err) {
-                                Ok(v) => (v, fidius_core::status::STATUS_PLUGIN_ERROR),
-                                Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                            match #crate_path::wire::serialize(&err) {
+                                Ok(v) => (v, #crate_path::status::STATUS_PLUGIN_ERROR),
+                                Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
                             }
                         }
                     }
                 }
             } else {
                 quote! {
-                    match fidius_core::wire::serialize(&output) {
-                        Ok(v) => (v, fidius_core::status::STATUS_OK),
-                        Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
+                    match #crate_path::wire::serialize(&output) {
+                        Ok(v) => (v, #crate_path::status::STATUS_OK),
+                        Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
                     }
                 }
             };
 
-            quote! {
+            match buffer_strategy {
+                BufferStrategyAttr::Arena => quote! {
+                    unsafe extern "C" fn #shim_name(
+                        in_ptr: *const u8,
+                        in_len: u32,
+                        arena_ptr: *mut u8,
+                        arena_cap: u32,
+                        out_offset: *mut u32,
+                        out_len: *mut u32,
+                    ) -> i32 {
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
+                            #deserialize_args
+
+                            let output = #method_call;
+
+                            let (output_bytes, status) = #output_handling;
+
+                            // Arena strategy: write into host-provided buffer.
+                            // If too small, return BUFFER_TOO_SMALL with needed size.
+                            if output_bytes.len() > arena_cap as usize {
+                                unsafe {
+                                    *out_len = output_bytes.len() as u32;
+                                }
+                                return #crate_path::status::STATUS_BUFFER_TOO_SMALL;
+                            }
+                            let arena = unsafe {
+                                ::std::slice::from_raw_parts_mut(arena_ptr, arena_cap as usize)
+                            };
+                            arena[..output_bytes.len()].copy_from_slice(&output_bytes);
+                            unsafe {
+                                *out_offset = 0;
+                                *out_len = output_bytes.len() as u32;
+                            }
+                            status
+                        }));
+
+                        match result {
+                            Ok(status) => status,
+                            Err(_panic_payload) => {
+                                // Arena strategy cannot reliably transmit panic
+                                // messages (the arena may be too small and we
+                                // can't re-request from here). Return STATUS_PANIC
+                                // with out_len = 0; host reports an opaque panic.
+                                unsafe {
+                                    *out_offset = 0;
+                                    *out_len = 0;
+                                }
+                                #crate_path::status::STATUS_PANIC
+                            }
+                        }
+                    }
+                },
+                BufferStrategyAttr::PluginAllocated => quote! {
                 unsafe extern "C" fn #shim_name(
                     in_ptr: *const u8,
                     in_len: u32,
@@ -238,18 +347,18 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
                 ) -> i32 {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
-                        let args = match fidius_core::wire::deserialize(in_slice) {
-                            Ok(v) => v,
-                            Err(_) => return fidius_core::status::STATUS_SERIALIZATION_ERROR,
-                        };
+                        #deserialize_args
 
                         let output = #method_call;
 
                         let (output_bytes, status) = #output_handling;
 
-                        let len = output_bytes.len();
-                        let ptr = output_bytes.as_ptr() as *mut u8;
-                        std::mem::forget(output_bytes);
+                        // Hand ownership to the host via Box<[u8]>. cap == len
+                        // by construction, so free_buffer's reconstruction is
+                        // always well-defined.
+                        let boxed: Box<[u8]> = output_bytes.into_boxed_slice();
+                        let len = boxed.len();
+                        let ptr = Box::into_raw(boxed) as *mut u8;
                         unsafe {
                             *out_ptr = ptr;
                             *out_len = len as u32;
@@ -259,9 +368,28 @@ fn generate_shims(impl_ident: &Ident, methods: &[MethodInfo]) -> TokenStream {
 
                     match result {
                         Ok(status) => status,
-                        Err(_) => fidius_core::status::STATUS_PANIC,
+                        Err(panic_payload) => {
+                            // Extract panic message and serialize into output buffer
+                            let msg = panic_payload
+                                .downcast_ref::<&str>()
+                                .map(|s| s.to_string())
+                                .or_else(|| panic_payload.downcast_ref::<String>().cloned())
+                                .unwrap_or_else(|| "unknown panic".to_string());
+
+                            if let Ok(msg_bytes) = #crate_path::wire::serialize(&msg) {
+                                let boxed: Box<[u8]> = msg_bytes.into_boxed_slice();
+                                let len = boxed.len();
+                                let ptr = Box::into_raw(boxed) as *mut u8;
+                                unsafe {
+                                    *out_ptr = ptr;
+                                    *out_len = len as u32;
+                                }
+                            }
+                            #crate_path::status::STATUS_PANIC
+                        }
                     }
                 }
+                },
             }
         })
         .collect();
@@ -297,6 +425,7 @@ fn generate_vtable_static(
     impl_ident: &Ident,
     methods: &[&Ident],
 ) -> TokenStream {
+    let companion = format_ident!("__fidius_{}", trait_name);
     let vtable_type = format_ident!("{}_VTable", trait_name);
     let vtable_name = format_ident!("__FIDIUS_VTABLE_{}", impl_ident);
     let constructor = format_ident!("new_{}_vtable", trait_name.to_string().to_lowercase());
@@ -310,7 +439,7 @@ fn generate_vtable_static(
         .collect();
 
     quote! {
-        static #vtable_name: #vtable_type = #constructor(#(#shim_args),*);
+        static #vtable_name: #companion::#vtable_type = #companion::#constructor(#(#shim_args),*);
     }
 }
 ```
@@ -325,7 +454,7 @@ fn generate_vtable_static(
 
 
 ```rust
-fn generate_descriptor (trait_name : & Ident , impl_ident : & Ident , methods : & [& Ident]) -> TokenStream
+fn generate_descriptor (trait_name : & Ident , impl_ident : & Ident , methods : & [& Ident] , crate_path : & Path , buffer_strategy : BufferStrategyAttr ,) -> TokenStream
 ```
 
 Generate the PluginDescriptor static.
@@ -334,7 +463,14 @@ Generate the PluginDescriptor static.
 <summary>Source</summary>
 
 ```rust
-fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident]) -> TokenStream {
+fn generate_descriptor(
+    trait_name: &Ident,
+    impl_ident: &Ident,
+    methods: &[&Ident],
+    crate_path: &Path,
+    buffer_strategy: BufferStrategyAttr,
+) -> TokenStream {
+    let companion = format_ident!("__fidius_{}", trait_name);
     let vtable_name = format_ident!("__FIDIUS_VTABLE_{}", impl_ident);
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
     let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
@@ -345,22 +481,29 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
     let plugin_name_const = format_ident!("__FIDIUS_PLUGIN_NAME_{}", impl_ident);
     let impl_name_str = impl_ident.to_string();
 
-    // Compute capabilities: OR the {Trait}_CAP_{METHOD} constant for each
-    // method in the impl that also appears in {Trait}_OPTIONAL_METHODS.
-    // We generate a const expression that the compiler evaluates.
     let optional_methods_ident = format_ident!("{}_OPTIONAL_METHODS", trait_name);
     let method_strs: Vec<String> = methods.iter().map(|m| m.to_string()).collect();
+    let method_count = methods.len() as u32;
+
+    // free_buffer is only meaningful for PluginAllocated. Arena strategy
+    // doesn't allocate output buffers — nothing to free.
+    let free_buffer_expr = match buffer_strategy {
+        BufferStrategyAttr::PluginAllocated => quote! { Some(#free_fn_name) },
+        BufferStrategyAttr::Arena => quote! { None },
+    };
 
     quote! {
         const #plugin_name_const: &std::ffi::CStr = unsafe {
             std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#impl_name_str, "\0").as_bytes())
         };
 
-        static #descriptor_name: fidius_core::descriptor::PluginDescriptor = unsafe {
+        static #descriptor_name: #crate_path::descriptor::PluginDescriptor = unsafe {
             // Compute capabilities inline: check which impl'd methods
-            // appear in the optional methods list
+            // appear in the optional methods list.
+            // Uses manual byte-by-byte comparison because stable Rust does not
+            // support str::eq in const contexts.
             const CAPS: u64 = {
-                let optional = #optional_methods_ident;
+                let optional = #companion::#optional_methods_ident;
                 let impl_methods: &[&str] = &[#(#method_strs),*];
                 let mut caps: u64 = 0;
                 let mut opt_idx = 0;
@@ -389,11 +532,12 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
                 caps
             };
 
-            #builder_fn(
+            #companion::#builder_fn(
                 #plugin_name_const.as_ptr(),
                 &#vtable_name as *const _ as *const _,
                 CAPS,
-                Some(#free_fn_name),
+                #free_buffer_expr,
+                #method_count,
             )
         };
     }
@@ -410,7 +554,7 @@ fn generate_descriptor(trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident
 
 
 ```rust
-fn generate_inventory_registration (impl_ident : & Ident) -> TokenStream
+fn generate_inventory_registration (impl_ident : & Ident , crate_path : & Path) -> TokenStream
 ```
 
 Register the descriptor via inventory for multi-plugin support.
@@ -419,12 +563,12 @@ Register the descriptor via inventory for multi-plugin support.
 <summary>Source</summary>
 
 ```rust
-fn generate_inventory_registration(impl_ident: &Ident) -> TokenStream {
+fn generate_inventory_registration(impl_ident: &Ident, crate_path: &Path) -> TokenStream {
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
 
     quote! {
-        fidius_core::inventory::submit! {
-            fidius_core::registry::DescriptorEntry {
+        #crate_path::inventory::submit! {
+            #crate_path::registry::DescriptorEntry {
                 descriptor: &#descriptor_name,
             }
         }

@@ -59,3 +59,9 @@ jobs:
 
       - name: Publish fidius-cli
         run: cargo publish -p fidius-cli --no-verify || true
+
+      - name: Wait for index
+        run: sleep 30
+
+      - name: Publish fidius-test
+        run: cargo publish -p fidius-test --no-verify || true

@@ -1,0 +1,35 @@
+[package]
+name = "fidius-host"
+version = "0.1.0"
+edition = "2021"
+description = "Host-side loading and calling for the Fidius plugin framework"
+license = "Apache-2.0"
+repository = "https://github.com/colliery-io/fidius"
+
+[features]
+tracing = ["dep:tracing"]
+
+[dependencies]
+fidius-core = { path = "../fidius-core", version = "0.1.0" }
+libloading = { workspace = true }
+ed25519-dalek = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+ed25519-dalek = { workspace = true }
+serde = { workspace = true }
+# Serialize e2e signing tests — they all read/write the same `.sig` file next
+# to the test-plugin-smoke dylib and race in parallel (FIDIUS-I-0020).
+serial_test = "3"
+# Test helpers (dylib_fixture, signing fixtures) — replaces copy-pasted
+# build_test_plugin() across integration/e2e tests.
+fidius-test = { path = "../fidius-test", version = "0.1.0" }
+# Dev-dep (rlib) on the test fixture so integration tests can use the
+# generated CalculatorClient type. The fixture's subprocess cdylib build
+# used by the tests is a separate cargo invocation and does NOT pull this
+# feature.
+test-plugin-smoke = { path = "../../tests/test-plugin-smoke", features = ["host"] }

@@ -69,16 +69,28 @@ Detect the binary format and architecture of a file.
 
 ```rust
 pub fn detect_architecture(path: &Path) -> Result<BinaryInfo, LoadError> {
-    let bytes = std::fs::read(path).map_err(|_| LoadError::LibraryNotFound {
-        path: path.display().to_string(),
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            LoadError::LibraryNotFound {
+                path: path.display().to_string(),
+            }
+        } else {
+            LoadError::Io(e)
+        }
     })?;
 
-    if bytes.len() < 16 {
+    let mut bytes = [0u8; 20];
+    let n = file.read(&mut bytes).map_err(LoadError::Io)?;
+
+    if n < 16 {
         return Ok(BinaryInfo {
             format: BinaryFormat::Unknown,
             arch: Arch::Unknown,
         });
     }
+    let bytes = &bytes[..n];
 
     // ELF: \x7fELF
     if bytes[0..4] == [0x7f, b'E', b'L', b'F'] {

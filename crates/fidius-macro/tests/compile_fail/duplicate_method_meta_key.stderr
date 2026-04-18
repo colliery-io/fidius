@@ -1,0 +1,5 @@
+error: duplicate #[method_meta] key `effect`
+ --> tests/compile_fail/duplicate_method_meta_key.rs:9:19
+  |
+9 |     #[method_meta("effect", "read")]
+  |                   ^^^^^^^^

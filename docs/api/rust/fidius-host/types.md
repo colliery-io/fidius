@@ -25,7 +25,6 @@ All data copied from FFI descriptor — no raw pointers.
 | `interface_hash` | `u64` | FNV-1a hash of required method signatures. |
 | `interface_version` | `u32` | User-specified interface version. |
 | `capabilities` | `u64` | Capability bitfield (optional method support). |
-| `wire_format` | `WireFormat` | Wire serialization format. |
 | `buffer_strategy` | `BufferStrategyKind` | Buffer management strategy. |
 
 

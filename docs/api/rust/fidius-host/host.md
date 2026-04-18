@@ -21,7 +21,6 @@ Host for loading and managing plugins.
 | `require_signature` | `bool` |  |
 | `trusted_keys` | `Vec < VerifyingKey >` |  |
 | `expected_hash` | `Option < u64 >` |  |
-| `expected_wire` | `Option < WireFormat >` |  |
 | `expected_strategy` | `Option < BufferStrategyKind >` |  |
 
 #### Methods
@@ -65,6 +64,9 @@ and returns metadata for all valid plugins found.
 
 ```rust
     pub fn discover(&self) -> Result<Vec<PluginInfo>, LoadError> {
+        #[cfg(feature = "tracing")]
+        tracing::info!(search_paths = ?self.search_paths, "discovering plugins");
+
         let mut plugins = Vec::new();
 
         for search_path in &self.search_paths {
@@ -81,13 +83,19 @@ and returns metadata for all valid plugins found.
                     continue;
                 }
 
+                // Verify signature before dlopen to prevent code execution from untrusted dylibs
+                if self.require_signature
+                    && signing::verify_signature(&path, &self.trusted_keys).is_err()
+                {
+                    continue;
+                }
+
                 match loader::load_library(&path) {
                     Ok(loaded) => {
                         for plugin in &loaded.plugins {
                             if let Ok(()) = loader::validate_against_interface(
                                 plugin,
                                 self.expected_hash,
-                                self.expected_wire,
                                 self.expected_strategy,
                             ) {
                                 plugins.push(plugin.info.clone());
@@ -127,6 +135,9 @@ with the given name. Returns the loaded plugin ready for calling.
 
 ```rust
     pub fn load(&self, name: &str) -> Result<LoadedPlugin, LoadError> {
+        #[cfg(feature = "tracing")]
+        tracing::info!(plugin_name = name, "loading plugin");
+
         for search_path in &self.search_paths {
             if !search_path.is_dir() {
                 continue;
@@ -141,15 +152,9 @@ with the given name. Returns the loaded plugin ready for calling.
                     continue;
                 }
 
-                // Verify signature if required
+                // Verify signature if required — always enforced regardless of LoadPolicy
                 if self.require_signature {
-                    match signing::verify_signature(&path, &self.trusted_keys) {
-                        Ok(()) => {}
-                        Err(e) if self.load_policy == LoadPolicy::Lenient => {
-                            eprintln!("fidius warning: {e}");
-                        }
-                        Err(e) => return Err(e),
-                    }
+                    signing::verify_signature(&path, &self.trusted_keys)?;
                 }
 
                 match loader::load_library(&path) {
@@ -159,7 +164,6 @@ with the given name. Returns the loaded plugin ready for calling.
                                 loader::validate_against_interface(
                                     &plugin,
                                     self.expected_hash,
-                                    self.expected_wire,
                                     self.expected_strategy,
                                 )?;
                                 return Ok(plugin);
@@ -199,7 +203,6 @@ Builder for configuring a PluginHost.
 | `require_signature` | `bool` |  |
 | `trusted_keys` | `Vec < VerifyingKey >` |  |
 | `expected_hash` | `Option < u64 >` |  |
-| `expected_wire` | `Option < WireFormat >` |  |
 | `expected_strategy` | `Option < BufferStrategyKind >` |  |
 
 #### Methods
@@ -222,7 +225,6 @@ fn new () -> Self
             require_signature: false,
             trusted_keys: Vec::new(),
             expected_hash: None,
-            expected_wire: None,
             expected_strategy: None,
         }
     }
@@ -347,29 +349,6 @@ Set the expected interface hash for validation.
 
 
 
-##### `wire_format` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
-
-
-```rust
-fn wire_format (mut self , format : WireFormat) -> Self
-```
-
-Set the expected wire format for validation.
-
-<details>
-<summary>Source</summary>
-
-```rust
-    pub fn wire_format(mut self, format: WireFormat) -> Self {
-        self.expected_wire = Some(format);
-        self
-    }
-```
-
-</details>
-
-
-
 ##### `buffer_strategy` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
@@ -413,7 +392,6 @@ Build the PluginHost.
             require_signature: self.require_signature,
             trusted_keys: self.trusted_keys,
             expected_hash: self.expected_hash,
-            expected_wire: self.expected_wire,
             expected_strategy: self.expected_strategy,
         })
     }

@@ -1,0 +1,5 @@
+error: `CallerAllocated` buffer strategy was removed in fidius 0.1.0; use `PluginAllocated` or `Arena`
+  --> tests/compile_fail/caller_allocated_removed.rs:10:42
+   |
+10 | #[plugin_interface(version = 1, buffer = CallerAllocated)]
+   |                                          ^^^^^^^^^^^^^^^

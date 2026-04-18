@@ -41,13 +41,15 @@ in a dedicated *interface crate*.
 - A descriptor builder function
 
 **Stage 3 -- Implement.** A plugin author writes `#[plugin_impl(TraitName)]`
-on their impl block. The macro generates:
+on their impl block (adding `buffer = Arena` if the interface uses Arena
+strategy). The macro generates:
 
 - `extern "C"` shim functions that deserialize input, call the method, serialize
-  output, and catch panics
+  output, and catch panics. Shim signatures vary by buffer strategy.
 - A static vtable populated with those shim pointers
-- A `PluginDescriptor` containing the hash, version, wire format, buffer
-  strategy, and vtable pointer
+- A `PluginDescriptor` containing the hash, version, buffer strategy, vtable
+  pointer, method metadata arrays, and (for `PluginAllocated`) a `free_buffer`
+  function pointer
 - An `inventory::submit!` call to register the descriptor
 
 **Stage 4 -- Export.** The plugin calls `fidius_plugin_registry!()` which emits
@@ -57,29 +59,33 @@ and caches it via `OnceLock`.
 
 **Stage 5 -- Load and call.** The host application uses `fidius-host` to
 `dlopen` the dylib, `dlsym("fidius_get_registry")`, validate magic bytes, ABI
-version, interface hash, wire format, and buffer strategy, then wrap the vtable
-in a `PluginHandle` for type-safe method calls.
+version, interface hash, and buffer strategy, then wrap the vtable in a
+`PluginHandle`. The interface crate's generated `{Trait}Client` (available
+when the host enables the crate's `host` feature) provides named, typed
+method calls on top of the handle.
 
-## Why Five Crates
+## Why Six Crates
 
 ```
 fidius (facade)
-├── fidius-core      shared types, wire format, hashing, descriptors
+├── fidius-core      shared types, wire format, hashing, descriptors, metadata
 └── fidius-macro     proc macros: #[plugin_interface], #[plugin_impl]
 
-fidius-host          host-side loading, validation, calling
-fidius-cli           scaffolding, signing, inspection CLI
+fidius-host          host-side loading, validation, calling, arena pool
+fidius-cli           scaffolding, signing, inspection, smoke-test CLI
+fidius-test          test helpers: dylib_fixture, signing fixtures, in-process Client
 ```
 
 Each crate exists for a specific reason:
 
 | Crate | Why it exists |
 |-------|---------------|
-| **fidius-core** | The only crate that both plugin and host link against. Defines the `#[repr(C)]` ABI contract: `PluginRegistry`, `PluginDescriptor`, `BufferStrategyKind`, `WireFormat`, status codes, wire serialization, and `PluginError`. Keeping this minimal ensures the plugin side stays light. |
-| **fidius-macro** | A `proc-macro` crate (required to be its own crate by Rust). Depends on `fidius-core` to call `interface_hash()` at compile time and reference descriptor types in generated code. |
-| **fidius** | Facade that re-exports `fidius-core` types and `fidius-macro` macros. Interface crates depend on this single crate instead of managing two dependencies. |
-| **fidius-host** | Host-side logic that plugins never need: `dlopen`/`dlsym` via `libloading`, architecture detection, Ed25519 signature verification, descriptor validation, and `PluginHandle` for calling methods. Kept separate so plugin cdylibs do not link `libloading` or `ed25519-dalek`. |
-| **fidius-cli** | The `fidius` binary for scaffolding (`init-interface`, `init-plugin`), signing (`keygen`, `sign`, `verify`), and inspection (`inspect`). Developer tooling, not a library. |
+| **fidius-core** | The only crate that both plugin and host link against. Defines the `#[repr(C)]` ABI contract: `PluginRegistry`, `PluginDescriptor`, `BufferStrategyKind`, `MetaKv`, `MethodMetaEntry`, status codes, wire serialization (bincode), and `PluginError`. Keeping this minimal ensures the plugin side stays light. |
+| **fidius-macro** | A `proc-macro` crate (required to be its own crate by Rust). Depends on `fidius-core` to call `interface_hash()` at compile time and reference descriptor types in generated code. Emits the typed `{Trait}Client` behind `#[cfg(feature = "host")]`. |
+| **fidius** | Facade that re-exports `fidius-core` types and `fidius-macro` macros. The opt-in `host` feature also re-exports `fidius-host::{PluginHandle, CallError, LoadError, PluginHost, PluginInfo, LoadPolicy}` so interface crates can declare `features = ["host"]` to expose the generated Client to consumers. |
+| **fidius-host** | Host-side logic that plugins never need: `dlopen`/`dlsym` via `libloading`, architecture detection, Ed25519 signature verification, descriptor validation, thread-local arena pool (for Arena strategy), and `PluginHandle` for calling methods. Kept separate so plugin cdylibs do not link `libloading` or `ed25519-dalek`. |
+| **fidius-cli** | The `fidius` binary for scaffolding (`init-interface`, `init-plugin`, `init-host`), signing (`keygen`, `sign`, `verify`), inspection (`inspect`), and smoke-testing (`test`). Developer tooling, not a library. |
+| **fidius-test** | Testing helpers for plugin and host authors: `dylib_fixture` (cached cargo build of a plugin crate), signing fixtures (`fixture_keypair`, `sign_dylib`), and in-process Client construction via `Client::in_process(name)`. Added in 0.1.0. |
 
 ## Dependency Graph
 
@@ -139,22 +145,26 @@ fingerprint for the interface.
 The `#[plugin_impl]` macro generates:
 
 1. One `extern "C"` shim per method (handles serialization, deserialization, and
-   panic-catching).
+   panic-catching). Shim signature varies by buffer strategy (`PluginAllocated`
+   vs `Arena`).
 2. A static vtable populated with those shim pointers.
-3. A `PluginDescriptor` referencing the vtable, interface hash, wire format,
-   and buffer strategy.
+3. A `PluginDescriptor` referencing the vtable, interface hash, buffer strategy,
+   method metadata arrays, and — for `PluginAllocated` — a `free_buffer`
+   function pointer.
 4. A registration call that makes the descriptor discoverable at runtime.
 
 ### At Runtime (Host)
 
 1. **Open** the dylib and look up the registry export symbol.
 2. **Validate** magic bytes, registry version, ABI version, interface hash,
-   wire format, and buffer strategy. Reject on any mismatch.
+   and buffer strategy. Reject on any mismatch.
 3. **Copy** descriptor metadata into owned `PluginInfo` structs and wrap the
    vtable in a `PluginHandle`.
-4. **Call** a method: serialize the input, invoke the vtable function pointer,
-   check the status code, deserialize the output, and free the plugin-allocated
-   buffer.
+4. **Call** a method: serialize the input, dispatch on buffer strategy
+   (`PluginAllocated` path: plugin allocates output buffer, host calls
+   `free_buffer` after reading; `Arena` path: host provides a buffer from
+   the thread-local pool, retries once on `STATUS_BUFFER_TOO_SMALL`),
+   deserialize the output.
 
 For the exact binary layout, field offsets, and status codes, see the
 [ABI specification](../reference/abi-specification.md).
@@ -180,17 +190,20 @@ through the vtable.
 ### Explicit Contracts
 
 Nothing is implicit. The interface hash catches method signature drift. The
-wire format field catches debug/release mismatches. The buffer strategy field
-catches allocation protocol mismatches. The ABI version catches descriptor
-layout changes. Magic bytes catch non-fidius dylibs. Every mismatch produces
-a specific, descriptive `LoadError` variant.
+buffer strategy field catches allocation-protocol mismatches. The ABI version
+catches descriptor layout changes. Magic bytes catch non-fidius dylibs. Every
+mismatch produces a specific, descriptive `LoadError` variant. ABI_VERSION
+itself derives from the crate's `CARGO_PKG_VERSION_{MAJOR,MINOR}` per
+ADR-0002, so the release process drives compatibility automatically.
 
 ### Plugin Side Stays Light
 
-Plugin cdylibs depend only on `fidius-core` (via the facade). They do not link
-`libloading`, `ed25519-dalek`, or any host-side logic. The `fidius-core` crate
-carries only `serde`, `serde_json`, `bincode`, `thiserror`, and `inventory` --
-all lightweight, widely used crates.
+Plugin cdylibs depend only on `fidius-core` (via the facade) and optionally
+`fidius-host` when the `host` feature is explicitly enabled. Default plugin
+builds do not link `libloading`, `ed25519-dalek`, or any host-side logic. A
+regression test in `crates/fidius-host/tests/plugin_dep_graph.rs` runs `cargo tree`
+on `test-plugin-smoke` to verify `libloading` stays out of the plugin's
+dep graph.
 
 ## The Interface Crate Pattern
 
@@ -204,7 +217,9 @@ my-app-plugin-api/
 ```
 
 The interface crate re-exports `fidius::plugin_impl` and `fidius::PluginError`
-so that plugin authors have a single dependency. This pattern exists because:
+so that plugin authors have a single dependency. It also declares a `host`
+feature (`host = ["fidius/host"]`) that host applications enable to get the
+generated `{Trait}Client` type. This pattern exists because:
 
 1. **Single source of truth.** The trait, hash, version, and capability
    constants are generated once and shared by all consumers.
@@ -212,8 +227,9 @@ so that plugin authors have a single dependency. This pattern exists because:
    crate, import `plugin_impl` and `PluginError` from it, and implement the
    trait. That is their entire contract surface.
 3. **Host and plugins agree automatically.** Both link against the same
-   interface crate, so they get the same interface hash, the same vtable
-   layout, and the same wire format constant.
+   interface crate, so they get the same interface hash and the same
+   vtable layout. The wire format is bincode in every build, so there is
+   no format negotiation at all.
 4. **Versioning is simple.** Bumping the interface crate version (with a new
    `version = N` in the attribute) is the single action needed to evolve
    the plugin API.
@@ -263,13 +279,13 @@ pipeline (Stage 5 above): `dlopen`, validate, wrap in `PluginHandle`.
 
 ### LoadPolicy enforcement
 
-When loading plugins, `PluginHost` enforces a `LoadPolicy`:
+When loading plugins, `PluginHost` accepts a `LoadPolicy`:
 
-- **`Strict`** (default) — signature verification failures and validation
-  mismatches are hard errors. The plugin is not loaded.
-- **`Lenient`** — signature failures are downgraded to warnings printed to
-  stderr. Useful during development when you do not want to sign every
-  build.
+- **`Strict`** (default) — any validation failure is a hard error.
+- **`Lenient`** — reserved for future non-security validation (e.g., hash
+  mismatches as warnings). Signature enforcement is **always strict**: when
+  `require_signature(true)` is set, every dylib must have a valid `.sig`
+  file, regardless of policy. The knob cannot be used to bypass signing.
 
 The policy is set via `PluginHostBuilder::load_policy(LoadPolicy::Strict)`.
 

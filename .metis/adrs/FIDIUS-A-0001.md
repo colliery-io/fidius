@@ -5,7 +5,7 @@ title: "Package Format and Schema Validation Design"
 number: 1
 short_code: "FIDIUS-A-0001"
 created_at: 2026-03-29T13:37:09.658038+00:00
-updated_at: 2026-03-29T13:37:09.658038+00:00
+updated_at: 2026-04-17T13:17:23.221941+00:00
 decision_date: 
 decision_maker: 
 parent: 
@@ -13,7 +13,7 @@ archived: false
 
 tags:
   - "#adr"
-  - "#phase/draft"
+  - "#phase/decided"
 
 
 exit_criteria_met: false

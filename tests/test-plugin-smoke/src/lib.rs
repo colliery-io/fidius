@@ -16,35 +16,41 @@ use fidius::{plugin_impl, plugin_interface};
 use serde::{Deserialize, Serialize};
 
 #[plugin_interface(version = 1, buffer = PluginAllocated)]
+#[trait_meta("kind", "calculator")]
+#[trait_meta("stability", "stable")]
 pub trait Calculator: Send + Sync {
+    #[method_meta("effect", "pure")]
     fn add(&self, input: AddInput) -> AddOutput;
 
+    #[method_meta("effect", "pure")]
     fn add_direct(&self, a: i64, b: i64) -> i64;
 
+    // No metadata on this method — entry should be empty.
     fn version(&self) -> String;
 
     #[optional(since = 2)]
+    #[method_meta("effect", "pure")]
     fn multiply(&self, input: MulInput) -> MulOutput;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct AddInput {
     pub a: i64,
     pub b: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct AddOutput {
     pub result: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct MulInput {
     pub a: i64,
     pub b: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct MulOutput {
     pub result: i64,
 }
@@ -71,6 +77,22 @@ impl Calculator for BasicCalculator {
         MulOutput {
             result: input.a * input.b,
         }
+    }
+}
+
+// Second plugin in the same dylib, using the Arena buffer strategy.
+// Exercises host-side ArenaPool + retry-on-too-small.
+#[plugin_interface(version = 1, buffer = Arena)]
+pub trait ArenaEcho: Send + Sync {
+    fn echo(&self, input: String) -> String;
+}
+
+pub struct ArenaEchoer;
+
+#[plugin_impl(ArenaEcho, buffer = Arena)]
+impl ArenaEcho for ArenaEchoer {
+    fn echo(&self, input: String) -> String {
+        format!("arena-echo: {input}")
     }
 }
 
