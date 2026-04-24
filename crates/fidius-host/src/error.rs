@@ -63,6 +63,12 @@ pub enum LoadError {
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// Python loader failed (only produced with the `python` feature on).
+    /// Wraps `fidius_python::PythonLoadError` as a string to keep the
+    /// fidius-host public error enum type-clean across feature gates.
+    #[error("python load failed: {0}")]
+    PythonLoad(String),
 }
 
 /// Errors that can occur when calling a plugin method.

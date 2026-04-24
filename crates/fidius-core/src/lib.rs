@@ -16,6 +16,7 @@ pub mod descriptor;
 pub mod error;
 pub mod hash;
 pub mod package;
+pub mod python_descriptor;
 pub mod registry;
 pub mod status;
 pub mod wire;

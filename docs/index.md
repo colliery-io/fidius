@@ -37,6 +37,7 @@ cargo install fidius-cli
 Step-by-step guides that walk you through building your first plugin, adding optional methods, and signing plugins.
 
 - [Your First Plugin](tutorials/your-first-plugin.md)
+- [Your First Python Plugin](tutorials/python-plugin.md)
 - [Optional Methods and Interface Evolution](tutorials/optional-methods.md)
 - [Signing and Verifying Plugins](tutorials/signing-plugins.md)
 - [Source Packages](tutorials/source-packages.md)

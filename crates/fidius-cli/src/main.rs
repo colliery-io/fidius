@@ -18,6 +18,7 @@ use std::process;
 use clap::{Parser, Subcommand};
 
 mod commands;
+mod python_stub;
 
 #[derive(Parser)]
 #[command(name = "fidius", about = "Fidius plugin framework CLI", version)]
@@ -118,6 +119,21 @@ enum Commands {
     Package {
         #[command(subcommand)]
         command: PackageCommands,
+    },
+    /// Generate a Python stub for an interface trait so a Python plugin
+    /// author has type-hinted method signatures plus the matching
+    /// `__interface_hash__` constant.
+    PythonStub {
+        /// Path to the interface crate's source file (typically `src/lib.rs`).
+        #[arg(long)]
+        interface: PathBuf,
+        /// Output `.py` file path. Use `-` for stdout.
+        #[arg(long)]
+        out: PathBuf,
+        /// Trait name to generate the stub for. Required when the file
+        /// declares more than one `#[plugin_interface]` trait.
+        #[arg(long)]
+        trait_name: Option<String>,
     },
 }
 
@@ -236,6 +252,11 @@ fn main() {
                 commands::package_unpack(&archive, dest.as_deref())
             }
         },
+        Commands::PythonStub {
+            interface,
+            out,
+            trait_name,
+        } => commands::python_stub(&interface, &out, trait_name.as_deref()),
     };
 
     if let Err(e) = result {

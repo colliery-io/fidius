@@ -1,0 +1,20 @@
+# A reference Python plugin used by the fidius-host integration tests.
+# Implements the BytePipe interface from test-plugin-smoke (Rust trait), in
+# Python — proving that the same interface can be served from either runtime.
+
+[package]
+name = "py-byte-pipe"
+version = "0.1.0"
+interface = "BytePipe"
+interface_version = 1
+runtime = "python"
+
+[metadata]
+category = "test"
+description = "Python implementation of the BytePipe interface."
+
+[python]
+entry_module = "byte_pipe"
+# requirements omitted: this plugin has no third-party deps. The fidius SDK
+# itself is vendored manually under vendor/ during the integration test setup
+# rather than installed via pip — tests want hermetic builds.

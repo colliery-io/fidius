@@ -149,6 +149,7 @@ fn validate_descriptor(
         buffer_strategy: desc
             .buffer_strategy_kind()
             .map_err(|v| LoadError::UnknownBufferStrategy { value: v })?,
+        runtime: crate::types::PluginRuntimeKind::Cdylib,
     };
 
     Ok(LoadedPlugin {

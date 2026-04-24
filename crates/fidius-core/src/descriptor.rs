@@ -72,6 +72,14 @@ pub enum BufferStrategyKind {
     /// retries. Data is valid only until the next call.
     ///
     /// VTable fns: `(in_ptr, in_len, arena_ptr, arena_cap, out_offset, out_len) -> i32`.
+    ///
+    /// **Arena is allocation-avoidance, not zero-copy.** The plugin still
+    /// serializes its output (bincode-encoded by default) and copies the
+    /// bytes into the host-provided buffer; what Arena saves is the per-call
+    /// `Box<[u8]>` allocation that PluginAllocated incurs. For true byte
+    /// passthrough — the bytes themselves cross the boundary without an
+    /// encoding step — annotate the trait method with `#[wire(raw)]`. Raw
+    /// wire mode composes with both buffer strategies.
     Arena = 2,
 }
 

@@ -8,6 +8,11 @@ repository = "https://github.com/colliery-io/fidius"
 
 [features]
 tracing = ["dep:tracing"]
+# Enable Python plugin support. Pulls in `fidius-python` (which embeds
+# CPython via PyO3), the new `host.load_python(...)` API, and python
+# packages in `discover()`. Default-off so cdylib-only consumers stay
+# thin and don't link libpython.
+python = ["dep:fidius-python"]
 
 [dependencies]
 fidius-core = { path = "../fidius-core", version = "0.1.0" }
@@ -17,6 +22,10 @@ thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true, optional = true }
+fidius-python = { path = "../fidius-python", version = "0.1.0", optional = true }
+
+[build-dependencies]
+pyo3-build-config = "0.25"
 
 [dev-dependencies]
 tempfile = "3"
