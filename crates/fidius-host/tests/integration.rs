@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use fidius_host::{LoadError, PluginHandle, PluginHost, PluginInfo};
 use fidius_test::dylib_fixture;
 use test_plugin_smoke::{
-    AddInput, AddOutput, ArenaEchoClient, CalculatorClient, MulInput, MulOutput,
+    AddInput, AddOutput, ArenaEchoClient, BytePipeClient, CalculatorClient, MulInput, MulOutput,
 };
 
 fn plugin_source_dir() -> PathBuf {
@@ -166,6 +166,49 @@ fn out_of_bounds_vtable_index_returns_error() {
         "expected InvalidMethodIndex for OOB index, got {:?}",
         result
     );
+}
+
+#[test]
+fn raw_wire_method_round_trips() {
+    let host = PluginHost::builder()
+        .search_path(plugin_dir())
+        .build()
+        .unwrap();
+
+    let loaded = host.load("ReverseBytes").unwrap();
+    assert_eq!(loaded.info.interface_name, "BytePipe");
+
+    let handle = PluginHandle::from_loaded(loaded);
+    let client = BytePipeClient::from_handle(handle);
+
+    // Raw method: the Vec<u8> argument and Vec<u8> return both bypass bincode.
+    let payload = b"abcdef".to_vec();
+    let reversed = client.reverse(&payload).unwrap();
+    assert_eq!(reversed, b"fedcba".to_vec());
+
+    // Sibling typed method on the same trait still works (mixed mode).
+    let name = client.name().unwrap();
+    assert_eq!(name, "reverse-bytes");
+}
+
+#[test]
+fn raw_wire_method_handles_large_payload() {
+    // Confirm raw mode happily moves multi-megabyte payloads end-to-end.
+    let host = PluginHost::builder()
+        .search_path(plugin_dir())
+        .build()
+        .unwrap();
+    let loaded = host.load("ReverseBytes").unwrap();
+    let handle = PluginHandle::from_loaded(loaded);
+    let client = BytePipeClient::from_handle(handle);
+
+    let payload: Vec<u8> = (0..(2 * 1024 * 1024u32))
+        .map(|i| (i & 0xFF) as u8)
+        .collect();
+    let result = client.reverse(&payload).unwrap();
+    assert_eq!(result.len(), payload.len());
+    assert_eq!(result.first(), payload.last());
+    assert_eq!(result.last(), payload.first());
 }
 
 #[test]

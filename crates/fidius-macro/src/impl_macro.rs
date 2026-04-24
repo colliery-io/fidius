@@ -36,6 +36,33 @@ struct MethodInfo<'a> {
     arg_types: Vec<&'a Type>,
     /// Argument names (excluding `self`).
     arg_names: Vec<Ident>,
+    /// Whether the impl method carries `#[wire(raw)]`. Must match the
+    /// interface trait's declaration; mismatch surfaces at plugin-load time
+    /// as an interface-hash mismatch (the trait's `#[wire(raw)]` flips a
+    /// `!raw` marker in the signature string the hash is computed over).
+    wire_raw: bool,
+}
+
+/// Detect a `#[wire(raw)]` attribute on an impl-side method. Mirrors the
+/// trait-side parser in `ir.rs` — an explicit `raw` keyword is the only
+/// supported form.
+fn impl_method_is_raw(attrs: &[syn::Attribute]) -> syn::Result<bool> {
+    for attr in attrs {
+        if !attr.path().is_ident("wire") {
+            continue;
+        }
+        let mut raw = false;
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("raw") {
+                raw = true;
+                Ok(())
+            } else {
+                Err(meta.error("expected `raw` — only `#[wire(raw)]` is supported"))
+            }
+        })?;
+        return Ok(raw);
+    }
+    Ok(false)
 }
 
 /// Check if a return type looks like `Result<T, ...>`.
@@ -127,39 +154,36 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let impl_ident = format_ident!("{}", impl_type_str);
 
     // Collect method info from the impl block
-    let impl_methods: Vec<MethodInfo> = item
-        .items
-        .iter()
-        .filter_map(|item| {
-            if let ImplItem::Fn(method) = item {
-                let returns_result = match &method.sig.output {
-                    ReturnType::Type(_, ty) => is_result_type(ty),
-                    ReturnType::Default => false,
-                };
-                let mut arg_types = Vec::new();
-                let mut arg_names = Vec::new();
-                for arg in &method.sig.inputs {
-                    if let FnArg::Typed(pat_type) = arg {
-                        arg_types.push(pat_type.ty.as_ref());
-                        if let Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
-                            arg_names.push(pat_ident.ident.clone());
-                        } else {
-                            arg_names.push(format_ident!("_arg"));
-                        }
+    let mut impl_methods: Vec<MethodInfo> = Vec::new();
+    for impl_item in &item.items {
+        if let ImplItem::Fn(method) = impl_item {
+            let returns_result = match &method.sig.output {
+                ReturnType::Type(_, ty) => is_result_type(ty),
+                ReturnType::Default => false,
+            };
+            let mut arg_types = Vec::new();
+            let mut arg_names = Vec::new();
+            for arg in &method.sig.inputs {
+                if let FnArg::Typed(pat_type) = arg {
+                    arg_types.push(pat_type.ty.as_ref());
+                    if let Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
+                        arg_names.push(pat_ident.ident.clone());
+                    } else {
+                        arg_names.push(format_ident!("_arg"));
                     }
                 }
-                Some(MethodInfo {
-                    name: &method.sig.ident,
-                    is_async: method.sig.asyncness.is_some(),
-                    returns_result,
-                    arg_types,
-                    arg_names,
-                })
-            } else {
-                None
             }
-        })
-        .collect();
+            let wire_raw = impl_method_is_raw(&method.attrs)?;
+            impl_methods.push(MethodInfo {
+                name: &method.sig.ident,
+                is_async: method.sig.asyncness.is_some(),
+                returns_result,
+                arg_types,
+                arg_names,
+                wire_raw,
+            });
+        }
+    }
 
     let method_names: Vec<&Ident> = impl_methods.iter().map(|m| m.name).collect();
     let _has_async = impl_methods.iter().any(|m| m.is_async);
@@ -169,6 +193,15 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
 
     // Generate shim functions (signature and body vary by buffer strategy)
     let shims = generate_shims(&impl_ident, &impl_methods, crate_path, buffer_strategy);
+
+    // Strip `#[wire(...)]` helper attrs from the re-emitted impl block so the
+    // Rust compiler doesn't reject them as unknown attributes.
+    let mut item_emit = item.clone();
+    for impl_item in &mut item_emit.items {
+        if let ImplItem::Fn(method) = impl_item {
+            method.attrs.retain(|a| !a.path().is_ident("wire"));
+        }
+    }
 
     // Generate static instance
     let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
@@ -212,7 +245,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let registration = generate_inventory_registration(&impl_ident, crate_path);
 
     Ok(quote! {
-        #item
+        #item_emit
         #instance
         #shims
         #free_buffer
@@ -241,12 +274,25 @@ fn generate_shims(
             let arg_types = &method.arg_types;
             let arg_names = &method.arg_names;
 
-            // Deserialize input as a tuple of all argument types
-            let deserialize_args = quote! {
-                let (#(#arg_names,)*) = match #crate_path::wire::deserialize::<(#(#arg_types,)*)>(in_slice) {
-                    Ok(v) => v,
-                    Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
-                };
+            // Raw mode: skip bincode on the input. The single arg is a
+            // Vec<u8> built directly from the FFI buffer (one alloc + memcpy).
+            // Typed mode: deserialize input as a tuple of all argument types.
+            let deserialize_args = if method.wire_raw {
+                let arg_name = method
+                    .arg_names
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| format_ident!("_arg"));
+                quote! {
+                    let #arg_name: ::std::vec::Vec<u8> = in_slice.to_vec();
+                }
+            } else {
+                quote! {
+                    let (#(#arg_names,)*) = match #crate_path::wire::deserialize::<(#(#arg_types,)*)>(in_slice) {
+                        Ok(v) => v,
+                        Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
+                    };
+                }
             };
 
             // The method call — either sync or async via block_on
@@ -260,8 +306,26 @@ fn generate_shims(
                 quote! { #instance_name.#method_name(#(#arg_names),*) }
             };
 
-            // Generate the output handling based on whether the method returns Result
-            let output_handling = if method.returns_result {
+            // Generate the output handling based on whether the method returns Result.
+            // Raw mode bypasses bincode on the success payload (the Vec<u8> *is*
+            // the wire payload). Error path still bincode-encodes for typed errors.
+            let output_handling = if method.wire_raw {
+                if method.returns_result {
+                    quote! {
+                        match output {
+                            Ok(val) => (val, #crate_path::status::STATUS_OK),
+                            Err(err) => {
+                                match #crate_path::wire::serialize(&err) {
+                                    Ok(v) => (v, #crate_path::status::STATUS_PLUGIN_ERROR),
+                                    Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    quote! { (output, #crate_path::status::STATUS_OK) }
+                }
+            } else if method.returns_result {
                 quote! {
                     match output {
                         Ok(val) => {

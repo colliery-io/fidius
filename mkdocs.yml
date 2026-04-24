@@ -58,6 +58,7 @@ nav:
   - Home: index.md
   - Tutorials:
     - Your First Plugin: tutorials/your-first-plugin.md
+    - Your First Python Plugin: tutorials/python-plugin.md
     - Optional Methods: tutorials/optional-methods.md
     - Signing Plugins: tutorials/signing-plugins.md
     - Source Packages: tutorials/source-packages.md

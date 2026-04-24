@@ -129,6 +129,7 @@ impl PluginHandle {
             buffer_strategy: desc
                 .buffer_strategy_kind()
                 .map_err(|v| LoadError::UnknownBufferStrategy { value: v })?,
+            runtime: crate::types::PluginRuntimeKind::Cdylib,
         };
         Ok(Self {
             _library: None,
@@ -171,6 +172,14 @@ impl PluginHandle {
     /// # Arguments
     /// * `index` - The method index in the vtable (0-based, in declaration order)
     /// * `input` - The input argument to serialize and pass to the plugin
+    ///
+    /// # No timeout
+    ///
+    /// This call runs synchronously on the calling thread and has no built-in
+    /// timeout or cancellation. A misbehaving plugin will block the caller
+    /// indefinitely. See the `fidius` crate top-level docs ("What fidius
+    /// does not provide") for the rationale and the recommended consumer-side
+    /// mitigation.
     pub fn call_method<I: Serialize, O: DeserializeOwned>(
         &self,
         index: usize,
@@ -190,6 +199,28 @@ impl PluginHandle {
         match self.info.buffer_strategy {
             BufferStrategyKind::PluginAllocated => self.call_plugin_allocated(index, &input_bytes),
             BufferStrategyKind::Arena => self.call_arena(index, &input_bytes),
+        }
+    }
+
+    /// Call a plugin method whose argument and successful return value are
+    /// raw bytes — bypassing bincode on both sides. Used by methods declared
+    /// with `#[wire(raw)]` on the interface trait.
+    ///
+    /// Errors and panic messages still use bincode (small typed payloads).
+    /// Returns the success bytes on `Ok`, or a `CallError::Plugin(_)` whose
+    /// inner `PluginError` was bincode-decoded from the plugin's error payload.
+    ///
+    /// Same no-timeout caveat as [`Self::call_method`].
+    pub fn call_method_raw(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError> {
+        if index >= self.method_count as usize {
+            return Err(CallError::InvalidMethodIndex {
+                index,
+                count: self.method_count,
+            });
+        }
+        match self.info.buffer_strategy {
+            BufferStrategyKind::PluginAllocated => self.call_plugin_allocated_raw(index, input),
+            BufferStrategyKind::Arena => self.call_arena_raw(index, input),
         }
     }
 
@@ -355,6 +386,170 @@ impl PluginHandle {
                 // Arena strategy's panic path returns out_len = 0 (the arena
                 // might be too small for the panic message). Host can't
                 // recover a message; report an opaque panic.
+                release_arena(arena);
+                Err(CallError::Panic(
+                    "plugin panicked (message not transmitted via Arena strategy)".into(),
+                ))
+            }
+            code => {
+                release_arena(arena);
+                Err(CallError::UnknownStatus { code })
+            }
+        }
+    }
+
+    /// PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
+    /// but the success buffer is returned to the caller as-is rather than
+    /// fed to bincode.
+    fn call_plugin_allocated_raw(
+        &self,
+        index: usize,
+        input_bytes: &[u8],
+    ) -> Result<Vec<u8>, CallError> {
+        let fn_ptr = unsafe {
+            let fn_ptrs = self.vtable as *const FfiFn;
+            *fn_ptrs.add(index)
+        };
+
+        let mut out_ptr: *mut u8 = std::ptr::null_mut();
+        let mut out_len: u32 = 0;
+
+        let status = unsafe {
+            fn_ptr(
+                input_bytes.as_ptr(),
+                input_bytes.len() as u32,
+                &mut out_ptr,
+                &mut out_len,
+            )
+        };
+
+        match status {
+            STATUS_OK => {}
+            STATUS_BUFFER_TOO_SMALL => return Err(CallError::BufferTooSmall),
+            STATUS_SERIALIZATION_ERROR => {
+                return Err(CallError::Serialization("FFI serialization failed".into()))
+            }
+            STATUS_PLUGIN_ERROR => {
+                if !out_ptr.is_null() && out_len > 0 {
+                    let output_slice =
+                        unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let plugin_err: PluginError = wire::deserialize(output_slice)
+                        .map_err(|e| CallError::Deserialization(e.to_string()))?;
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+                    return Err(CallError::Plugin(plugin_err));
+                }
+                return Err(CallError::Plugin(PluginError::new(
+                    "UNKNOWN",
+                    "plugin returned error but no error data",
+                )));
+            }
+            STATUS_PANIC => {
+                let msg = if !out_ptr.is_null() && out_len > 0 {
+                    let slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let msg = wire::deserialize::<String>(slice)
+                        .unwrap_or_else(|_| "unknown panic".into());
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+                    msg
+                } else {
+                    "unknown panic".into()
+                };
+                return Err(CallError::Panic(msg));
+            }
+            _ => return Err(CallError::UnknownStatus { code: status }),
+        }
+
+        if out_ptr.is_null() {
+            return Err(CallError::Serialization(
+                "plugin returned null output buffer".into(),
+            ));
+        }
+
+        // Copy the success bytes into a Vec, then free the plugin's buffer.
+        // This matches the existing Box<[u8]> ownership contract — the plugin
+        // owns the memory until `free_buffer` is called.
+        let output_slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+        let result = output_slice.to_vec();
+
+        if let Some(free) = self.free_buffer {
+            unsafe { free(out_ptr, out_len as usize) };
+        }
+
+        Ok(result)
+    }
+
+    /// Arena raw path — same FFI shape as `call_arena`, success bytes
+    /// returned as a `Vec<u8>` copied out of the arena.
+    fn call_arena_raw(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError> {
+        let fn_ptr = unsafe {
+            let fn_ptrs = self.vtable as *const ArenaFn;
+            *fn_ptrs.add(index)
+        };
+
+        let mut arena = acquire_arena(DEFAULT_ARENA_CAPACITY);
+        let mut out_offset: u32 = 0;
+        let mut out_len: u32 = 0;
+        let mut retried = false;
+
+        let status = loop {
+            let s = unsafe {
+                fn_ptr(
+                    input_bytes.as_ptr(),
+                    input_bytes.len() as u32,
+                    arena.as_mut_ptr(),
+                    arena.len() as u32,
+                    &mut out_offset,
+                    &mut out_len,
+                )
+            };
+            if s == STATUS_BUFFER_TOO_SMALL && !retried {
+                let needed = out_len as usize;
+                grow_arena(&mut arena, needed);
+                retried = true;
+                continue;
+            }
+            break s;
+        };
+
+        match status {
+            STATUS_OK => {
+                let start = out_offset as usize;
+                let end = start + out_len as usize;
+                if end > arena.len() {
+                    release_arena(arena);
+                    return Err(CallError::Serialization(
+                        "plugin reported out_offset/out_len outside arena".into(),
+                    ));
+                }
+                let result = arena[start..end].to_vec();
+                release_arena(arena);
+                Ok(result)
+            }
+            STATUS_BUFFER_TOO_SMALL => {
+                release_arena(arena);
+                Err(CallError::BufferTooSmall)
+            }
+            STATUS_SERIALIZATION_ERROR => {
+                release_arena(arena);
+                Err(CallError::Serialization("FFI serialization failed".into()))
+            }
+            STATUS_PLUGIN_ERROR => {
+                let start = out_offset as usize;
+                let end = start + out_len as usize;
+                let plugin_err = if out_len > 0 && end <= arena.len() {
+                    wire::deserialize::<PluginError>(&arena[start..end]).unwrap_or_else(|_| {
+                        PluginError::new("UNKNOWN", "plugin returned malformed error")
+                    })
+                } else {
+                    PluginError::new("UNKNOWN", "plugin returned error but no error data")
+                };
+                release_arena(arena);
+                Err(CallError::Plugin(plugin_err))
+            }
+            STATUS_PANIC => {
                 release_arena(arena);
                 Err(CallError::Panic(
                     "plugin panicked (message not transmitted via Arena strategy)".into(),

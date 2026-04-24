@@ -96,4 +96,32 @@ impl ArenaEcho for ArenaEchoer {
     }
 }
 
+// Third plugin: exercises `#[wire(raw)]` byte-passthrough mode.
+// Mixes a raw method with a normal typed method on the same trait so
+// codegen handles the interleave correctly.
+#[plugin_interface(version = 1, buffer = PluginAllocated)]
+pub trait BytePipe: Send + Sync {
+    /// Raw-wire method: reverses the input bytes. No bincode either side.
+    #[wire(raw)]
+    fn reverse(&self, data: Vec<u8>) -> Vec<u8>;
+
+    /// Normal typed control-plane method on the same interface.
+    fn name(&self) -> String;
+}
+
+pub struct ReverseBytes;
+
+#[plugin_impl(BytePipe)]
+impl BytePipe for ReverseBytes {
+    #[wire(raw)]
+    fn reverse(&self, mut data: Vec<u8>) -> Vec<u8> {
+        data.reverse();
+        data
+    }
+
+    fn name(&self) -> String {
+        "reverse-bytes".to_string()
+    }
+}
+
 fidius::fidius_plugin_registry!();

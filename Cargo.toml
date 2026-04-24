@@ -6,6 +6,7 @@ members = [
     "crates/fidius-cli",
     "crates/fidius",
     "crates/fidius-test",
+    "crates/fidius-python",
 ]
 exclude = ["tests/test-plugin-smoke"]
 resolver = "2"
@@ -30,3 +31,5 @@ sha2 = "0.10"
 ureq = "3"
 tar = "0.4"
 bzip2 = "0.5"
+tempfile = "3"
+pyo3 = { version = "0.25", features = ["auto-initialize"] }

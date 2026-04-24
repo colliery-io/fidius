@@ -155,10 +155,19 @@ pub struct MethodIR {
     /// If `#[optional(since = N)]`, the version it was added.
     pub optional_since: Option<u32>,
     /// Canonical signature string for interface hashing.
-    /// Format: `"name:arg_type_1,arg_type_2->return_type"`
+    /// Format: `"name:arg_type_1,arg_type_2->return_type"`, with a trailing
+    /// `!raw` marker for methods opted into raw wire mode so the interface
+    /// hash diverges between raw and bincode-typed versions.
     pub signature_string: String,
     /// Metadata from `#[method_meta("k", "v")]` attributes. Preserves declaration order.
     pub method_metas: Vec<MetaKvAttr>,
+    /// Whether this method is opted into raw (byte-passthrough) wire mode
+    /// via `#[wire(raw)]`. When true, the macro skips bincode on the
+    /// success path — the single `Vec<u8>` argument crosses the FFI
+    /// boundary as raw bytes, and the `Vec<u8>` return value is handed to
+    /// the host unchanged. Error-path payloads (for `Result<Vec<u8>, E>`
+    /// returns) continue to go through bincode.
+    pub wire_raw: bool,
 }
 
 impl MethodIR {
@@ -239,8 +248,126 @@ fn parse_optional_attr(attrs: &[Attribute]) -> syn::Result<Option<u32>> {
     Ok(None)
 }
 
+/// Parse a `#[wire(raw)]` attribute, if present. Returns `true` when raw wire
+/// mode is opted in, `false` otherwise. Any other `wire(...)` form is a
+/// compile-time error.
+fn parse_wire_attr(attrs: &[Attribute]) -> syn::Result<bool> {
+    for attr in attrs {
+        if !attr.path().is_ident("wire") {
+            continue;
+        }
+        let mut raw = false;
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("raw") {
+                raw = true;
+                Ok(())
+            } else {
+                Err(meta.error("expected `raw` — only `#[wire(raw)]` is supported"))
+            }
+        })?;
+        return Ok(raw);
+    }
+    Ok(false)
+}
+
+/// Return `true` if the given type is `Vec<u8>`.
+fn is_vec_u8(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    let Some(last) = type_path.path.segments.last() else {
+        return false;
+    };
+    if last.ident != "Vec" {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return false;
+    };
+    if args.args.len() != 1 {
+        return false;
+    }
+    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
+        return false;
+    };
+    let Type::Path(inner_path) = inner else {
+        return false;
+    };
+    inner_path
+        .path
+        .get_ident()
+        .map(|id| id == "u8")
+        .unwrap_or(false)
+}
+
+/// Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
+fn result_ok_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+    let last = type_path.path.segments.last()?;
+    if last.ident != "Result" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    let first = args.args.first()?;
+    match first {
+        syn::GenericArgument::Type(t) => Some(t),
+        _ => None,
+    }
+}
+
+/// Validate that a method flagged `#[wire(raw)]` has a supported signature:
+/// exactly one `Vec<u8>` argument, and returns either `Vec<u8>` or
+/// `Result<Vec<u8>, _>`. Returns a helpful error otherwise.
+fn validate_raw_method_signature(
+    method: &TraitItemFn,
+    arg_types: &[Type],
+    return_type: Option<&Type>,
+) -> syn::Result<()> {
+    let span = method.sig.ident.span();
+    if arg_types.len() != 1 {
+        return Err(syn::Error::new(
+            span,
+            "#[wire(raw)] methods must take exactly one argument of type `Vec<u8>` (excluding `&self`)",
+        ));
+    }
+    if !is_vec_u8(&arg_types[0]) {
+        return Err(syn::Error::new(
+            arg_types[0].span(),
+            "#[wire(raw)] argument must be `Vec<u8>`",
+        ));
+    }
+    let Some(ret) = return_type else {
+        return Err(syn::Error::new(
+            span,
+            "#[wire(raw)] methods must return `Vec<u8>` or `Result<Vec<u8>, E>`",
+        ));
+    };
+    // Return is either Vec<u8> directly, or Result<Vec<u8>, _>.
+    if is_vec_u8(ret) {
+        return Ok(());
+    }
+    if let Some(ok) = result_ok_type(ret) {
+        if is_vec_u8(ok) {
+            return Ok(());
+        }
+    }
+    Err(syn::Error::new(
+        ret.span(),
+        "#[wire(raw)] methods must return `Vec<u8>` or `Result<Vec<u8>, E>`",
+    ))
+}
+
 /// Build the canonical signature string for a method.
-fn build_signature_string(method: &TraitItemFn) -> String {
+///
+/// Delegates the format to `fidius_core::hash::signature_string` so the
+/// proc macro and any other tooling (e.g. `fidius python-stub`) share one
+/// source of truth. The `!raw` marker for `#[wire(raw)]` methods is part
+/// of that shared format.
+fn build_signature_string(method: &TraitItemFn, wire_raw: bool) -> String {
     let name = method.sig.ident.to_string();
 
     let arg_types: Vec<String> = method
@@ -258,7 +385,7 @@ fn build_signature_string(method: &TraitItemFn) -> String {
         ReturnType::Type(_, ty) => ty.to_token_stream().to_string(),
     };
 
-    format!("{}:{}->{}", name, arg_types.join(","), ret)
+    fidius_core::hash::signature_string(&name, &arg_types, &ret, wire_raw)
 }
 
 /// Extract argument names from a method signature (excluding `self`).
@@ -335,11 +462,23 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
         }
 
         let is_async = method.sig.asyncness.is_some();
-        let signature_string = build_signature_string(method);
+        let wire_raw = parse_wire_attr(&method.attrs)?;
         let arg_types = extract_arg_types(method);
         let arg_names = extract_arg_names(method);
         let return_type = extract_return_type(method);
         let method_metas = parse_meta_attrs(&method.attrs, "method_meta")?;
+
+        if wire_raw {
+            if is_async {
+                return Err(syn::Error::new(
+                    method.sig.ident.span(),
+                    "#[wire(raw)] is not supported on async methods in this release",
+                ));
+            }
+            validate_raw_method_signature(method, &arg_types, return_type.as_ref())?;
+        }
+
+        let signature_string = build_signature_string(method, wire_raw);
 
         methods.push(MethodIR {
             name: method.sig.ident.clone(),
@@ -350,6 +489,7 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             optional_since,
             signature_string,
             method_metas,
+            wire_raw,
         });
     }
 

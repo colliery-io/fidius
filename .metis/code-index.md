@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-04-18T02:26:12Z | 53 files | Rust
+> Generated: 2026-04-24T20:48:11Z | 94 files | Python, Rust
 
 ## Project Structure
 
@@ -12,7 +12,8 @@
 │   ├── fidius-cli/
 │   │   ├── src/
 │   │   │   ├── commands.rs
-│   │   │   └── main.rs
+│   │   │   ├── main.rs
+│   │   │   └── python_stub.rs
 │   │   └── tests/
 │   │       ├── cli.rs
 │   │       └── full_pipeline.rs
@@ -24,12 +25,14 @@
 │   │   │   ├── hash.rs
 │   │   │   ├── lib.rs
 │   │   │   ├── package.rs
+│   │   │   ├── python_descriptor.rs
 │   │   │   ├── registry.rs
 │   │   │   ├── status.rs
 │   │   │   └── wire.rs
 │   │   └── tests/
 │   │       └── layout_and_roundtrip.rs
 │   ├── fidius-host/
+│   │   ├── build.rs
 │   │   ├── src/
 │   │   │   ├── arch.rs
 │   │   │   ├── arena.rs
@@ -45,7 +48,9 @@
 │   │       ├── e2e.rs
 │   │       ├── integration.rs
 │   │       ├── package_e2e.rs
-│   │       └── plugin_dep_graph.rs
+│   │       ├── plugin_dep_graph.rs
+│   │       ├── python_plugin_e2e.rs
+│   │       └── python_routing.rs
 │   ├── fidius-macro/
 │   │   ├── src/
 │   │   │   ├── impl_macro.rs
@@ -67,8 +72,21 @@
 │   │       ├── metadata.rs
 │   │       ├── multi_arg.rs
 │   │       ├── multi_plugin.rs
+│   │       ├── raw_wire.rs
 │   │       ├── smoke_cdylib.rs
 │   │       └── trybuild.rs
+│   ├── fidius-python/
+│   │   ├── build.rs
+│   │   ├── src/
+│   │   │   ├── error.rs
+│   │   │   ├── handle.rs
+│   │   │   ├── interpreter.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── loader.rs
+│   │   │   └── value_bridge.rs
+│   │   └── tests/
+│   │       ├── loader_e2e.rs
+│   │       └── smoke.rs
 │   └── fidius-test/
 │       ├── src/
 │       │   ├── dylib.rs
@@ -76,7 +94,61 @@
 │       │   └── signing.rs
 │       └── tests/
 │           └── smoke.rs
+├── pluggable-poc/
+│   ├── crates/
+│   │   ├── emit-console/
+│   │   │   └── src/
+│   │   │       └── lib.rs
+│   │   ├── ingest-csv/
+│   │   │   └── src/
+│   │   │       └── lib.rs
+│   │   ├── pipeline-host/
+│   │   │   └── src/
+│   │   │       ├── arrow_bridge.rs
+│   │   │       ├── config.rs
+│   │   │       ├── main.rs
+│   │   │       └── orchestrator.rs
+│   │   ├── pipeline-types/
+│   │   │   └── src/
+│   │   │       └── lib.rs
+│   │   ├── plugin-runtime/
+│   │   │   └── src/
+│   │   │       ├── ffi_plugin.rs
+│   │   │       ├── lib.rs
+│   │   │       ├── native.rs
+│   │   │       ├── pyo3_process.rs
+│   │   │       ├── pyo3_thread.rs
+│   │   │       └── pyo3_zerocopy.rs
+│   │   ├── transform-double/
+│   │   │   └── src/
+│   │   │       └── lib.rs
+│   │   ├── transform-normalize/
+│   │   │   └── src/
+│   │   │       └── lib.rs
+│   │   └── transform-onnx/
+│   │       └── src/
+│   │           └── lib.rs
+│   ├── data/
+│   │   └── generate_data.py
+│   ├── models/
+│   │   └── train_model.py
+│   └── plugins/
+│       ├── ffi/
+│       │   └── transform-double-ffi/
+│       │       └── src/
+│       │           └── lib.rs
+│       ├── harness.py
+│       └── transform_column_doubler.py
+├── python/
+│   ├── fidius/
+│   │   ├── __init__.py
+│   │   ├── _errors.py
+│   │   └── _registry.py
+│   └── tests/
+│       └── test_sdk.py
 └── tests/
+    ├── test-plugin-py-greeter/
+    │   └── byte_pipe.py
     └── test-plugin-smoke/
         └── src/
             └── lib.rs
@@ -100,11 +172,12 @@
 - pub `test` function L531-612 — `(dir: &Path, release: bool) -> Result`
 - pub `package_validate` function L616-631 — `(dir: &Path) -> Result`
 - pub `package_build` function L635-666 — `(dir: &Path, release: bool) -> Result`
-- pub `package_inspect` function L670-686 — `(dir: &Path) -> Result`
-- pub `package_sign` function L690-711 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_verify` function L715-743 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_pack` function L747-765 — `(dir: &Path, output: Option<&Path>) -> Result`
-- pub `package_unpack` function L769-774 — `(archive: &Path, dest: Option<&Path>) -> Result`
+- pub `package_inspect` function L670-692 — `(dir: &Path) -> Result`
+- pub `package_sign` function L696-717 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L721-749 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_pack` function L753-771 — `(dir: &Path, output: Option<&Path>) -> Result`
+- pub `package_unpack` function L775-780 — `(archive: &Path, dest: Option<&Path>) -> Result`
+- pub `python_stub` function L784-786 — `(interface_src: &Path, out: &Path, trait_name: Option<&str>) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
 -  `resolve_dep` function L30-56 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
 -  `check_crates_io` function L59-74 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
@@ -112,10 +185,36 @@
 #### crates/fidius-cli/src/main.rs
 
 -  `commands` module L20 — `-`
--  `Cli` struct L24-27 — `{ command: Commands }`
--  `Commands` enum L30-122 — `InitInterface | InitPlugin | InitHost | Keygen | Sign | Verify | Inspect | Test ...`
--  `PackageCommands` enum L125-176 — `Validate | Build | Inspect | Sign | Verify | Pack | Unpack`
--  `main` function L178-245 — `()`
+-  `python_stub` module L21 — `-`
+-  `Cli` struct L25-28 — `{ command: Commands }`
+-  `Commands` enum L31-138 — `InitInterface | InitPlugin | InitHost | Keygen | Sign | Verify | Inspect | Test ...`
+-  `PackageCommands` enum L141-192 — `Validate | Build | Inspect | Sign | Verify | Pack | Unpack`
+-  `main` function L194-266 — `()`
+
+#### crates/fidius-cli/src/python_stub.rs
+
+- pub `generate_stub` function L54-72 — `(interface_src: &Path, requested_trait: Option<&str>) -> Result<String>` — Generate the contents of a Python stub file for the named trait found in
+- pub `write_stub` function L75-89 — `(interface_src: &Path, out_path: &Path, requested_trait: Option<&str>) -> Result` — Write the stub for the named trait to `out_path`.
+-  `Result` type L29 — `= std::result::Result<T, Box<dyn std::error::Error>>` — agree byte-for-byte.
+-  `MethodSpec` struct L32-49 — `{ name: String, arg_types: Vec<String>, arg_names_with_py_types: Vec<(String, St...` — One method extracted from a trait, ready for stub emission.
+-  `has_plugin_interface_attr` function L91-99 — `(item: &ItemTrait) -> bool` — agree byte-for-byte.
+-  `pick_trait` function L101-135 — `( traits: &'a [&'a ItemTrait], requested: Option<&str>, src: &Path, ) -> Result<...` — agree byte-for-byte.
+-  `extract_methods` function L137-146 — `(item: &ItemTrait) -> Result<Vec<MethodSpec>>` — agree byte-for-byte.
+-  `method_to_spec` function L148-208 — `(method: &TraitItemFn) -> Result<MethodSpec>` — agree byte-for-byte.
+-  `is_wire_raw_attr` function L210-222 — `(attr: &syn::Attribute) -> bool` — agree byte-for-byte.
+-  `token_string` function L224-226 — `(t: &T) -> String` — agree byte-for-byte.
+-  `extract_doc_line` function L228-242 — `(attr: &syn::Attribute) -> Option<String>` — agree byte-for-byte.
+-  `rust_type_to_python` function L246-313 — `(ty: &Type) -> String` — Map a Rust type to its Python type-hint counterpart.
+-  `is_u8` function L315-320 — `(ty: &Type) -> bool` — agree byte-for-byte.
+-  `render_python_stub` function L322-389 — `(trait_name: &str, methods: &[MethodSpec]) -> String` — agree byte-for-byte.
+-  `tests` module L392-532 — `-` — agree byte-for-byte.
+-  `parse_methods` function L395-407 — `(src: &str) -> (String, Vec<MethodSpec>)` — agree byte-for-byte.
+-  `primitive_type_mapping` function L410-425 — `()` — agree byte-for-byte.
+-  `vec_u8_maps_to_bytes_even_without_wire_raw` function L428-438 — `()` — agree byte-for-byte.
+-  `wire_raw_signatures_are_bytes` function L441-455 — `()` — agree byte-for-byte.
+-  `unknown_types_get_todo_marker` function L458-468 — `()` — agree byte-for-byte.
+-  `rendered_stub_hash_matches_macro` function L471-502 — `()` — agree byte-for-byte.
+-  `picks_named_trait_when_multiple_present` function L505-531 — `()` — agree byte-for-byte.
 
 ### crates/fidius-cli/tests
 
@@ -154,32 +253,32 @@
 - pub `FIDIUS_MAGIC` variable L24 — `: [u8; 8]` — Magic bytes identifying a Fidius plugin registry.
 - pub `REGISTRY_VERSION` variable L27 — `: u32` — Current version of the `PluginRegistry` struct layout.
 - pub `ABI_VERSION` variable L50-54 — `: u32` — Current version of the `PluginDescriptor` struct layout.
-- pub `BufferStrategyKind` enum L65-76 — `PluginAllocated | Arena` — Buffer management strategy for an interface.
-- pub `MetaKv` struct L86-91 — `{ key: *const c_char, value: *const c_char }` — Static key/value pair for method-level or trait-level metadata.
-- pub `MethodMetaEntry` struct L104-110 — `{ kvs: *const MetaKv, kv_count: u32 }` — Per-method metadata entry.
-- pub `PluginRegistry` struct L137-146 — `{ magic: [u8; 8], registry_version: u32, plugin_count: u32, descriptors: *const ...` — Top-level registry exported by every Fidius plugin dylib.
-- pub `PluginDescriptor` struct L169-219 — `{ descriptor_size: u32, abi_version: u32, interface_name: *const c_char, interfa...` — Metadata descriptor for a single plugin within a dylib.
-- pub `DescriptorPtr` struct L233 — `-` — A `Sync` wrapper for a raw pointer to a `PluginDescriptor`.
-- pub `interface_name_str` function L246-249 — `(&self) -> &str` — Read the `interface_name` field as a Rust `&str`.
-- pub `plugin_name_str` function L257-260 — `(&self) -> &str` — Read the `plugin_name` field as a Rust `&str`.
-- pub `buffer_strategy_kind` function L266-272 — `(&self) -> Result<BufferStrategyKind, u8>` — Returns the `buffer_strategy` field as a `BufferStrategyKind`.
-- pub `has_capability` function L277-282 — `(&self, bit: u32) -> bool` — Check if the given optional method capability bit is set.
+- pub `BufferStrategyKind` enum L65-84 — `PluginAllocated | Arena` — Buffer management strategy for an interface.
+- pub `MetaKv` struct L94-99 — `{ key: *const c_char, value: *const c_char }` — Static key/value pair for method-level or trait-level metadata.
+- pub `MethodMetaEntry` struct L112-118 — `{ kvs: *const MetaKv, kv_count: u32 }` — Per-method metadata entry.
+- pub `PluginRegistry` struct L145-154 — `{ magic: [u8; 8], registry_version: u32, plugin_count: u32, descriptors: *const ...` — Top-level registry exported by every Fidius plugin dylib.
+- pub `PluginDescriptor` struct L177-227 — `{ descriptor_size: u32, abi_version: u32, interface_name: *const c_char, interfa...` — Metadata descriptor for a single plugin within a dylib.
+- pub `DescriptorPtr` struct L241 — `-` — A `Sync` wrapper for a raw pointer to a `PluginDescriptor`.
+- pub `interface_name_str` function L254-257 — `(&self) -> &str` — Read the `interface_name` field as a Rust `&str`.
+- pub `plugin_name_str` function L265-268 — `(&self) -> &str` — Read the `plugin_name` field as a Rust `&str`.
+- pub `buffer_strategy_kind` function L274-280 — `(&self) -> Result<BufferStrategyKind, u8>` — Returns the `buffer_strategy` field as a `BufferStrategyKind`.
+- pub `has_capability` function L285-290 — `(&self, bit: u32) -> bool` — Check if the given optional method capability bit is set.
 -  `parse_u32_const` function L34-43 — `(s: &str) -> u32` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
 -  `CRATE_MAJOR` variable L45 — `: u32` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
 -  `CRATE_MINOR` variable L46 — `: u32` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `MetaKv` type L94 — `impl Send for MetaKv` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `MetaKv` type L95 — `impl Sync for MetaKv` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `MethodMetaEntry` type L113 — `impl Send for MethodMetaEntry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `MethodMetaEntry` type L114 — `impl Sync for MethodMetaEntry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `BufferStrategyKind` type L116-123 — `= BufferStrategyKind` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `fmt` function L117-122 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginRegistry` type L151 — `impl Send for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginRegistry` type L152 — `impl Sync for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginDescriptor` type L224 — `impl Send for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginDescriptor` type L225 — `impl Sync for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `DescriptorPtr` type L236 — `impl Send for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `DescriptorPtr` type L237 — `impl Sync for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
--  `PluginDescriptor` type L239-283 — `= PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `MetaKv` type L102 — `impl Send for MetaKv` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `MetaKv` type L103 — `impl Sync for MetaKv` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `MethodMetaEntry` type L121 — `impl Send for MethodMetaEntry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `MethodMetaEntry` type L122 — `impl Sync for MethodMetaEntry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `BufferStrategyKind` type L124-131 — `= BufferStrategyKind` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `fmt` function L125-130 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginRegistry` type L159 — `impl Send for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginRegistry` type L160 — `impl Sync for PluginRegistry` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginDescriptor` type L232 — `impl Send for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginDescriptor` type L233 — `impl Sync for PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `DescriptorPtr` type L244 — `impl Send for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `DescriptorPtr` type L245 — `impl Sync for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
+-  `PluginDescriptor` type L247-291 — `= PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
 
 #### crates/fidius-core/src/error.rs
 
@@ -196,14 +295,15 @@
 
 - pub `fnv1a` function L28-37 — `(bytes: &[u8]) -> u64` — Compute the FNV-1a 64-bit hash of a byte slice.
 - pub `interface_hash` function L47-52 — `(signatures: &[&str]) -> u64` — Compute the interface hash from a set of method signatures.
+- pub `signature_string` function L75-78 — `(name: &str, arg_types: &[String], ret: &str, wire_raw: bool) -> String` — Build the canonical signature string for one method.
 -  `FNV_OFFSET_BASIS` variable L22 — `: u64` — FNV-1a 64-bit offset basis.
 -  `FNV_PRIME` variable L25 — `: u64` — FNV-1a 64-bit prime.
--  `tests` module L55-103 — `-` — plugins compiled against a different interface.
--  `empty_input` function L59-63 — `()` — plugins compiled against a different interface.
--  `known_vector` function L66-72 — `()` — plugins compiled against a different interface.
--  `order_independence` function L75-85 — `()` — plugins compiled against a different interface.
--  `sensitivity` function L88-92 — `()` — plugins compiled against a different interface.
--  `different_signatures_differ` function L95-102 — `()` — plugins compiled against a different interface.
+-  `tests` module L81-129 — `-` — plugins compiled against a different interface.
+-  `empty_input` function L85-89 — `()` — plugins compiled against a different interface.
+-  `known_vector` function L92-98 — `()` — plugins compiled against a different interface.
+-  `order_independence` function L101-111 — `()` — plugins compiled against a different interface.
+-  `sensitivity` function L114-118 — `()` — plugins compiled against a different interface.
+-  `different_signatures_differ` function L121-128 — `()` — plugins compiled against a different interface.
 
 #### crates/fidius-core/src/lib.rs
 
@@ -211,45 +311,93 @@
 - pub `error` module L16 — `-`
 - pub `hash` module L17 — `-`
 - pub `package` module L18 — `-`
-- pub `registry` module L19 — `-`
-- pub `status` module L20 — `-`
-- pub `wire` module L21 — `-`
-- pub `async_runtime` module L24 — `-`
+- pub `python_descriptor` module L19 — `-`
+- pub `registry` module L20 — `-`
+- pub `status` module L21 — `-`
+- pub `wire` module L22 — `-`
+- pub `async_runtime` module L25 — `-`
 
 #### crates/fidius-core/src/package.rs
 
-- pub `PackageManifest` struct L32-37 — `{ package: PackageHeader, metadata: M }` — A parsed package manifest, generic over the host-defined metadata schema.
-- pub `PackageHeader` struct L41-54 — `{ name: String, version: String, interface: String, interface_version: u32, exte...` — Fixed header fields that every package manifest must have.
-- pub `extension` function L58-60 — `(&self) -> &str` — Returns the package extension, defaulting to `"fid"`.
-- pub `PackageError` enum L65-98 — `ManifestNotFound | ParseError | Io | BuildFailed | SignatureNotFound | Signature...` — Errors that can occur when loading a package manifest.
-- pub `load_manifest` function L118-130 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
-- pub `load_manifest_untyped` function L136-138 — `(dir: &Path) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
-- pub `package_digest` function L148-169 — `(dir: &Path) -> Result<[u8; 32], PackageError>` — Compute a deterministic SHA-256 digest over all package source files.
-- pub `PackResult` struct L238-243 — `{ path: PathBuf, unsigned: bool }` — Result of packing a package, including any warnings.
-- pub `pack_package` function L253-296 — `(dir: &Path, output: Option<&Path>) -> Result<PackResult, PackageError>` — Create a `.fid` archive (tar + bzip2) from a package directory.
-- pub `unpack_package` function L302-333 — `(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError>` — Extract a `.fid` archive (tar + bzip2) to a destination directory.
--  `PackageHeader` type L56-61 — `= PackageHeader` — host-defined schema type.
--  `collect_files` function L172-203 — `(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError>` — Recursively collect file paths relative to `root`, skipping excluded dirs/files.
--  `collect_archive_files` function L206-234 — `( root: &Path, dir: &Path, out: &mut Vec<String>, ) -> Result<(), PackageError>` — Recursively collect file paths for archiving (includes `.sig` files).
--  `tests` module L336-676 — `-` — host-defined schema type.
--  `write_manifest` function L340-342 — `(dir: &Path, content: &str)` — host-defined schema type.
--  `TestMeta` struct L345-349 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
--  `valid_manifest_parses` function L352-376 — `()` — host-defined schema type.
--  `missing_required_metadata_field_fails` function L379-403 — `()` — host-defined schema type.
--  `missing_manifest_returns_not_found` function L406-410 — `()` — host-defined schema type.
--  `extra_metadata_fields_ignored` function L413-434 — `()` — host-defined schema type.
--  `untyped_manifest_accepts_any_metadata` function L437-458 — `()` — host-defined schema type.
--  `digest_is_deterministic` function L461-469 — `()` — host-defined schema type.
--  `digest_changes_on_file_modification` function L472-483 — `()` — host-defined schema type.
--  `digest_excludes_target_and_sig` function L486-500 — `()` — host-defined schema type.
--  `make_package` function L502-518 — `(dir: &Path)` — host-defined schema type.
--  `pack_unpack_round_trip` function L521-542 — `()` — host-defined schema type.
--  `pack_includes_sig_file` function L545-559 — `()` — host-defined schema type.
--  `pack_excludes_target_and_git` function L562-578 — `()` — host-defined schema type.
--  `unpack_invalid_archive_no_manifest` function L581-611 — `()` — host-defined schema type.
--  `pack_default_output_name` function L614-624 — `()` — host-defined schema type.
--  `pack_custom_extension` function L627-657 — `()` — host-defined schema type.
--  `extension_defaults_to_fid` function L660-675 — `()` — host-defined schema type.
+- pub `PackageManifest` struct L32-43 — `{ package: PackageHeader, metadata: M, python: Option<PythonPackageMeta> }` — A parsed package manifest, generic over the host-defined metadata schema.
+- pub `validate_runtime` function L52-73 — `(&self) -> Result<(), PackageError>` — Cross-section validation: runtime + python section must agree.
+- pub `PackageHeader` struct L78-96 — `{ name: String, version: String, interface: String, interface_version: u32, exte...` — Fixed header fields that every package manifest must have.
+- pub `extension` function L100-102 — `(&self) -> &str` — Returns the package extension, defaulting to `"fid"`.
+- pub `runtime` function L107-116 — `(&self) -> PackageRuntime` — Returns the runtime kind, defaulting to `Rust` when absent.
+- pub `runtime_strict` function L119-127 — `(&self) -> Result<PackageRuntime, PackageError>` — Returns the runtime kind, erroring on unknown values.
+- pub `PackageRuntime` enum L133-141 — `Rust | Python` — Plugin runtime kind.
+- pub `as_str` function L145-150 — `(&self) -> &'static str` — Returns the canonical string form used in `package.toml`.
+- pub `PythonPackageMeta` struct L162-171 — `{ entry_module: String, requirements: Option<String> }` — Fields under the `[python]` section of `package.toml`.
+- pub `requirements_path` function L175-177 — `(&self) -> &str` — Returns the requirements file path, defaulting to `"requirements.txt"`.
+- pub `PackageError` enum L182-246 — `ManifestNotFound | ParseError | Io | BuildFailed | SignatureNotFound | Signature...` — Errors that can occur when loading a package manifest.
+- pub `UnpackOptions` struct L255-265 — `{ max_decompressed: u64, max_ratio: u64, max_entries: u32 }` — Options controlling archive extraction safety limits.
+- pub `load_manifest` function L295-312 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
+- pub `load_manifest_untyped` function L318-320 — `(dir: &Path) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
+- pub `package_digest` function L330-351 — `(dir: &Path) -> Result<[u8; 32], PackageError>` — Compute a deterministic SHA-256 digest over all package source files.
+- pub `PackResult` struct L420-425 — `{ path: PathBuf, unsigned: bool }` — Result of packing a package, including any warnings.
+- pub `pack_package` function L506-559 — `(dir: &Path, output: Option<&Path>) -> Result<PackResult, PackageError>` — Create a `.fid` archive (tar + bzip2) from a package directory.
+- pub `unpack_package` function L578-580 — `(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError>` — Extract a `.fid` archive (tar + bzip2) to a destination directory using
+- pub `unpack_package_with_options` function L586-723 — `( archive: &Path, dest: &Path, options: &UnpackOptions, ) -> Result<PathBuf, Pac...` — Extract a `.fid` archive with caller-provided safety limits.
+-  `PackageHeader` type L98-128 — `= PackageHeader` — host-defined schema type.
+-  `PackageRuntime` type L143-151 — `= PackageRuntime` — host-defined schema type.
+-  `PackageRuntime` type L153-157 — `= PackageRuntime` — host-defined schema type.
+-  `fmt` function L154-156 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — host-defined schema type.
+-  `PythonPackageMeta` type L173-178 — `= PythonPackageMeta` — host-defined schema type.
+-  `UnpackOptions` type L267-275 — `impl Default for UnpackOptions` — host-defined schema type.
+-  `default` function L268-274 — `() -> Self` — host-defined schema type.
+-  `collect_files` function L354-385 — `(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError>` — Recursively collect file paths relative to `root`, skipping excluded dirs/files.
+-  `collect_archive_files` function L388-416 — `( root: &Path, dir: &Path, out: &mut Vec<String>, ) -> Result<(), PackageError>` — Recursively collect file paths for archiving (includes `.sig` files).
+-  `vendor_python_deps` function L436-491 — `(dir: &Path, py: &PythonPackageMeta) -> Result<(), PackageError>` — Vendor Python dependencies into `<dir>/vendor/` by invoking
+-  `tests` module L726-1642 — `-` — host-defined schema type.
+-  `write_manifest` function L730-732 — `(dir: &Path, content: &str)` — host-defined schema type.
+-  `TestMeta` struct L735-739 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
+-  `valid_manifest_parses` function L742-766 — `()` — host-defined schema type.
+-  `missing_required_metadata_field_fails` function L769-793 — `()` — host-defined schema type.
+-  `missing_manifest_returns_not_found` function L796-800 — `()` — host-defined schema type.
+-  `extra_metadata_fields_ignored` function L803-824 — `()` — host-defined schema type.
+-  `untyped_manifest_accepts_any_metadata` function L827-848 — `()` — host-defined schema type.
+-  `digest_is_deterministic` function L851-859 — `()` — host-defined schema type.
+-  `digest_changes_on_file_modification` function L862-873 — `()` — host-defined schema type.
+-  `digest_excludes_target_and_sig` function L876-890 — `()` — host-defined schema type.
+-  `make_package` function L892-908 — `(dir: &Path)` — host-defined schema type.
+-  `pack_unpack_round_trip` function L911-932 — `()` — host-defined schema type.
+-  `pack_includes_sig_file` function L935-949 — `()` — host-defined schema type.
+-  `pack_excludes_target_and_git` function L952-968 — `()` — host-defined schema type.
+-  `unpack_invalid_archive_no_manifest` function L971-1001 — `()` — host-defined schema type.
+-  `pack_default_output_name` function L1004-1014 — `()` — host-defined schema type.
+-  `pack_custom_extension` function L1017-1047 — `()` — host-defined schema type.
+-  `extension_defaults_to_fid` function L1050-1066 — `()` — host-defined schema type.
+-  `rust_runtime_default_when_absent` function L1071-1089 — `()` — host-defined schema type.
+-  `python_runtime_with_python_section_parses` function L1092-1117 — `()` — host-defined schema type.
+-  `python_runtime_requirements_default` function L1120-1144 — `()` — host-defined schema type.
+-  `python_runtime_without_python_section_rejected` function L1147-1173 — `()` — host-defined schema type.
+-  `python_section_without_python_runtime_rejected` function L1176-1196 — `()` — host-defined schema type.
+-  `unknown_runtime_rejected` function L1199-1222 — `()` — host-defined schema type.
+-  `package_runtime_display_and_str` function L1225-1229 — `()` — host-defined schema type.
+-  `build_archive` function L1239-1248 — `(path: &Path, build: F)` — Build a bz2-compressed tar archive from a builder callback.
+-  `write_name` function L1253-1261 — `(header: &mut Header, path: &str)` — Write a raw entry name directly into a GNU tar header, bypassing
+-  `write_linkname` function L1263-1271 — `(header: &mut Header, link: &str)` — host-defined schema type.
+-  `append_regular` function L1276-1284 — `(tar: &mut tar::Builder<BzEncoder<std::fs::File>>, path: &str, data: &[u8])` — Append a regular file entry with explicit path and content bytes.
+-  `append_link` function L1287-1301 — `( tar: &mut tar::Builder<BzEncoder<std::fs::File>>, path: &str, link_target: &st...` — Append a link entry with a chosen EntryType (symlink/hardlink).
+-  `unpack_rejects_parent_dir_component` function L1304-1319 — `()` — host-defined schema type.
+-  `unpack_rejects_absolute_path` function L1322-1335 — `()` — host-defined schema type.
+-  `unpack_rejects_symlink` function L1338-1351 — `()` — host-defined schema type.
+-  `unpack_rejects_hardlink` function L1354-1367 — `()` — host-defined schema type.
+-  `unpack_symlink_then_file_rejected_at_first_entry` function L1370-1391 — `()` — host-defined schema type.
+-  `unpack_rejects_declared_size_bomb` function L1394-1423 — `()` — host-defined schema type.
+-  `unpack_rejects_ratio_bomb` function L1426-1453 — `()` — host-defined schema type.
+-  `unpack_rejects_too_many_entries` function L1456-1475 — `()` — host-defined schema type.
+-  `unpack_staging_cleans_up_on_rejection` function L1478-1499 — `()` — host-defined schema type.
+-  `unpack_with_options_accepts_large_archive` function L1502-1520 — `()` — host-defined schema type.
+-  `make_python_package` function L1525-1559 — `(dir: &Path, with_requirements: Option<&str>)` — Build a minimal Python package directory (manifest + entry .py).
+-  `pack_python_with_prevendored_directory_skips_pip` function L1562-1588 — `()` — host-defined schema type.
+-  `pack_python_with_no_requirements_or_vendor_warns_but_succeeds` function L1591-1604 — `()` — host-defined schema type.
+-  `pack_python_with_unresolvable_requirement_surfaces_pip_error` function L1607-1641 — `()` — host-defined schema type.
+
+#### crates/fidius-core/src/python_descriptor.rs
+
+- pub `PythonInterfaceDescriptor` struct L31-42 — `{ interface_name: &'static str, interface_hash: u64, methods: &'static [PythonMe...` — Static descriptor for one fidius interface, consumed by the Python
+- pub `PythonMethodDesc` struct L46-54 — `{ name: &'static str, wire_raw: bool }` — One method on the interface.
 
 #### crates/fidius-core/src/registry.rs
 
@@ -297,6 +445,14 @@
 -  `magic_bytes_value` function L214-217 — `()` — and interface hash determinism.
 -  `version_constants` function L220-225 — `()` — and interface hash determinism.
 
+### crates/fidius-host
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-host/build.rs
+
+-  `main` function L26-45 — `()` — Build script: when the `python` feature is enabled, embed a runtime
+
 ### crates/fidius-host/src
 
 > *Semantic summary to be generated by AI agent.*
@@ -327,28 +483,31 @@
 
 #### crates/fidius-host/src/error.rs
 
-- pub `LoadError` enum L21-66 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
-- pub `CallError` enum L70-97 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
+- pub `LoadError` enum L21-72 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
+- pub `CallError` enum L76-103 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
 
 #### crates/fidius-host/src/handle.rs
 
 - pub `PluginHandle` struct L47-66 — `{ _library: Option<Arc<Library>>, vtable: *const c_void, descriptor: *const Plug...` — A handle to a loaded plugin, ready for calling methods.
 - pub `from_loaded` function L103-113 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a PluginHandle from a LoadedPlugin.
-- pub `from_descriptor` function L122-142 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a PluginHandle from a plugin descriptor already registered in
-- pub `find_in_process_descriptor` function L150-164 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
-- pub `call_method` function L174-194 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `has_capability` function L373-378 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L381-383 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L396-428 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
-- pub `trait_metadata` function L434-455 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
+- pub `from_descriptor` function L122-143 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a PluginHandle from a plugin descriptor already registered in
+- pub `find_in_process_descriptor` function L151-165 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
+- pub `call_method` function L183-203 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `call_method_raw` function L214-225 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
+- pub `has_capability` function L568-573 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L576-578 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L591-623 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
+- pub `trait_metadata` function L629-650 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
 -  `FfiFn` type L34 — `= unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32` — Type alias for the PluginAllocated FFI function pointer signature.
 -  `ArenaFn` type L37 — `= unsafe extern "C" fn(*const u8, u32, *mut u8, u32, *mut u32, *mut u32) -> i32` — Type alias for the Arena FFI function pointer signature.
 -  `PluginHandle` type L76 — `impl Send for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
 -  `PluginHandle` type L77 — `impl Sync for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L79-456 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
+-  `PluginHandle` type L79-651 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
 -  `new` function L82-100 — `( library: Arc<Library>, vtable: *const c_void, descriptor: *const PluginDescrip...` — Create a new PluginHandle.
--  `call_plugin_allocated` function L198-276 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
--  `call_arena` function L282-368 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
+-  `call_plugin_allocated` function L229-307 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
+-  `call_arena` function L313-399 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
+-  `call_plugin_allocated_raw` function L404-482 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
+-  `call_arena_raw` function L486-563 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
 
 #### crates/fidius-host/src/host.rs
 
@@ -362,12 +521,16 @@
 - pub `buffer_strategy` function L91-94 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
 - pub `build` function L97-106 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
 - pub `builder` function L111-113 — `() -> PluginHostBuilder` — Create a new builder.
-- pub `discover` function L119-167 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
-- pub `load` function L173-217 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+- pub `discover` function L124-149 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
+- pub `load` function L201-245 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+- pub `find_python_package` function L250-280 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
+- pub `load_python` function L292-300 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
 -  `PluginHostBuilder` type L48-107 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
 -  `new` function L49-58 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L109-218 — `= PluginHost` — PluginHost builder and plugin discovery.
--  `is_dylib` function L221-230 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+-  `PluginHost` type L109-301 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `discover_cdylib` function L151-171 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
+-  `discover_python_package` function L173-195 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L304-313 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### crates/fidius-host/src/lib.rs
 
@@ -386,20 +549,20 @@
 - pub `LoadedLibrary` struct L28-33 — `{ library: Arc<Library>, plugins: Vec<LoadedPlugin> }` — A loaded plugin library with validated descriptors.
 - pub `LoadedPlugin` struct L36-51 — `{ info: PluginInfo, vtable: *const c_void, free_buffer: Option<unsafe extern "C"...` — A single validated plugin from a loaded library.
 - pub `load_library` function L71-124 — `(path: &Path) -> Result<LoadedLibrary, LoadError>` — Load a plugin library from a path.
-- pub `validate_against_interface` function L165-189 — `( plugin: &LoadedPlugin, expected_hash: Option<u64>, expected_strategy: Option<B...` — Validate a loaded plugin against expected interface parameters.
+- pub `validate_against_interface` function L166-190 — `( plugin: &LoadedPlugin, expected_hash: Option<u64>, expected_strategy: Option<B...` — Validate a loaded plugin against expected interface parameters.
 -  `LoadedPlugin` type L55 — `impl Send for LoadedPlugin` — Core plugin loading and descriptor validation.
 -  `LoadedPlugin` type L56 — `impl Sync for LoadedPlugin` — Core plugin loading and descriptor validation.
 -  `LoadedPlugin` type L58-65 — `= LoadedPlugin` — Core plugin loading and descriptor validation.
 -  `fmt` function L59-64 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — Core plugin loading and descriptor validation.
--  `validate_descriptor` function L127-162 — `( desc: &PluginDescriptor, library: &Arc<Library>, ) -> Result<LoadedPlugin, Loa...` — Validate a single descriptor and copy to owned types.
+-  `validate_descriptor` function L127-163 — `( desc: &PluginDescriptor, library: &Arc<Library>, ) -> Result<LoadedPlugin, Loa...` — Validate a single descriptor and copy to owned types.
 
 #### crates/fidius-host/src/package.rs
 
 - pub `load_package_manifest` function L41-45 — `( dir: &Path, ) -> Result<PackageManifest<M>, PackageError>` — Load and validate a package manifest against a host-defined schema.
 - pub `discover_packages` function L51-70 — `(dir: &Path) -> Result<Vec<PathBuf>, PackageError>` — Discover packages in a directory.
 - pub `verify_package` function L81-108 — `(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), PackageError>` — Verify a source package's signature against trusted public keys.
-- pub `unpack_fid` function L121-133 — `(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError>` — Extract a `.fid` archive and validate its contents.
-- pub `build_package` function L138-187 — `(dir: &Path, release: bool) -> Result<PathBuf, PackageError>` — Build a package by running `cargo build` inside the package directory.
+- pub `unpack_fid` function L127-139 — `(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError>` — Extract a `.fid` archive and validate its contents.
+- pub `build_package` function L144-193 — `(dir: &Path, release: bool) -> Result<PathBuf, PackageError>` — Build a package by running `cargo build` inside the package directory.
 
 #### crates/fidius-host/src/signing.rs
 
@@ -415,8 +578,12 @@
 
 #### crates/fidius-host/src/types.rs
 
-- pub `PluginInfo` struct L23-36 — `{ name: String, interface_name: String, interface_hash: u64, interface_version: ...` — Owned metadata for a discovered or loaded plugin.
-- pub `LoadPolicy` enum L40-46 — `Strict | Lenient` — Controls how strictly the host validates plugins.
+- pub `PluginRuntimeKind` enum L23-29 — `Cdylib | Python` — Plugin runtime kind.
+- pub `PluginInfo` struct L38-54 — `{ name: String, interface_name: String, interface_hash: u64, interface_version: ...` — Owned metadata for a discovered or loaded plugin.
+- pub `is_cdylib` function L58-60 — `(&self) -> bool` — True if this is a cdylib-backed plugin.
+- pub `is_python` function L63-65 — `(&self) -> bool` — True if this is a Python plugin.
+- pub `LoadPolicy` enum L70-76 — `Strict | Lenient` — Controls how strictly the host validates plugins.
+-  `PluginInfo` type L56-66 — `= PluginInfo` — Owned metadata types for loaded plugins.
 
 ### crates/fidius-host/tests
 
@@ -454,10 +621,12 @@
 -  `load_nonexistent_plugin_returns_not_found` function L136-144 — `()` — capability / info assertions where the Client abstracts them away.
 -  `out_of_bounds_vtable_index_returns_error` function L147-169 — `()` — capability / info assertions where the Client abstracts them away.
 -  `Dummy` struct L157 — `-` — capability / info assertions where the Client abstracts them away.
--  `arena_plugin_loads_and_round_trips` function L172-188 — `()` — capability / info assertions where the Client abstracts them away.
--  `arena_plugin_grows_buffer_on_too_small_retry` function L191-213 — `()` — capability / info assertions where the Client abstracts them away.
--  `trait_and_method_metadata_readable_through_handle` function L216-242 — `()` — capability / info assertions where the Client abstracts them away.
--  `has_capability_returns_false_for_high_bits` function L245-259 — `()` — capability / info assertions where the Client abstracts them away.
+-  `raw_wire_method_round_trips` function L172-192 — `()` — capability / info assertions where the Client abstracts them away.
+-  `raw_wire_method_handles_large_payload` function L195-212 — `()` — capability / info assertions where the Client abstracts them away.
+-  `arena_plugin_loads_and_round_trips` function L215-231 — `()` — capability / info assertions where the Client abstracts them away.
+-  `arena_plugin_grows_buffer_on_too_small_retry` function L234-256 — `()` — capability / info assertions where the Client abstracts them away.
+-  `trait_and_method_metadata_readable_through_handle` function L259-285 — `()` — capability / info assertions where the Client abstracts them away.
+-  `has_capability_returns_false_for_high_bits` function L288-302 — `()` — capability / info assertions where the Client abstracts them away.
 
 #### crates/fidius-host/tests/package_e2e.rs
 
@@ -476,34 +645,60 @@
 
 -  `plugin_without_host_feature_does_not_pull_libloading` function L26-65 — `()` — and asserts `libloading` is not in its dep graph.
 
+#### crates/fidius-host/tests/python_plugin_e2e.rs
+
+-  `stage_plugin` function L51-66 — `(tmp: &tempfile::TempDir) -> PathBuf` — Directory structure mirrors what a deployer would have:
+-  `repo_root` function L68-75 — `() -> PathBuf` — 5.
+-  `copy_dir` function L77-89 — `(src: &std::path::Path, dst: &std::path::Path)` — 5.
+-  `byte_pipe_descriptor` function L95-97 — `() -> &'static PythonInterfaceDescriptor` — Produce the BytePipe descriptor from the Rust trait via the macro-emitted
+-  `discover_lists_python_plugin_with_python_runtime` function L100-114 — `()` — 5.
+-  `typed_method_round_trips` function L117-132 — `()` — 5.
+-  `raw_wire_method_round_trips_2mb` function L135-154 — `()` — 5.
+-  `tampered_interface_hash_is_rejected_at_load` function L157-190 — `()` — 5.
+
+#### crates/fidius-host/tests/python_routing.rs
+
+-  `HASH` variable L26 — `: u64` — when the `python` feature is enabled.
+-  `METHODS` variable L27-30 — `: [PythonMethodDesc; 1]` — when the `python` feature is enabled.
+-  `fresh_descriptor` function L32-44 — `() -> (&'static PythonInterfaceDescriptor, String)` — when the `python` feature is enabled.
+-  `COUNTER` variable L33 — `: AtomicUsize` — when the `python` feature is enabled.
+-  `copy_dir` function L46-58 — `(src: &std::path::Path, dst: &std::path::Path)` — when the `python` feature is enabled.
+-  `make_python_package` function L60-109 — `( plugins_root: &std::path::Path, pkg_name: &str, entry_module: &str, ) -> PathB...` — when the `python` feature is enabled.
+-  `repo_root` function L111-118 — `() -> PathBuf` — when the `python` feature is enabled.
+-  `discover_surfaces_python_package` function L121-138 — `()` — when the `python` feature is enabled.
+-  `load_python_dispatches_through_host` function L141-158 — `()` — when the `python` feature is enabled.
+-  `load_python_unknown_name_returns_not_found` function L161-174 — `()` — when the `python` feature is enabled.
+-  `cdylib_load_path_unaffected` function L177-195 — `()` — when the `python` feature is enabled.
+
 ### crates/fidius-macro/src
 
 > *Semantic summary to be generated by AI agent.*
 
 #### crates/fidius-macro/src/impl_macro.rs
 
-- pub `PluginImplAttrs` struct L57-66 — `{ trait_name: Ident, crate_path: Path, buffer_strategy: BufferStrategyAttr }` — Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`,
-- pub `generate_plugin_impl` function L121-223 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
--  `MethodInfo` struct L31-39 — `{ name: &'a Ident, is_async: bool, returns_result: bool, arg_types: Vec<&'a Type...` — Info about an impl method, extracted from the impl block.
--  `is_result_type` function L42-53 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
--  `PluginImplAttrs` type L68-118 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `parse` function L69-117 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `generate_shims` function L227-400 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L406-427 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L430-508 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L511-521 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+- pub `PluginImplAttrs` struct L84-93 — `{ trait_name: Ident, crate_path: Path, buffer_strategy: BufferStrategyAttr }` — Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`,
+- pub `generate_plugin_impl` function L148-256 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
+-  `MethodInfo` struct L31-44 — `{ name: &'a Ident, is_async: bool, returns_result: bool, arg_types: Vec<&'a Type...` — Info about an impl method, extracted from the impl block.
+-  `impl_method_is_raw` function L49-66 — `(attrs: &[syn::Attribute]) -> syn::Result<bool>` — Detect a `#[wire(raw)]` attribute on an impl-side method.
+-  `is_result_type` function L69-80 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
+-  `PluginImplAttrs` type L95-145 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `parse` function L96-144 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `generate_shims` function L260-464 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
+-  `generate_vtable_static` function L470-491 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L494-572 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L575-585 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### crates/fidius-macro/src/interface.rs
 
-- pub `generate_interface` function L47-80 — `(ir: &InterfaceIR) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_interface]` invocation.
--  `strip_optional_attrs` function L29-44 — `(item: &ItemTrait) -> ItemTrait` — Strip fidius-specific helper attributes (`#[optional]`, `#[method_meta]`,
--  `is_fidius_helper` function L30-34 — `(attr: &syn::Attribute) -> bool` — capability bit constants, version/strategy constants, and a descriptor builder function.
--  `generate_metadata` function L91-189 — `(ir: &InterfaceIR) -> TokenStream` — Emit the static metadata arrays for `#[method_meta]` and `#[trait_meta]`
--  `generate_vtable` function L192-267 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
--  `generate_constants` function L270-319 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
--  `generate_descriptor_builder` function L322-392 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
--  `generate_method_indices` function L395-411 — `(ir: &InterfaceIR) -> TokenStream` — Generate method index constants.
--  `generate_client` function L425-531 — `(ir: &InterfaceIR) -> TokenStream` — Generate a typed `{Trait}Client` struct that wraps a `PluginHandle` and
+- pub `generate_interface` function L48-81 — `(ir: &InterfaceIR) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_interface]` invocation.
+-  `strip_optional_attrs` function L29-45 — `(item: &ItemTrait) -> ItemTrait` — Strip fidius-specific helper attributes (`#[optional]`, `#[method_meta]`,
+-  `is_fidius_helper` function L30-35 — `(attr: &syn::Attribute) -> bool` — capability bit constants, version/strategy constants, and a descriptor builder function.
+-  `generate_metadata` function L92-190 — `(ir: &InterfaceIR) -> TokenStream` — Emit the static metadata arrays for `#[method_meta]` and `#[trait_meta]`
+-  `generate_vtable` function L193-268 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
+-  `generate_constants` function L271-359 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
+-  `generate_descriptor_builder` function L362-432 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
+-  `generate_method_indices` function L435-451 — `(ir: &InterfaceIR) -> TokenStream` — Generate method index constants.
+-  `generate_client` function L465-589 — `(ir: &InterfaceIR) -> TokenStream` — Generate a typed `{Trait}Client` struct that wraps a `PluginHandle` and
 
 #### crates/fidius-macro/src/ir.rs
 
@@ -511,27 +706,31 @@
 - pub `BufferStrategyAttr` enum L43-46 — `PluginAllocated | Arena` — Discriminants match `fidius_core::descriptor::BufferStrategyKind` — values
 - pub `MetaKvAttr` struct L125-128 — `{ key: String, value: String }` — A static metadata key/value pair parsed from a `#[method_meta(...)]`
 - pub `InterfaceIR` struct L132-140 — `{ trait_name: Ident, attrs: InterfaceAttrs, methods: Vec<MethodIR>, trait_metas:...` — Full IR for a parsed interface trait.
-- pub `MethodIR` struct L145-162 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
-- pub `is_required` function L166-168 — `(&self) -> bool` — Whether this is a required (non-optional) method.
-- pub `parse_interface` function L306-365 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
+- pub `MethodIR` struct L145-171 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
+- pub `is_required` function L175-177 — `(&self) -> bool` — Whether this is a required (non-optional) method.
+- pub `parse_interface` function L433-505 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
 -  `InterfaceAttrs` type L48-120 — `impl Parse for InterfaceAttrs` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `parse` function L49-119 — `(input: ParseStream) -> syn::Result<Self>` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `MethodIR` type L164-169 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_meta_attrs` function L175-219 — `(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>>` — Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]`
--  `parse_optional_attr` function L222-240 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
--  `build_signature_string` function L243-262 — `(method: &TraitItemFn) -> String` — Build the canonical signature string for a method.
--  `extract_arg_names` function L265-282 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
--  `extract_arg_types` function L285-295 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
--  `extract_return_type` function L298-303 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
--  `tests` module L368-487 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_test_trait` function L372-380 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `basic_trait_parsing` function L383-400 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `optional_method_parsing` function L403-416 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `async_method_detection` function L419-429 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `rejects_mut_self` function L432-448 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `signature_string_format` function L451-461 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `interface_attrs_parsing` function L464-470 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `interface_attrs_with_crate_path` function L473-486 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `MethodIR` type L173-178 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_meta_attrs` function L184-228 — `(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>>` — Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]`
+-  `parse_optional_attr` function L231-249 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
+-  `parse_wire_attr` function L254-271 — `(attrs: &[Attribute]) -> syn::Result<bool>` — Parse a `#[wire(raw)]` attribute, if present.
+-  `is_vec_u8` function L274-301 — `(ty: &Type) -> bool` — Return `true` if the given type is `Vec<u8>`.
+-  `result_ok_type` function L304-320 — `(ty: &Type) -> Option<&Type>` — Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
+-  `validate_raw_method_signature` function L325-362 — `( method: &TraitItemFn, arg_types: &[Type], return_type: Option<&Type>, ) -> syn...` — Validate that a method flagged `#[wire(raw)]` has a supported signature:
+-  `build_signature_string` function L370-389 — `(method: &TraitItemFn, wire_raw: bool) -> String` — Build the canonical signature string for a method.
+-  `extract_arg_names` function L392-409 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
+-  `extract_arg_types` function L412-422 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
+-  `extract_return_type` function L425-430 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
+-  `tests` module L508-627 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_test_trait` function L512-520 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `basic_trait_parsing` function L523-540 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `optional_method_parsing` function L543-556 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `async_method_detection` function L559-569 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `rejects_mut_self` function L572-588 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `signature_string_format` function L591-601 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `interface_attrs_parsing` function L604-610 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `interface_attrs_with_crate_path` function L613-626 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 
 #### crates/fidius-macro/src/lib.rs
 
@@ -635,6 +834,16 @@
 -  `both_descriptors_are_valid` function L57-80 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
 -  `can_call_both_plugins` function L83-120 — `()` — Test that multiple #[plugin_impl] in one binary produces a registry with multiple plugins.
 
+#### crates/fidius-macro/tests/raw_wire.rs
+
+- pub `TypedPipe` interface L32-34 — `{ fn process() }` — without needing to load a dylib.
+- pub `RawPipe` interface L37-40 — `{ fn process() }` — without needing to load a dylib.
+- pub `Mixed` interface L56-65 — `{ fn bulk(), fn ping(), fn bulk_v2() }` — without needing to load a dylib.
+- pub `FallibleBytePipe` interface L84-87 — `{ fn maybe() }` — without needing to load a dylib.
+-  `raw_marker_changes_interface_hash` function L43-50 — `()` — without needing to load a dylib.
+-  `mixed_interface_companion_module_compiles` function L68-77 — `()` — without needing to load a dylib.
+-  `raw_method_with_result_return_compiles` function L90-93 — `()` — without needing to load a dylib.
+
 #### crates/fidius-macro/tests/smoke_cdylib.rs
 
 -  `load_cdylib_and_call_plugin` function L23-136 — `()` — loads it via dlopen/dlsym and verifies the registry and vtable work.
@@ -673,6 +882,101 @@
 
 - pub `BadPlugin` interface L7-10 — `{ fn do_thing() }`
 -  `main` function L12 — `()`
+
+### crates/fidius-python
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-python/build.rs
+
+-  `main` function L26-47 — `()` — Build script: configure PyO3 cfg flags and emit a runtime rpath so the
+
+### crates/fidius-python/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-python/src/error.rs
+
+- pub `pyerr_to_plugin_error` function L40-69 — `(err: PyErr) -> PluginError` — Convert a `PyErr` into a `PluginError`, preserving class name, message,
+-  `format_traceback` function L74-79 — `(py: Python<'_>, tb: Bound<'_, PyTraceback>) -> PyResult<String>` — Format a Python traceback into a plain string by calling
+-  `tests` module L82-105 — `-` — plugin code can raise typed errors without their fields being flattened.
+-  `maps_value_error_to_plugin_error` function L86-104 — `()` — plugin code can raise typed errors without their fields being flattened.
+
+#### crates/fidius-python/src/handle.rs
+
+- pub `PythonCallError` enum L44-70 — `InvalidMethodIndex | WireModeMismatch | InputDecode | OutputEncode | Plugin` — Errors a typed call can produce on the Python side.
+- pub `PythonPluginHandle` struct L74-82 — `{ descriptor: &'static PythonInterfaceDescriptor, _module: Py<PyAny>, method_cal...` — Loaded-and-validated handle to one Python plugin.
+- pub `descriptor` function L97-99 — `(&self) -> &'static PythonInterfaceDescriptor` — `code = <ExceptionClassName>` otherwise.
+- pub `method_count` function L101-103 — `(&self) -> usize` — `code = <ExceptionClassName>` otherwise.
+- pub `call_typed` function L112-134 — `( &self, method_index: usize, input_bincode: &[u8], ) -> Result<Vec<u8>, PythonC...` — Typed dispatch.
+- pub `call_typed_json` function L139-159 — `( &self, method_index: usize, input_json: &[u8], ) -> Result<Vec<u8>, PythonCall...` — Typed dispatch where the input is already JSON-serialised (the
+- pub `call_raw` function L162-181 — `(&self, method_index: usize, input: &[u8]) -> Result<Vec<u8>, PythonCallError>` — Raw dispatch — pass bytes in, get bytes out, no encoding.
+-  `PythonPluginHandle` type L84-206 — `= PythonPluginHandle` — `code = <ExceptionClassName>` otherwise.
+-  `new` function L85-95 — `( descriptor: &'static PythonInterfaceDescriptor, module: Py<PyAny>, method_call...` — `code = <ExceptionClassName>` otherwise.
+-  `lookup_method` function L183-205 — `( &self, index: usize, attempting_raw: bool, ) -> Result<MethodLookup<'_>, Pytho...` — `code = <ExceptionClassName>` otherwise.
+-  `MethodLookup` struct L208-210 — `{ callable: &'a Py<PyAny> }` — `code = <ExceptionClassName>` otherwise.
+-  `build_call_args` function L219-238 — `( py: Python<'py>, input: &serde_json::Value, ) -> PyResult<Bound<'py, PyTuple>>` — Build positional args for `callable.call(...)` from a JSON value.
+
+#### crates/fidius-python/src/interpreter.rs
+
+- pub `ensure_initialized` function L38-46 — `()` — Idempotent: ensure the embedded Python interpreter is initialised.
+-  `INIT` variable L30 — `: Once` — separate `Mutex<PyInterpreter>` to manage.
+
+#### crates/fidius-python/src/lib.rs
+
+- pub `error` module L27 — `-` — Python plugin runtime for Fidius.
+- pub `handle` module L28 — `-` — under FIDIUS-I-0020.
+- pub `interpreter` module L29 — `-` — under FIDIUS-I-0020.
+- pub `loader` module L30 — `-` — under FIDIUS-I-0020.
+- pub `value_bridge` module L31 — `-` — under FIDIUS-I-0020.
+
+#### crates/fidius-python/src/loader.rs
+
+- pub `PythonLoadError` enum L47-82 — `Manifest | NotPythonRuntime | MissingPythonSection | ImportFailed | InterfaceHas...` — Errors that can happen during Python plugin load.
+- pub `load_python_plugin` function L89-139 — `( package_dir: &Path, descriptor: &'static PythonInterfaceDescriptor, ) -> Resul...` — Load a Python plugin package against a static interface descriptor.
+-  `prepend_sys_path` function L144-173 — `(py: Python<'_>, dir: &Path) -> Result<(), PythonLoadError>` — Prepend `<dir>/vendor` and `<dir>` to `sys.path` if not already present.
+-  `validate_interface_hash` function L175-197 — `( module: &Bound<'_, PyModule>, descriptor: &'static PythonInterfaceDescriptor, ...` — All Python work happens in the host's embedded interpreter (T-0085).
+-  `resolve_methods` function L199-227 — `( module: &Bound<'_, PyModule>, descriptor: &'static PythonInterfaceDescriptor, ...` — All Python work happens in the host's embedded interpreter (T-0085).
+-  `import_failure` function L229-235 — `(what: &str, err: PyErr) -> PythonLoadError` — All Python work happens in the host's embedded interpreter (T-0085).
+
+#### crates/fidius-python/src/value_bridge.rs
+
+- pub `value_to_pyobject` function L33-65 — `(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, PyAny>>` — Convert a `serde_json::Value` into a Python object owned by `py`.
+- pub `pyobject_to_value` function L72-141 — `(obj: &Bound<'_, PyAny>) -> PyResult<Value>` — Convert a Python object back into a `serde_json::Value`.
+-  `tests` module L144-167 — `-` — which bypasses this layer entirely.
+-  `roundtrip_primitives` function L149-166 — `()` — which bypasses this layer entirely.
+
+### crates/fidius-python/tests
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-python/tests/loader_e2e.rs
+
+-  `HASH` variable L29 — `: u64` — independently.
+-  `GREETER_METHODS` variable L30-43 — `: [PythonMethodDesc; 3]` — independently.
+-  `ERROR_METHODS` variable L45-48 — `: [PythonMethodDesc; 1]` — independently.
+-  `fresh_descriptor` function L55-68 — `( methods: &'static [PythonMethodDesc], ) -> (&'static PythonInterfaceDescriptor...` — Make a `'static` interface descriptor with a unique name so each test
+-  `COUNTER` variable L58 — `: AtomicUsize` — independently.
+-  `make_plugin` function L75-127 — `( tmp: &tempfile::TempDir, entry_module: &str, declared_hash: u64, methods_sourc...` — Stand up a minimal Python plugin package on disk:
+-  `GREETER_METHODS_SRC` variable L129-141 — `: &str` — independently.
+-  `ERROR_METHODS_SRC` variable L143-147 — `: &str` — independently.
+-  `repo_root` function L149-156 — `() -> PathBuf` — independently.
+-  `copy_dir` function L158-170 — `(src: &std::path::Path, dst: &std::path::Path)` — independently.
+-  `load_greeter` function L172-178 — `() -> (tempfile::TempDir, fidius_python::PythonPluginHandle)` — independently.
+-  `typed_call_round_trip_string` function L181-187 — `()` — independently.
+-  `typed_call_with_struct_args` function L190-218 — `()` — independently.
+-  `DoubleIn` struct L194-197 — `{ name: String, count: i64 }` — independently.
+-  `DoubleOut` struct L199-202 — `{ name: String, twice: i64 }` — independently.
+-  `raw_call_round_trip_2mb` function L221-231 — `()` — independently.
+-  `plugin_error_round_trips_with_code_and_details` function L234-260 — `()` — independently.
+-  `interface_hash_mismatch_is_rejected` function L263-273 — `()` — independently.
+-  `wire_mode_mismatch_typed_called_as_raw_errors` function L276-281 — `()` — independently.
+-  `out_of_range_method_index_errors` function L284-288 — `()` — independently.
+
+#### crates/fidius-python/tests/smoke.rs
+
+-  `interpreter_evaluates_simple_expression` function L25-35 — `()` — Python exception.
+-  `pyerr_to_plugin_error_preserves_class_message_and_traceback` function L38-50 — `()` — Python exception.
 
 ### crates/fidius-test/src
 
@@ -722,6 +1026,299 @@
 -  `client_in_process_calls_plugin_without_dylib_load` function L109-120 — `()` — fixture.
 -  `client_in_process_returns_not_found_for_missing_plugin` function L123-130 — `()` — fixture.
 
+### pluggable-poc/crates/emit-console/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/emit-console/src/lib.rs
+
+- pub `ConsoleEmitPlugin` struct L5-9 — `{ max_rows: Option<usize>, total_rows: usize, batch_count: usize }` — Pretty-prints Arrow RecordBatches to stdout.
+- pub `new` function L12-18 — `() -> Self`
+-  `ConsoleEmitPlugin` type L11-19 — `= ConsoleEmitPlugin`
+-  `ConsoleEmitPlugin` type L21-25 — `impl Default for ConsoleEmitPlugin`
+-  `default` function L22-24 — `() -> Self`
+-  `ConsoleEmitPlugin` type L27-69 — `impl EmitPlugin for ConsoleEmitPlugin`
+-  `init` function L28-31 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `write_batch` function L33-59 — `(&mut self, input: &DataBatch) -> Result<(), PluginError>`
+-  `finalize` function L61-68 — `(&mut self) -> Result<(), PluginError>`
+
+### pluggable-poc/crates/ingest-csv/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/ingest-csv/src/lib.rs
+
+- pub `CsvIngestPlugin` struct L11-15 — `{ reader: Option<arrow::csv::Reader<File>>, file_path: String, has_header: bool ...` — Reads a CSV file and produces Arrow RecordBatches.
+- pub `new` function L18-24 — `() -> Self`
+-  `CsvIngestPlugin` type L17-25 — `= CsvIngestPlugin`
+-  `CsvIngestPlugin` type L27-31 — `impl Default for CsvIngestPlugin`
+-  `default` function L28-30 — `() -> Self`
+-  `CsvIngestPlugin` type L33-123 — `impl IngestPlugin for CsvIngestPlugin`
+-  `init` function L34-76 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `next_batch` function L78-117 — `(&mut self, max_rows: usize) -> Result<Option<DataBatch>, PluginError>`
+-  `close` function L119-122 — `(&mut self) -> Result<(), PluginError>`
+
+### pluggable-poc/crates/pipeline-host/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/pipeline-host/src/config.rs
+
+- pub `PipelineFile` struct L9-15 — `{ pipeline: PipelineMeta, ingest: StageConfig, transform: Vec<StageConfig>, emit...` — Top-level pipeline configuration parsed from TOML.
+- pub `PipelineMeta` struct L18-24 — `{ name: String, mode: PipelineMode, batch_size: usize }`
+- pub `StageConfig` struct L32-58 — `{ kind: String, plugin: Option<String>, script: Option<String>, entrypoint: Opti...` — Configuration for a single pipeline stage.
+- pub `plugin_config` function L65-69 — `(&self) -> PluginConfig`
+- pub `isolation_tier` function L71-73 — `(&self) -> IsolationTier`
+- pub `timeout` function L75-77 — `(&self) -> u64`
+- pub `load_pipeline` function L81-85 — `(path: &Path) -> anyhow::Result<PipelineFile>` — Load and parse a pipeline TOML file.
+-  `default_batch_size` function L26-28 — `() -> usize`
+-  `default_kind` function L60-62 — `() -> String`
+-  `StageConfig` type L64-78 — `= StageConfig`
+
+#### pluggable-poc/crates/pipeline-host/src/main.rs
+
+-  `arrow_bridge` module L1 — `-`
+-  `config` module L2 — `-`
+-  `orchestrator` module L3 — `-`
+-  `Cli` struct L17-25 — `{ pipeline: PathBuf, bench: bool }`
+-  `main` function L27-87 — `() -> Result<()>`
+-  `build_ingest` function L90-108 — `( stage: &StageConfig, _project_root: &Path, ) -> Result<Box<dyn IngestPlugin>>` — Build an ingest plugin from config.
+-  `build_transform` function L111-190 — `( stage: &StageConfig, project_root: &Path, ) -> Result<Box<dyn TransformPlugin>...` — Build a transform plugin from config.
+-  `build_emit` function L193-211 — `( stage: &StageConfig, _project_root: &Path, ) -> Result<Box<dyn EmitPlugin>>` — Build an emit plugin from config.
+
+#### pluggable-poc/crates/pipeline-host/src/orchestrator.rs
+
+- pub `Pipeline` struct L7-13 — `{ name: String, batch_size: usize, ingest: Box<dyn IngestPlugin>, transforms: Ve...` — Assembled pipeline ready to execute.
+- pub `run` function L16-97 — `(pipeline: &mut Pipeline) -> Result<PipelineStats, PluginError>` — Run the pipeline: pull batches from ingest, push through transforms, emit.
+- pub `PipelineStats` struct L100-109 — `{ batches: usize, rows_ingested: usize, rows_emitted: usize, total_time: Duratio...`
+- pub `print_summary` function L112-155 — `(&self)`
+-  `PipelineStats` type L111-156 — `= PipelineStats`
+-  `pct` function L158-164 — `(part: Duration, total: Duration) -> f64`
+
+### pluggable-poc/crates/pipeline-types/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/pipeline-types/src/lib.rs
+
+- pub `IsolationTier` enum L12-18 — `Native | Thread | ZeroCopy | Process` — Isolation tier for plugin execution.
+- pub `PipelineMode` enum L23-27 — `Batch | Streaming` — Pipeline execution mode.
+- pub `DataBatch` struct L31-34 — `{ batch: RecordBatch, metadata: HashMap<String, String> }` — Data flowing between pipeline stages.
+- pub `new` function L37-42 — `(batch: RecordBatch) -> Self`
+- pub `with_metadata` function L44-46 — `(batch: RecordBatch, metadata: HashMap<String, String>) -> Self`
+- pub `num_rows` function L48-50 — `(&self) -> usize`
+- pub `PluginConfig` struct L55-57 — `{ params: HashMap<String, String> }` — Configuration passed to a plugin at init time.
+- pub `PluginError` enum L61-76 — `InvalidConfig | Processing | Fatal | Timeout | Arrow` — Plugin error types with severity.
+- pub `IngestPlugin` interface L81-87 — `{ fn init(), fn next_batch(), fn close() }` — Ingest plugin trait — pulls data into the pipeline.
+- pub `TransformPlugin` interface L90-99 — `{ fn init(), fn process_batch(), fn flush(), fn close() }` — Transform plugin trait — processes data batches in the pipeline.
+- pub `EmitPlugin` interface L102-108 — `{ fn init(), fn write_batch(), fn finalize() }` — Emit plugin trait — writes data out of the pipeline.
+-  `DataBatch` type L36-51 — `= DataBatch`
+-  `close` function L84-86 — `(&mut self) -> Result<(), PluginError>`
+-  `flush` function L93-95 — `(&mut self) -> Result<Option<DataBatch>, PluginError>`
+-  `close` function L96-98 — `(&mut self) -> Result<(), PluginError>`
+-  `finalize` function L105-107 — `(&mut self) -> Result<(), PluginError>`
+
+### pluggable-poc/crates/plugin-runtime/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/plugin-runtime/src/ffi_plugin.rs
+
+- pub `FfiTransformPlugin` struct L21-24 — `{ dylib_path: PathBuf, library: Option<libloading::Library> }` — A transform plugin loaded from a compiled shared library (.dylib/.so) via FFI.
+- pub `new` function L27-32 — `(dylib_path: PathBuf) -> Self`
+-  `PluginInitFn` type L9 — `= unsafe extern "C" fn(*const u8, usize) -> i32` — Type aliases for the FFI function signatures exported by the plugin dylib.
+-  `PluginProcessBatchFn` type L10-15 — `= unsafe extern "C" fn( *mut FFI_ArrowArray, *mut FFI_ArrowSchema, *mut FFI_Arro...`
+-  `PluginCloseFn` type L16 — `= unsafe extern "C" fn()`
+-  `FfiTransformPlugin` type L26-33 — `= FfiTransformPlugin`
+-  `FfiTransformPlugin` type L35-127 — `impl TransformPlugin for FfiTransformPlugin`
+-  `init` function L36-66 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L68-116 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `close` function L118-126 — `(&mut self) -> Result<(), PluginError>`
+-  `FfiTransformPlugin` type L129-133 — `impl Drop for FfiTransformPlugin`
+-  `drop` function L130-132 — `(&mut self)`
+
+#### pluggable-poc/crates/plugin-runtime/src/lib.rs
+
+- pub `ffi_plugin` module L1 — `-`
+- pub `native` module L2 — `-`
+- pub `pyo3_process` module L3 — `-`
+- pub `pyo3_thread` module L4 — `-`
+- pub `pyo3_zerocopy` module L5 — `-`
+- pub `serialize_ipc` function L13-19 — `(batch: &RecordBatch) -> anyhow::Result<Vec<u8>>` — Serialize a RecordBatch to Arrow IPC stream bytes.
+- pub `deserialize_ipc` function L22-30 — `(bytes: &[u8]) -> anyhow::Result<RecordBatch>` — Deserialize Arrow IPC stream bytes to a RecordBatch.
+
+#### pluggable-poc/crates/plugin-runtime/src/pyo3_process.rs
+
+- pub `PyO3ProcessTransform` struct L30-37 — `{ script_path: PathBuf, entrypoint: String, harness_path: PathBuf, config: Plugi...` — PyO3 process-isolated transform executor (Tier 3).
+- pub `new` function L40-54 — `( script: impl Into<PathBuf>, entrypoint: &str, harness: impl Into<PathBuf>, tim...`
+-  `MSG_INIT` variable L10 — `: u32`
+-  `MSG_PROCESS_BATCH` variable L11 — `: u32`
+-  `MSG_FLUSH` variable L12 — `: u32`
+-  `MSG_CLOSE` variable L13 — `: u32`
+-  `RESP_OK` variable L16 — `: u32`
+-  `RESP_BATCH` variable L17 — `: u32`
+-  `RESP_NONE` variable L18 — `: u32`
+-  `RESP_ERROR` variable L19 — `: u32`
+-  `PyO3ProcessTransform` type L39-55 — `= PyO3ProcessTransform`
+-  `PyO3ProcessTransform` type L57-154 — `impl TransformPlugin for PyO3ProcessTransform`
+-  `init` function L58-93 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L95-117 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `flush` function L119-136 — `(&mut self) -> Result<Option<DataBatch>, PluginError>`
+-  `close` function L138-153 — `(&mut self) -> Result<(), PluginError>`
+-  `PyO3ProcessTransform` type L156-160 — `impl Drop for PyO3ProcessTransform`
+-  `drop` function L157-159 — `(&mut self)`
+-  `send_message` function L162-188 — `(child: &mut Option<Child>, msg_type: u32, payload: &[u8]) -> Result<(), PluginE...`
+-  `recv_message` function L190-216 — `(child: &mut Option<Child>) -> Result<(u32, Vec<u8>), PluginError>`
+
+#### pluggable-poc/crates/plugin-runtime/src/pyo3_thread.rs
+
+- pub `PyO3ThreadTransform` struct L18-25 — `{ script_path: PathBuf, entrypoint: String, config: PluginConfig, timeout_ms: u6...` — PyO3 thread-isolated transform executor (Tier 2).
+- pub `new` function L28-36 — `(script: impl Into<PathBuf>, entrypoint: &str, timeout_ms: u64) -> Self`
+-  `PyO3ThreadTransform` type L27-37 — `= PyO3ThreadTransform`
+-  `PyO3ThreadTransform` type L39-125 — `impl TransformPlugin for PyO3ThreadTransform`
+-  `init` function L40-81 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L83-119 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `close` function L121-124 — `(&mut self) -> Result<(), PluginError>`
+-  `pyerr` function L127-129 — `(e: impl std::fmt::Display) -> PluginError`
+
+#### pluggable-poc/crates/plugin-runtime/src/pyo3_zerocopy.rs
+
+- pub `PyO3ZeroCopyTransform` struct L20-26 — `{ script_path: PathBuf, entrypoint: String, config: PluginConfig, timeout_ms: u6...` — PyO3 zero-copy transform executor (Tier 2+).
+- pub `new` function L29-37 — `(script: impl Into<PathBuf>, entrypoint: &str, timeout_ms: u64) -> Self`
+-  `PyO3ZeroCopyTransform` type L28-38 — `= PyO3ZeroCopyTransform`
+-  `PyO3ZeroCopyTransform` type L40-146 — `impl TransformPlugin for PyO3ZeroCopyTransform`
+-  `init` function L41-79 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L81-140 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `close` function L142-145 — `(&mut self) -> Result<(), PluginError>`
+-  `pyerr` function L148-150 — `(e: impl std::fmt::Display) -> PluginError`
+
+### pluggable-poc/crates/transform-double/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/transform-double/src/lib.rs
+
+- pub `DoubleTransformPlugin` struct L12-14 — `{ columns: Option<Vec<String>> }` — Native Rust column doubler — uses Arrow's vectorized compute
+- pub `new` function L17-19 — `() -> Self`
+-  `DoubleTransformPlugin` type L16-20 — `= DoubleTransformPlugin`
+-  `DoubleTransformPlugin` type L22-26 — `impl Default for DoubleTransformPlugin`
+-  `default` function L23-25 — `() -> Self`
+-  `DoubleTransformPlugin` type L28-73 — `impl TransformPlugin for DoubleTransformPlugin`
+-  `init` function L29-36 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L38-72 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+
+### pluggable-poc/crates/transform-normalize/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/transform-normalize/src/lib.rs
+
+- pub `NormalizeTransformPlugin` struct L16-19 — `{ columns: Vec<String>, method: Method }` — Min-max or z-score normalization on specified columns.
+- pub `new` function L22-27 — `() -> Self`
+-  `Method` enum L10-13 — `MinMax | ZScore` — Normalization method.
+-  `NormalizeTransformPlugin` type L21-28 — `= NormalizeTransformPlugin`
+-  `NormalizeTransformPlugin` type L30-34 — `impl Default for NormalizeTransformPlugin`
+-  `default` function L31-33 — `() -> Self`
+-  `NormalizeTransformPlugin` type L36-98 — `impl TransformPlugin for NormalizeTransformPlugin`
+-  `init` function L37-51 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L53-97 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `min_max_normalize` function L100-125 — `(array: &Float64Array) -> Result<Float64Array, PluginError>`
+-  `z_score_normalize` function L127-149 — `(array: &Float64Array) -> Result<Float64Array, PluginError>`
+
+### pluggable-poc/crates/transform-onnx/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/crates/transform-onnx/src/lib.rs
+
+- pub `OnnxTransformPlugin` struct L14-19 — `{ model: Option<TractModel>, input_columns: Vec<String>, output_column: String, ...` — ONNX model inference via tract — runs a model on input columns and
+- pub `new` function L22-29 — `() -> Self`
+-  `TractModel` type L10 — `= SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>`
+-  `OnnxTransformPlugin` type L21-30 — `= OnnxTransformPlugin`
+-  `OnnxTransformPlugin` type L32-36 — `impl Default for OnnxTransformPlugin`
+-  `default` function L33-35 — `() -> Self`
+-  `OnnxTransformPlugin` type L38-141 — `impl TransformPlugin for OnnxTransformPlugin`
+-  `init` function L39-71 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L73-140 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+
+### pluggable-poc/data
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/data/generate_data.py
+
+- pub `generate` function L10-25 — `def generate(output_path: str, num_rows: int = 1000, seed: int = 42)`
+
+### pluggable-poc/models
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/models/train_model.py
+
+- pub `train_and_export` function L16-94 — `def train_and_export(output_path: str = "models/classifier.onnx", n_samples: int...`
+
+### pluggable-poc/plugins/ffi/transform-double-ffi/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/plugins/ffi/transform-double-ffi/src/lib.rs
+
+- pub `plugin_init` function L15-44 — `(config_json: *const u8, config_len: usize) -> i32` — Initialize the plugin with a JSON config string.
+- pub `plugin_process_batch` function L52-92 — `( in_array: *mut FFI_ArrowArray, in_schema: *mut FFI_ArrowSchema, out_array: *mu...` — Process a single batch.
+- pub `plugin_close` function L96-98 — `()` — Close the plugin and free resources.
+-  `COLUMNS` variable L8 — `: Mutex<Option<Vec<String>>>` — Columns to double (None = all numeric columns).
+-  `Config` struct L28-31 — `{ columns: Option<String> }`
+-  `process_batch_inner` function L101-132 — `(batch: &RecordBatch) -> Result<RecordBatch, arrow::error::ArrowError>` — Inner processing logic — uses Arrow's vectorized compute kernels.
+
+### pluggable-poc/plugins
+
+> *Semantic summary to be generated by AI agent.*
+
+#### pluggable-poc/plugins/harness.py
+
+- pub `read_message` function L42-49 — `def read_message()` — Read a framed message from stdin.
+- pub `write_message` function L52-58 — `def write_message(msg_type, payload=b"")` — Write a framed message to stdout.
+- pub `ipc_to_table` function L61-64 — `def ipc_to_table(ipc_bytes: bytes) -> pa.Table` — Deserialize Arrow IPC stream bytes to a PyArrow Table.
+- pub `table_to_ipc` function L67-74 — `def table_to_ipc(table: pa.Table) -> bytes` — Serialize a PyArrow Table to Arrow IPC stream bytes.
+- pub `load_plugin` function L77-86 — `def load_plugin(script_path: str, entrypoint: str)` — Dynamically load a Python plugin module and return the entry function.
+- pub `main` function L89-137 — `def main()`
+
+#### pluggable-poc/plugins/transform_column_doubler.py
+
+- pub `transform` function L15-54 — `def transform(ipc_bytes_or_table, params: dict)` — Double all numeric columns in the input.
+
+### python/fidius
+
+> *Semantic summary to be generated by AI agent.*
+
+#### python/fidius/_errors.py
+
+- pub `PluginError` class L32-57 — `(Exception) { __init__ }` — Structured plugin error that round-trips to the host with its fields intact.
+- pub `__init__` method L45-54 — `def __init__( self, code: str, message: str, details: Optional[dict] = None, ) -...`
+- pub `__repr__` method L56-57 — `def __repr__(self) -> str`
+
+#### python/fidius/_registry.py
+
+- pub `method` function L33-49 — `def method(func: Callable) -> Callable` — Register *func* under its ``__name__`` as a fidius plugin method.
+- pub `get_method` function L52-70 — `def get_method(name: str, module: str | None = None) -> Callable` — Look up a previously-registered method.
+- pub `list_methods` function L73-81 — `def list_methods(module: str | None = None) -> list[str]` — Return the sorted list of registered method names.
+- pub `reset_registry` function L84-86 — `def reset_registry() -> None` — Clear the registry.
+
+### python/tests
+
+> *Semantic summary to be generated by AI agent.*
+
+#### python/tests/test_sdk.py
+
+- pub `test_method_registers_under_function_name` function L40-46 — `def test_method_registers_under_function_name()`
+- pub `test_decorator_returns_function_unchanged` function L49-55 — `def test_decorator_returns_function_unchanged()`
+- pub `test_multiple_methods_in_one_module` function L58-71 — `def test_multiple_methods_in_one_module()`
+- pub `test_duplicate_registration_raises` function L74-83 — `def test_duplicate_registration_raises()`
+- pub `test_get_method_unknown_raises_keyerror` function L86-88 — `def test_get_method_unknown_raises_keyerror()`
+- pub `test_plugin_error_carries_code_message_details` function L91-97 — `def test_plugin_error_carries_code_message_details()`
+- pub `test_plugin_error_details_optional` function L100-102 — `def test_plugin_error_details_optional()`
+- pub `test_module_importable_from_vendor_layout` function L105-134 — `def test_module_importable_from_vendor_layout(tmp_path)` — Simulate the vendored-load pattern: copy fidius/ into a temp dir,
+
 ### tests/test-plugin-smoke/src
 
 > *Semantic summary to be generated by AI agent.*
@@ -736,6 +1333,8 @@
 - pub `BasicCalculator` struct L58 — `-`
 - pub `ArenaEcho` interface L86-88 — `{ fn echo() }`
 - pub `ArenaEchoer` struct L90 — `-`
+- pub `BytePipe` interface L103-110 — `{ fn reverse(), fn name() }`
+- pub `ReverseBytes` struct L112 — `-`
 -  `BasicCalculator` type L61-81 — `impl Calculator for BasicCalculator`
 -  `add` function L62-66 — `(&self, input: AddInput) -> AddOutput`
 -  `add_direct` function L68-70 — `(&self, a: i64, b: i64) -> i64`
@@ -743,4 +1342,7 @@
 -  `multiply` function L76-80 — `(&self, input: MulInput) -> MulOutput`
 -  `ArenaEchoer` type L93-97 — `impl ArenaEcho for ArenaEchoer`
 -  `echo` function L94-96 — `(&self, input: String) -> String`
+-  `ReverseBytes` type L115-125 — `impl BytePipe for ReverseBytes`
+-  `reverse` function L117-120 — `(&self, mut data: Vec<u8>) -> Vec<u8>`
+-  `name` function L122-124 — `(&self) -> String`
 

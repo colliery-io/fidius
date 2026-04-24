@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fidius"
+version = "0.1.0"
+description = "Python SDK for authoring Fidius plugins."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Colliery, Inc." }]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Libraries",
+]
+# Intentionally no runtime deps: plugins must be able to vendor this module
+# alongside their own deps without pulling anything else in.
+dependencies = []
+
+[project.urls]
+repository = "https://github.com/colliery-io/fidius"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fidius*"]

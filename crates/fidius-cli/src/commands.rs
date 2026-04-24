@@ -676,6 +676,12 @@ pub fn package_inspect(dir: &Path) -> Result {
     println!("  Version: {}", pkg.version);
     println!("  Interface: {}", pkg.interface);
     println!("  Interface version: {}", pkg.interface_version);
+    println!("  Runtime: {}", pkg.runtime());
+    if let Some(py) = manifest.python.as_ref() {
+        println!("  Python:");
+        println!("    Entry module: {}", py.entry_module);
+        println!("    Requirements: {}", py.requirements_path());
+    }
     if let Some(table) = manifest.metadata.as_table() {
         println!("  Metadata:");
         for (key, value) in table {
@@ -771,4 +777,10 @@ pub fn package_unpack(archive: &Path, dest: Option<&Path>) -> Result {
     let pkg_dir = fidius_core::package::unpack_package(archive, dest)?;
     println!("Unpacked: {}", pkg_dir.display());
     Ok(())
+}
+
+// ─── python-stub ────────────────────────────────────────────────────────────
+
+pub fn python_stub(interface_src: &Path, out: &Path, trait_name: Option<&str>) -> Result {
+    crate::python_stub::write_stub(interface_src, out, trait_name)
 }

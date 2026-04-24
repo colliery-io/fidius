@@ -1,0 +1,6 @@
+# Byte-compiled cache and pytest state — regenerated on every test run.
+__pycache__/
+*.pyc
+.pytest_cache/
+# Test venv created by `angreal python-test`. Per-developer, never committed.
+.venv/
