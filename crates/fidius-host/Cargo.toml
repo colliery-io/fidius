@@ -36,7 +36,7 @@ serde = { workspace = true }
 serial_test = "3"
 # Test helpers (dylib_fixture, signing fixtures) — replaces copy-pasted
 # build_test_plugin() across integration/e2e tests.
-fidius-test = { path = "../fidius-test", version = "0.2.0" }
+fidius-test = { path = "../fidius-test" }
 # Dev-dep (rlib) on the test fixture so integration tests can use the
 # generated CalculatorClient type. The fixture's subprocess cdylib build
 # used by the tests is a separate cargo invocation and does NOT pull this
