@@ -61,7 +61,7 @@ fn both_descriptors_are_valid() {
         .collect();
 
     for desc in &descs {
-        assert_eq!(desc.abi_version, 100);
+        assert_eq!(desc.abi_version, 200);
         assert_eq!(
             desc.interface_hash,
             __fidius_Greeter::Greeter_INTERFACE_HASH

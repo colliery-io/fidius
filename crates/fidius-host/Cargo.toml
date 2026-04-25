@@ -1,6 +1,6 @@
 [package]
 name = "fidius-host"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Host-side loading and calling for the Fidius plugin framework"
 license = "Apache-2.0"
@@ -15,14 +15,14 @@ tracing = ["dep:tracing"]
 python = ["dep:fidius-python"]
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.1.0" }
+fidius-core = { path = "../fidius-core", version = "0.2.0" }
 libloading = { workspace = true }
 ed25519-dalek = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true, optional = true }
-fidius-python = { path = "../fidius-python", version = "0.1.0", optional = true }
+fidius-python = { path = "../fidius-python", version = "0.2.0", optional = true }
 
 [build-dependencies]
 pyo3-build-config = "0.25"
@@ -36,7 +36,7 @@ serde = { workspace = true }
 serial_test = "3"
 # Test helpers (dylib_fixture, signing fixtures) — replaces copy-pasted
 # build_test_plugin() across integration/e2e tests.
-fidius-test = { path = "../fidius-test", version = "0.1.0" }
+fidius-test = { path = "../fidius-test", version = "0.2.0" }
 # Dev-dep (rlib) on the test fixture so integration tests can use the
 # generated CalculatorClient type. The fixture's subprocess cdylib build
 # used by the tests is a separate cargo invocation and does NOT pull this

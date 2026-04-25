@@ -50,7 +50,7 @@ fn registry_exists_and_is_valid() {
 fn descriptor_fields_are_correct() {
     let reg = get_registry();
     let desc = unsafe { &**reg.descriptors };
-    assert_eq!(desc.abi_version, 100);
+    assert_eq!(desc.abi_version, 200);
     assert_eq!(
         desc.interface_hash,
         __fidius_Greeter::Greeter_INTERFACE_HASH

@@ -77,7 +77,7 @@ fn load_cdylib_and_call_plugin() {
         .find(|d| unsafe { d.plugin_name_str() } == "BasicCalculator")
         .expect("BasicCalculator descriptor not found");
 
-    assert_eq!(desc.abi_version, 100);
+    assert_eq!(desc.abi_version, 200);
     assert_eq!(desc.buffer_strategy, 1); // PluginAllocated
     assert!(desc.free_buffer.is_some());
 
