@@ -33,42 +33,64 @@ jobs:
       # Publish in dependency order with index propagation delays.
       # --no-verify skips rebuild during publish (already tested above).
       # Order: core → macro → python → host → test → fidius (facade) → cli.
-      # fidius-host's dev-dep on fidius-test is path-only to break the cycle.
+      # Each step tolerates "already exists" (idempotent re-tag) but fails
+      # on any other error — no silent failures.
       - name: Publish fidius-core
-        run: cargo publish -p fidius-core --no-verify || true
+        run: |
+          out=$(cargo publish -p fidius-core --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
 
       - name: Wait for index
         run: sleep 30
 
       - name: Publish fidius-macro
-        run: cargo publish -p fidius-macro --no-verify || true
+        run: |
+          out=$(cargo publish -p fidius-macro --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
 
       - name: Wait for index
         run: sleep 30
 
       - name: Publish fidius-python
-        run: cargo publish -p fidius-python --no-verify || true
+        run: |
+          out=$(cargo publish -p fidius-python --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
 
       - name: Wait for index
         run: sleep 30
 
       - name: Publish fidius-host
-        run: cargo publish -p fidius-host --no-verify || true
+        run: |
+          out=$(cargo publish -p fidius-host --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
 
       - name: Wait for index
         run: sleep 30
 
       - name: Publish fidius-test
-        run: cargo publish -p fidius-test --no-verify || true
+        run: |
+          out=$(cargo publish -p fidius-test --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
 
       - name: Wait for index
         run: sleep 30
 
       - name: Publish fidius (facade)
-        run: cargo publish -p fidius --no-verify || true
+        run: |
+          out=$(cargo publish -p fidius --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
 
       - name: Wait for index
         run: sleep 30
 
       - name: Publish fidius-cli
-        run: cargo publish -p fidius-cli --no-verify || true
+        run: |
+          out=$(cargo publish -p fidius-cli --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"

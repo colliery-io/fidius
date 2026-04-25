@@ -10,7 +10,7 @@ repository = "https://github.com/colliery-io/fidius"
 # Intentionally NOT depending on `fidius-host` — that would create a cycle
 # now that `fidius-host` optionally depends on us. The host plugs us in via
 # its `python` feature; we stay layer-agnostic underneath.
-fidius-core = { path = "../fidius-core" }
+fidius-core = { path = "../fidius-core", version = "0.2.0" }
 bincode = { workspace = true }
 pyo3 = { workspace = true }
 serde = { workspace = true }
