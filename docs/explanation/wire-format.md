@@ -114,6 +114,31 @@ the expected return type or as a `PluginError`.
 
 ---
 
+## Raw-wire methods (`#[wire(raw)]`)
+
+Added in 0.2.0. A method declared `#[wire(raw)]` skips bincode in both
+directions: the argument and successful return value are passed as raw
+bytes with no encoding overhead. The signature is constrained to
+`fn(data: &[u8]) -> Result<Vec<u8>, CallError>`.
+
+Use raw wire when:
+
+- The payload is already a binary format (Parquet, Arrow IPC, image
+  buffers, audio frames, gzipped JSON…).
+- The payload is large enough that the bincode round-trip is a
+  measurable cost — typically ≥ a few hundred KB.
+
+The error path still uses bincode-encoded `PluginError`. Raw mode is
+recorded in the interface hash via a `!raw` marker on the method
+signature, so a host built against a typed method cannot accidentally
+load a plugin that ships the same name as raw (or vice-versa) — drift
+fails at load time the same way any other signature change does.
+
+Host call sites use `call_raw(method_index, &input_bytes)` instead of
+the generated typed `Client` methods.
+
+---
+
 *Related documentation:*
 
 - [Architecture Overview](architecture.md) — where wire format fits in the pipeline

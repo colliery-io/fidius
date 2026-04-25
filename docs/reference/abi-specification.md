@@ -23,7 +23,7 @@ The first 8 bytes of every `PluginRegistry`. Used by the host to verify the regi
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `REGISTRY_VERSION` | `1` | Layout version of the `PluginRegistry` struct. |
-| `ABI_VERSION` | `100` (at fidius-core 0.1.0) | Layout version of the `PluginDescriptor` struct. |
+| `ABI_VERSION` | `200` (at fidius-core 0.2.0) | Layout version of the `PluginDescriptor` struct. |
 
 Both are `u32`. The host rejects registries or descriptors with mismatched versions.
 
@@ -59,7 +59,7 @@ Each `PluginRegistry` is constructed once per dylib by `build_registry()` and ca
 | Offset | Size | Field | Type | Description |
 |--------|------|-------|------|-------------|
 | 0 | 4 | `descriptor_size` | `u32` | Size in bytes of this descriptor struct at plugin build time. Host reads this FIRST to detect fields added in later minor versions. See [ADR-0002]. |
-| 4 | 4 | `abi_version` | `u32` | Must equal `ABI_VERSION` (e.g., `100` for fidius-core 0.1.0). |
+| 4 | 4 | `abi_version` | `u32` | Must equal `ABI_VERSION` (e.g., `200` for fidius-core 0.2.0). |
 | 8 | 8 | `interface_name` | `*const c_char` | Null-terminated UTF-8 C string. Interface trait name. |
 | 16 | 8 | `interface_hash` | `u64` | FNV-1a hash of required method signatures. |
 | 24 | 4 | `interface_version` | `u32` | User-specified version from `#[plugin_interface(version = N)]`. |

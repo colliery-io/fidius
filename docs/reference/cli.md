@@ -543,6 +543,36 @@ do not contain a `package.toml`.
 
 ---
 
+### `python-stub`
+
+Generate a Python plugin stub from a Rust interface crate. Added in 0.2.0.
+
+```bash
+fidius python-stub --interface <PATH> --trait-name <NAME> --out <FILE>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--interface <PATH>` | Path to the Rust source file containing the `#[plugin_interface]` trait. |
+| `--trait-name <NAME>` | Name of the trait to translate. Required when the file declares more than one. |
+| `--out <FILE>` | Destination `.py` file. |
+
+The generated stub contains:
+
+- `__interface_hash__ = 0x...` — the FNV-1a hash the host validates at
+  load time. Do **not** edit this; regenerate the stub instead.
+- One `@method`-decorated function per trait method, with type hints
+  derived from a Rust → Python primitive mapping table (`Vec<u8>` →
+  `bytes`, `i64` → `int`, `String` → `str`, etc.). Unmapped types are
+  marked with a `# TODO` comment.
+- Methods declared `#[wire(raw)]` on the Rust side use `bytes` for both
+  argument and return type.
+
+See [Your First Python Plugin](../tutorials/python-plugin.md) for the
+full workflow.
+
+---
+
 ## See Also
 
 - [Host API Reference](../api/rust/fidius-host.md) -- programmatic API used by `inspect`
