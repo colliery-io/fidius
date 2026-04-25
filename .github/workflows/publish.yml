@@ -45,6 +45,12 @@ jobs:
       - name: Wait for index
         run: sleep 30
 
+      - name: Publish fidius-python
+        run: cargo publish -p fidius-python --no-verify || true
+
+      - name: Wait for index
+        run: sleep 30
+
       - name: Publish fidius (facade)
         run: cargo publish -p fidius --no-verify || true
 
