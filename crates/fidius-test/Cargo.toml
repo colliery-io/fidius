@@ -1,15 +1,15 @@
 [package]
 name = "fidius-test"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Testing helpers for Fidius plugin authors and hosts"
 license = "Apache-2.0"
 repository = "https://github.com/colliery-io/fidius"
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.2.0" }
-fidius-host = { path = "../fidius-host", version = "0.2.0" }
-fidius-macro = { path = "../fidius-macro", version = "0.2.0" }
+fidius-core = { path = "../fidius-core", version = "0.2.1" }
+fidius-host = { path = "../fidius-host", version = "0.2.1" }
+fidius-macro = { path = "../fidius-macro", version = "0.2.1" }
 ed25519-dalek = { workspace = true }
 
 [dev-dependencies]
