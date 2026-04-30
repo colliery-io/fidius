@@ -1,6 +1,6 @@
 [package]
 name = "fidius-python"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Python plugin runtime for Fidius — embeds CPython via PyO3 and exposes a PluginHandle backed by a Python module."
 license = "Apache-2.0"
@@ -20,7 +20,10 @@ tracing = { workspace = true }
 toml = { workspace = true }
 
 [build-dependencies]
-pyo3-build-config = "0.25"
+# `resolve-config` gates `use_pyo3_cfgs`/`get`, which build.rs calls. Today
+# this compiles only because `pyo3` (a regular dep) transitively unifies the
+# feature in; declare it explicitly so isolated builds keep working.
+pyo3-build-config = { version = "0.25", features = ["resolve-config"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
