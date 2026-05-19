@@ -1,5 +1,9 @@
 <!-- Copyright 2026 Colliery, Inc. Licensed under Apache 2.0 -->
 
+<p align="center">
+  <img src="assets/logo.png" alt="fidius" width="220" />
+</p>
+
 # fidius
 
 **A Rust plugin framework for trait-to-dylib plugin systems**
