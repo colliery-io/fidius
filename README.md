@@ -40,21 +40,57 @@ cargo install fidius-cli
 
 ## Quick Example
 
-```bash
-# Scaffold an interface and a plugin
-fidius init-interface my-api --trait ImageFilter
-fidius init-plugin my-plugin --interface my-api --trait ImageFilter
+A fidius plugin system is three crates: an **interface** (the trait), a **plugin** (a cdylib that implements it), and a **host** (loads and calls it). The CLI scaffolds the first two:
 
-# Build the plugin
+```bash
+fidius init-interface my-api    --trait ImageFilter
+fidius init-plugin    my-plugin --interface my-api --trait ImageFilter
+```
+
+You then fill in two small pieces of code. **In the interface crate**, annotate the trait — the macro generates the vtable, ABI hash, and the host-side typed proxy:
+
+```rust
+use serde::{Deserialize, Serialize};
+
+#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]
+pub trait ImageFilter: Send + Sync {
+    fn apply(&self, input: ApplyInput) -> ApplyOutput;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ApplyInput  { pub pixels: Vec<u8> }
+#[derive(Serialize, Deserialize)]
+pub struct ApplyOutput { pub pixels: Vec<u8> }
+```
+
+**In the plugin crate**, annotate your `impl` and emit the registry — that's all the FFI you write:
+
+```rust
+use my_api::{plugin_impl, ImageFilter, ApplyInput, ApplyOutput};
+
+pub struct Invert;
+
+#[plugin_impl(ImageFilter)]
+impl ImageFilter for Invert {
+    fn apply(&self, input: ApplyInput) -> ApplyOutput {
+        ApplyOutput { pixels: input.pixels.into_iter().map(|p| 255 - p).collect() }
+    }
+}
+
+fidius::fidius_plugin_registry!();
+```
+
+Then build, optionally sign, and inspect:
+
+```bash
 cd my-plugin && cargo build
 
-# Sign it (optional)
 fidius keygen --out mykey
 fidius sign --key mykey.secret target/debug/libmy_plugin.dylib
-
-# Inspect the compiled plugin
 fidius inspect target/debug/libmy_plugin.dylib
 ```
+
+The host loads the resulting dylib through `fidius-host` and calls `apply()` through a generated `ImageFilterClient` proxy. See [Your First Plugin](docs/tutorials/your-first-plugin.md) for the full walkthrough including the host crate.
 
 ## Development
 
