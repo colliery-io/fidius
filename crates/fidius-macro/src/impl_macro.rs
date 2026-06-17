@@ -250,12 +250,12 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     // Register descriptor via inventory for multi-plugin collection
     let registration = generate_inventory_registration(&impl_ident, crate_path);
 
-    // WASM Component Model auto-export (FIDIUS-T-0106). Best-effort: emitted only
-    // under `#[cfg(target_family = "wasm")]` and only when every method maps to
-    // the supported WIT type set with owned args — otherwise skipped, so cdylib
-    // and Python builds are never affected.
-    let wasm_adapter =
-        generate_wasm_adapter(trait_name, &instance_name, &impl_methods).unwrap_or_default();
+    // WASM Component Model auto-export (FIDIUS-T-0106). Emitted under
+    // `#[cfg(target_family = "wasm")]`; on a wasm build with an unsupported
+    // method signature it emits a clear `compile_error!` instead of silently
+    // producing a component that exports nothing. cdylib/Python builds cfg this
+    // out entirely, so they are never affected.
+    let wasm_adapter = generate_wasm_adapter(trait_name, &instance_name, &impl_methods);
 
     Ok(quote! {
         #item_emit
@@ -273,14 +273,15 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
 ///
 /// Emits, under `#[cfg(target_family = "wasm")]`, a `wit_bindgen::generate!`
 /// invocation (inline WIT generated from the method signatures) plus a `Guest`
-/// impl that forwards to the plugin's static instance, and `export!`. Returns
-/// `None` (skip) if any method has a reference argument or a type outside the
-/// supported set, so non-WASM builds and complex-typed plugins are unaffected.
+/// impl that forwards to the plugin's static instance, and `export!`. If any
+/// method has a reference argument or a type outside the supported set, it
+/// instead emits a wasm-gated `compile_error!` (a clear failure on wasm builds;
+/// a no-op on cdylib/Python builds where the whole adapter is cfg'd out).
 fn generate_wasm_adapter(
     trait_name: &Ident,
     instance_name: &Ident,
     methods: &[MethodInfo],
-) -> Option<TokenStream> {
+) -> TokenStream {
     use crate::wit::{
         render_wit, result_ok_type, return_to_wit, rust_type_to_wit, to_kebab_case, WitMethod,
     };
@@ -294,19 +295,28 @@ fn generate_wasm_adapter(
     let companion = format_ident!("__fidius_{}", trait_name);
     let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
 
-    // Build the WIT; bail (skip the adapter) on any reference arg or
-    // unsupported type so cdylib/Python plugins keep compiling.
+    // Build the WIT. On a reference arg or an unsupported type, emit a
+    // wasm-gated `compile_error!` rather than silently skipping the adapter
+    // (which would yield a component exporting nothing — a load-time surprise).
     let mut wit_methods = Vec::new();
     for m in methods {
         let mut params = Vec::new();
         for (name, ty) in m.arg_names.iter().zip(&m.arg_types) {
             if matches!(ty, Type::Reference(_)) {
-                return None;
+                return wasm_unsupported(
+                    m.name,
+                    "reference arguments are not supported — take owned types (String, Vec<u8>, …)",
+                );
             }
-            let wt = rust_type_to_wit(ty).ok()?;
-            params.push((to_kebab_case(&name.to_string()), wt));
+            match rust_type_to_wit(ty) {
+                Ok(wt) => params.push((to_kebab_case(&name.to_string()), wt)),
+                Err(e) => return wasm_unsupported(m.name, &e),
+            }
         }
-        let ret = return_to_wit(m.ret_type).ok()?;
+        let ret = match return_to_wit(m.ret_type) {
+            Ok(r) => r,
+            Err(e) => return wasm_unsupported(m.name, &e),
+        };
         wit_methods.push(WitMethod {
             name: to_kebab_case(&m.name.to_string()),
             params,
@@ -347,7 +357,7 @@ fn generate_wasm_adapter(
         .collect();
 
     let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
-    Some(quote! {
+    quote! {
         #[cfg(target_family = "wasm")]
         #[allow(warnings, clippy::all)]
         mod #module_ident {
@@ -364,7 +374,23 @@ fn generate_wasm_adapter(
             }
             export!(__FidiusComponent);
         }
-    })
+    }
+}
+
+/// Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
+/// the WASM auto-export can't handle. On native (cdylib/Python) builds the cfg
+/// is false, so this is a no-op there; on a wasm build it fails the compile with
+/// a clear message instead of silently producing a component that exports nothing.
+fn wasm_unsupported(method: &Ident, reason: &str) -> TokenStream {
+    let msg = format!(
+        "fidius WASM auto-export: method `{method}` cannot be exported to a component — {reason}. \
+         Supported types: bool, i8..i64, u8..u64, f32/f64, char, String, Vec<T>, Option<T>, \
+         and Result<T, PluginError>. (User struct/enum support via #[derive(WitType)] is planned.)"
+    );
+    quote! {
+        #[cfg(target_family = "wasm")]
+        ::core::compile_error!(#msg);
+    }
 }
 
 /// Generate extern "C" shim functions for each method. Shim signatures and
