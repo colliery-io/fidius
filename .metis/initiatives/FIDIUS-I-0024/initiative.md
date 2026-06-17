@@ -4,14 +4,14 @@ level: initiative
 title: "Backend performance — benchmarks vs microservice transports (+ WASM per-call optimization)"
 short_code: "FIDIUS-I-0024"
 created_at: 2026-06-17T15:24:40.867118+00:00
-updated_at: 2026-06-17T15:25:45.226924+00:00
+updated_at: 2026-06-17T16:39:52.654896+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
