@@ -15,6 +15,7 @@
 mod impl_macro;
 mod interface;
 mod ir;
+mod wit;
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, ItemImpl, ItemTrait};

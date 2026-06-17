@@ -38,7 +38,9 @@ use crate::error::{CallError, LoadError};
 use crate::executor::cdylib::CdylibExecutor;
 #[cfg(feature = "python")]
 use crate::executor::python::Pyo3Executor;
-#[cfg(feature = "python")]
+#[cfg(feature = "wasm")]
+use crate::executor::wasm::WasmComponentExecutor;
+#[cfg(any(feature = "python", feature = "wasm"))]
 use crate::executor::{PluginExecutor, ValueExecutor};
 use crate::types::PluginInfo;
 
@@ -51,6 +53,10 @@ enum Backend {
     /// when the `python` feature is enabled.
     #[cfg(feature = "python")]
     Python(Pyo3Executor),
+    /// `.wasm` component via wasmtime. Only present when the `wasm` feature is
+    /// enabled.
+    #[cfg(feature = "wasm")]
+    Wasm(WasmComponentExecutor),
 }
 
 /// A handle to a loaded plugin, ready for calling methods.
@@ -98,6 +104,15 @@ impl PluginHandle {
         }
     }
 
+    /// Create a `PluginHandle` backed by a loaded WASM component. Only
+    /// available with the `wasm` feature.
+    #[cfg(feature = "wasm")]
+    pub fn from_wasm(executor: WasmComponentExecutor) -> Self {
+        Self {
+            backend: Backend::Wasm(executor),
+        }
+    }
+
     /// Call a plugin method by vtable index.
     ///
     /// Serializes the input with the backend's native wire (cdylib → bincode;
@@ -121,6 +136,15 @@ impl PluginHandle {
                 fidius_core::from_value(out)
                     .map_err(|err| CallError::Deserialization(err.to_string()))
             }
+            // wasm: same self-describing `Value` currency as python.
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(e) => {
+                let args = fidius_core::to_value(input)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let out = ValueExecutor::call(e, index, args)?;
+                fidius_core::from_value(out)
+                    .map_err(|err| CallError::Deserialization(err.to_string()))
+            }
         }
     }
 
@@ -130,6 +154,8 @@ impl PluginHandle {
             Backend::Cdylib(e) => e.call_method_raw(index, input),
             #[cfg(feature = "python")]
             Backend::Python(e) => PluginExecutor::call_raw(e, index, input),
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(e) => PluginExecutor::call_raw(e, index, input),
         }
     }
 
@@ -148,6 +174,8 @@ impl PluginHandle {
             Backend::Cdylib(e) => e.info(),
             #[cfg(feature = "python")]
             Backend::Python(e) => PluginExecutor::info(e),
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(e) => PluginExecutor::info(e),
         }
     }
 
@@ -157,9 +185,11 @@ impl PluginHandle {
     pub fn method_metadata(&self, method_id: u32) -> Vec<(&str, &str)> {
         match &self.backend {
             Backend::Cdylib(e) => e.method_metadata(method_id),
-            // Python plugins carry no descriptor-level method metadata.
+            // Python/WASM plugins carry no descriptor-level method metadata.
             #[cfg(feature = "python")]
             Backend::Python(_) => Vec::new(),
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(_) => Vec::new(),
         }
     }
 
@@ -170,6 +200,8 @@ impl PluginHandle {
             Backend::Cdylib(e) => e.trait_metadata(),
             #[cfg(feature = "python")]
             Backend::Python(_) => Vec::new(),
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(_) => Vec::new(),
         }
     }
 }

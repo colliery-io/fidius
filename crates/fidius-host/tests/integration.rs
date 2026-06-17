@@ -321,6 +321,9 @@ runtime = "wasm"
 
 [metadata]
 category = "test"
+
+[wasm]
+component = "thing.wasm"
 "#,
     )
     .unwrap();

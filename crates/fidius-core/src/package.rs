@@ -40,6 +40,10 @@ pub struct PackageManifest<M> {
     /// invariants.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub python: Option<PythonPackageMeta>,
+    /// WASM-component fields. Required when `package.runtime == "wasm"`,
+    /// rejected otherwise. Validated by [`PackageManifest::validate_runtime`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm: Option<WasmPackageMeta>,
 }
 
 impl<M> PackageManifest<M> {
@@ -58,6 +62,11 @@ impl<M> PackageManifest<M> {
                         "[python] section is only valid when runtime = \"python\"".into(),
                     ));
                 }
+                if self.wasm.is_some() {
+                    return Err(PackageError::InvalidManifest(
+                        "[wasm] section is only valid when runtime = \"wasm\"".into(),
+                    ));
+                }
                 Ok(())
             }
             PackageRuntime::Python => {
@@ -67,15 +76,22 @@ impl<M> PackageManifest<M> {
                             .into(),
                     ));
                 }
+                if self.wasm.is_some() {
+                    return Err(PackageError::InvalidManifest(
+                        "[wasm] section is only valid when runtime = \"wasm\"".into(),
+                    ));
+                }
                 Ok(())
             }
             PackageRuntime::Wasm => {
-                // A wasm component carries its contract in WIT, not a [python]
-                // section. Reject a stray [python] section; otherwise accept.
-                // Phase 2 will add wasm-specific manifest validation.
                 if self.python.is_some() {
                     return Err(PackageError::InvalidManifest(
                         "[python] section is only valid when runtime = \"python\"".into(),
+                    ));
+                }
+                if self.wasm.is_none() {
+                    return Err(PackageError::InvalidManifest(
+                        "runtime = \"wasm\" requires a [wasm] section with `component`".into(),
                     ));
                 }
                 Ok(())
@@ -187,6 +203,25 @@ pub struct PythonPackageMeta {
     /// dependencies into `vendor/`. Defaults to `"requirements.txt"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requirements: Option<String>,
+}
+
+/// Fields under the `[wasm]` section of `package.toml`. Required when
+/// `package.runtime == "wasm"`, rejected otherwise.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WasmPackageMeta {
+    /// Component filename inside the package directory (e.g. `"plugin.wasm"`).
+    /// A WIT component, not a core module.
+    pub component: String,
+    /// Optional precompiled `.cwasm` (produced at pack time by the wasmtime
+    /// engine; engine/version-specific). When present and valid, the loader
+    /// uses the AOT fast path instead of JIT-compiling `component`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub precompiled: Option<String>,
+    /// WASI capability allow-list (e.g. `["clocks", "random", "sockets"]`).
+    /// Empty = deny-all sandbox. Consumed by the capability policy (T-0104);
+    /// filesystem is never granted in v1.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
 }
 
 impl PythonPackageMeta {

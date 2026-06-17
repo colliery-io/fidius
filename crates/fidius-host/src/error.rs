@@ -69,6 +69,12 @@ pub enum LoadError {
     /// fidius-host public error enum type-clean across feature gates.
     #[error("python load failed: {0}")]
     PythonLoad(String),
+
+    /// WASM component loader failed (only produced with the `wasm` feature on).
+    /// Wraps wasmtime/instantiation errors as a string to keep the public enum
+    /// type-clean across feature gates.
+    #[error("wasm load failed: {0}")]
+    WasmLoad(String),
 }
 
 /// Errors that can occur when calling a plugin method.

@@ -332,6 +332,33 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
     let py_descriptor_ident = format_ident!("{}_PYTHON_DESCRIPTOR", trait_name);
     let method_count = ir.methods.len();
 
+    // WASM (Component Model) descriptor: parallels the Python one. Method/
+    // interface names are kebab-case (the WIT convention), and the exported
+    // interface name follows fidius's WIT layout
+    // `fidius:<iface>/<iface>@<version>.0.0`, so the generated `.wit`, the built
+    // component, and the host loader (`load_wasm`) all agree.
+    let iface_kebab = crate::wit::to_kebab_case(&trait_name_str);
+    // WIT package version is a fixed coordinate, decoupled from the interface
+    // version (fidius's real compatibility gate is the interface hash). Keeping
+    // it fixed lets `#[plugin_impl]` emit a matching WIT package name without
+    // needing the interface version at its expansion site.
+    let interface_export = format!("fidius:{iface_kebab}/{iface_kebab}@0.1.0");
+    let wasm_descriptor_ident = format_ident!("{}_WASM_DESCRIPTOR", trait_name);
+    let wasm_method_descs: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .map(|m| {
+            let name = crate::wit::to_kebab_case(&m.name.to_string());
+            let wire_raw = m.wire_raw;
+            quote! {
+                #crate_path::wasm_descriptor::WasmMethodDesc {
+                    name: #name,
+                    wire_raw: #wire_raw,
+                }
+            }
+        })
+        .collect();
+
     quote! {
         pub const #hash_name: u64 = #hash_value;
         pub const #version_name: u32 = #version_val;
@@ -354,6 +381,22 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
 
         const PYTHON_METHODS: [#crate_path::python_descriptor::PythonMethodDesc; #method_count] = [
             #(#py_method_descs),*
+        ];
+
+        /// Static descriptor consumed by the WASM component loader
+        /// (`fidius-host::PluginHost::load_wasm`). Mirrors the Python descriptor;
+        /// names are kebab-case to match the component's WIT exports.
+        pub static #wasm_descriptor_ident:
+            #crate_path::wasm_descriptor::WasmInterfaceDescriptor =
+            #crate_path::wasm_descriptor::WasmInterfaceDescriptor {
+                interface_name: #trait_name_str,
+                interface_export: #interface_export,
+                interface_hash: #hash_value,
+                methods: &WASM_METHODS,
+            };
+
+        const WASM_METHODS: [#crate_path::wasm_descriptor::WasmMethodDesc; #method_count] = [
+            #(#wasm_method_descs),*
         ];
     }
 }

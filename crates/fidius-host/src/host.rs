@@ -318,6 +318,116 @@ impl PluginHost {
         };
         Ok(crate::handle::PluginHandle::from_python(py, info))
     }
+
+    /// Find a WASM package directory by name across the search paths (matches
+    /// `package.toml` `[package].name` with `runtime = "wasm"`).
+    #[cfg(feature = "wasm")]
+    pub fn find_wasm_package(&self, name: &str) -> Result<PathBuf, LoadError> {
+        for search_path in &self.search_paths {
+            if !search_path.is_dir() {
+                continue;
+            }
+            for entry in std::fs::read_dir(search_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() || !path.join("package.toml").exists() {
+                    continue;
+                }
+                let Ok(manifest) = fidius_core::package::load_manifest_untyped(&path) else {
+                    continue;
+                };
+                if matches!(
+                    manifest.package.runtime(),
+                    fidius_core::package::PackageRuntime::Wasm
+                ) && manifest.package.name == name
+                {
+                    return Ok(path);
+                }
+            }
+        }
+        Err(LoadError::PluginNotFound {
+            name: name.to_string(),
+        })
+    }
+
+    /// Load a WASM component plugin package by name and validate it against the
+    /// supplied interface descriptor (the `<TraitName>_WASM_DESCRIPTOR` the
+    /// interface crate emits). Returns a unified [`crate::handle::PluginHandle`].
+    ///
+    /// The component is sandboxed: WASI is wired into the `Linker` but the guest
+    /// gets a zero-grant `WasiCtx` (no FS preopens, no env, no sockets). The
+    /// capability allow-list in `[wasm].capabilities` is applied in T-0104.
+    ///
+    /// Available only with the `wasm` feature.
+    #[cfg(feature = "wasm")]
+    pub fn load_wasm(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
+
+        let dir = self.find_wasm_package(name)?;
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        let wasm_meta = manifest
+            .wasm
+            .as_ref()
+            .ok_or_else(|| LoadError::WasmLoad("manifest is missing the [wasm] section".into()))?;
+
+        let methods: Vec<WasmMethod> = descriptor
+            .methods
+            .iter()
+            .map(|m| WasmMethod {
+                name: m.name.to_string(),
+                wire_raw: m.wire_raw,
+            })
+            .collect();
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Wasm,
+        };
+        let interface = descriptor.interface_export.to_string();
+        let capabilities = wasm_meta.capabilities.clone();
+
+        // Prefer the precompiled .cwasm AOT fast path when present; else JIT.
+        let executor = if let Some(cwasm) = &wasm_meta.precompiled {
+            let bytes = std::fs::read(dir.join(cwasm))?;
+            // SAFETY: bytes are produced by `fidius pack` with a matching engine;
+            // wasmtime validates the header and refuses a mismatch.
+            unsafe {
+                WasmComponentExecutor::from_cwasm(&bytes, interface, methods, capabilities, info)
+            }
+        } else {
+            let bytes = std::fs::read(dir.join(&wasm_meta.component))?;
+            WasmComponentExecutor::from_component_bytes(
+                &bytes,
+                interface,
+                methods,
+                capabilities,
+                info,
+            )
+        }
+        .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+
+        // Interface-hash integrity check (parity with cdylib/Python).
+        let got = executor
+            .interface_hash()
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        if got != descriptor.interface_hash {
+            return Err(LoadError::InterfaceHashMismatch {
+                got,
+                expected: descriptor.interface_hash,
+            });
+        }
+
+        Ok(crate::handle::PluginHandle::from_wasm(executor))
+    }
 }
 
 /// Check if a path has a platform-appropriate dylib extension.

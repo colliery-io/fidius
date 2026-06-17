@@ -13,6 +13,10 @@ tracing = ["dep:tracing"]
 # packages in `discover()`. Default-off so cdylib-only consumers stay
 # thin and don't link libpython.
 python = ["dep:fidius-python"]
+# Enable the sandboxed WASM component backend (FIDIUS-I-0021 Phase 2). Pulls in
+# wasmtime and the `WasmComponentExecutor` / `host.load_wasm(...)` API. Default-off
+# so cdylib/Python-only consumers don't link wasmtime.
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]
 
 [dependencies]
 fidius-core = { path = "../fidius-core", version = "0.2.1" }
@@ -23,6 +27,13 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true, optional = true }
 fidius-python = { path = "../fidius-python", version = "0.2.1", optional = true }
+# Component Model runtime for the wasm backend. `component-model` + `cranelift`
+# are on by default; we keep defaults for JIT + AOT (.cwasm) support.
+wasmtime = { version = "45", optional = true }
+# WASI host implementation. Std-built components import wasi:cli/io/clocks/filesystem
+# even when unused, so the sandbox provides WASI with a zero-grant WasiCtx rather
+# than an empty Linker (FIDIUS-T-0102 finding; capability allow-list in T-0104).
+wasmtime-wasi = { version = "45", optional = true }
 
 [build-dependencies]
 # `resolve-config` gates `use_pyo3_cfgs`/`get`, which build.rs calls. Without

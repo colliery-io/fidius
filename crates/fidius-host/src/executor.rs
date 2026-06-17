@@ -42,6 +42,8 @@
 pub mod cdylib;
 #[cfg(feature = "python")]
 pub mod python;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 use fidius_core::Value;
 
@@ -51,6 +53,8 @@ use crate::types::PluginInfo;
 pub use cdylib::CdylibExecutor;
 #[cfg(feature = "python")]
 pub use python::Pyo3Executor;
+#[cfg(feature = "wasm")]
+pub use wasm::{WasmComponentExecutor, WasmMethod};
 
 /// The surface every execution backend shares.
 ///

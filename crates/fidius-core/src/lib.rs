@@ -20,6 +20,7 @@ pub mod python_descriptor;
 pub mod registry;
 pub mod status;
 pub mod value;
+pub mod wasm_descriptor;
 pub mod wire;
 
 #[cfg(feature = "async")]

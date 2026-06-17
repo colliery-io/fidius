@@ -62,14 +62,21 @@ component.
 
 ## CI
 
-CI does **not** install these tools yet — there is no component code to build
-until Phase 2 (FIDIUS-I-0021) lands. When the first `WasmComponentExecutor`
-and its integration tests merge, add a dedicated CI job that:
+A dedicated **`wasm`** job in `.github/workflows/ci.yml` (separate from the main
+`check`/`test` matrix, so the cdylib/Python pipeline is unaffected by
+component-tooling install time) installs the `wasm32-wasip2` target plus pinned
+`cargo-component`, `wasm-tools`, and `componentize-py` (the polyglot guest
+toolchain), builds the fixtures, and runs `cargo test -p fidius-host --features wasm`.
 
-- installs the `wasm32-wasip2` target, and
-- installs `cargo-component` and `wasm-tools` at **pinned** versions (e.g. via
-  `cargo install --locked --version <X>` or `cargo binstall`), matching the
-  table above, so component builds are reproducible across runners.
+Run the WASM-backend tests locally the same way:
 
-Keep it a separate job from the main `check`/`test` matrix so the existing
-cdylib/Python pipeline is unaffected by component-tooling install time.
+```bash
+# build the Rust + Python greeter components, then test
+(cd tests/wasm-fixtures/greeter && cargo component build --release)
+tests/wasm-fixtures/greeter-py/build.sh          # needs componentize-py
+cargo test -p fidius-host --features wasm
+```
+
+The `polyglot_python_guest_behaves_identically` test skips cleanly (does not
+fail) if `greeter_py.wasm` hasn't been built, so the suite still runs where
+`componentize-py` isn't installed.

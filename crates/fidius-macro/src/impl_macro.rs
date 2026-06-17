@@ -41,6 +41,9 @@ struct MethodInfo<'a> {
     /// as an interface-hash mismatch (the trait's `#[wire(raw)]` flips a
     /// `!raw` marker in the signature string the hash is computed over).
     wire_raw: bool,
+    /// The method's return type, if any (`None` for `-> ()`). Used by the
+    /// WASM component WIT generator (FIDIUS-T-0106).
+    ret_type: Option<&'a Type>,
 }
 
 /// Detect a `#[wire(raw)]` attribute on an impl-side method. Mirrors the
@@ -157,10 +160,11 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let mut impl_methods: Vec<MethodInfo> = Vec::new();
     for impl_item in &item.items {
         if let ImplItem::Fn(method) = impl_item {
-            let returns_result = match &method.sig.output {
-                ReturnType::Type(_, ty) => is_result_type(ty),
-                ReturnType::Default => false,
+            let ret_type: Option<&Type> = match &method.sig.output {
+                ReturnType::Type(_, ty) => Some(ty.as_ref()),
+                ReturnType::Default => None,
             };
+            let returns_result = ret_type.map(is_result_type).unwrap_or(false);
             let mut arg_types = Vec::new();
             let mut arg_names = Vec::new();
             for arg in &method.sig.inputs {
@@ -181,6 +185,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                 arg_types,
                 arg_names,
                 wire_raw,
+                ret_type,
             });
         }
     }
@@ -244,6 +249,13 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     // Register descriptor via inventory for multi-plugin collection
     let registration = generate_inventory_registration(&impl_ident, crate_path);
 
+    // WASM Component Model auto-export (FIDIUS-T-0106). Best-effort: emitted only
+    // under `#[cfg(target_family = "wasm")]` and only when every method maps to
+    // the supported WIT type set with owned args — otherwise skipped, so cdylib
+    // and Python builds are never affected.
+    let wasm_adapter =
+        generate_wasm_adapter(trait_name, &instance_name, &impl_methods).unwrap_or_default();
+
     Ok(quote! {
         #item_emit
         #instance
@@ -252,6 +264,99 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         #vtable
         #descriptor
         #registration
+        #wasm_adapter
+    })
+}
+
+/// Generate the WASM component auto-export adapter for `#[plugin_impl]`.
+///
+/// Emits, under `#[cfg(target_family = "wasm")]`, a `wit_bindgen::generate!`
+/// invocation (inline WIT generated from the method signatures) plus a `Guest`
+/// impl that forwards to the plugin's static instance, and `export!`. Returns
+/// `None` (skip) if any method has a reference argument or a type outside the
+/// supported set, so non-WASM builds and complex-typed plugins are unaffected.
+fn generate_wasm_adapter(
+    trait_name: &Ident,
+    instance_name: &Ident,
+    methods: &[MethodInfo],
+) -> Option<TokenStream> {
+    use crate::wit::{
+        render_wit, result_ok_type, return_to_wit, rust_type_to_wit, to_kebab_case, WitMethod,
+    };
+
+    let iface_kebab = to_kebab_case(&trait_name.to_string());
+    let iface_snake = iface_kebab.replace('-', "_");
+    let pkg_seg = format_ident!("{}", iface_snake);
+    let world = format!("{iface_kebab}-plugin");
+    let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
+
+    // Build the WIT; bail (skip the adapter) on any reference arg or
+    // unsupported type so cdylib/Python plugins keep compiling.
+    let mut wit_methods = Vec::new();
+    for m in methods {
+        let mut params = Vec::new();
+        for (name, ty) in m.arg_names.iter().zip(&m.arg_types) {
+            if matches!(ty, Type::Reference(_)) {
+                return None;
+            }
+            let wt = rust_type_to_wit(ty).ok()?;
+            params.push((to_kebab_case(&name.to_string()), wt));
+        }
+        let ret = return_to_wit(m.ret_type).ok()?;
+        wit_methods.push(WitMethod {
+            name: to_kebab_case(&m.name.to_string()),
+            params,
+            ret,
+        });
+    }
+    let wit_doc = render_wit(&iface_kebab, &wit_methods);
+
+    let guest_methods: Vec<TokenStream> = methods
+        .iter()
+        .map(|m| {
+            let mname = m.name;
+            let arg_names = &m.arg_names;
+            let arg_types = &m.arg_types;
+            let call = quote! { super::#instance_name.#mname(#(#arg_names),*) };
+            if m.returns_result {
+                let ok_tokens = match m.ret_type.and_then(result_ok_type) {
+                    Some(t) => quote! { #t },
+                    None => quote! { () },
+                };
+                quote! {
+                    fn #mname(#(#arg_names: #arg_types),*)
+                        -> Result<#ok_tokens, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
+                        #call.map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
+                            code: __e.code,
+                            message: __e.message,
+                            details: __e.details,
+                        })
+                    }
+                }
+            } else {
+                match m.ret_type {
+                    Some(rt) => quote! { fn #mname(#(#arg_names: #arg_types),*) -> #rt { #call } },
+                    None => quote! { fn #mname(#(#arg_names: #arg_types),*) { #call } },
+                }
+            }
+        })
+        .collect();
+
+    let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
+    Some(quote! {
+        #[cfg(target_family = "wasm")]
+        #[allow(warnings, clippy::all)]
+        mod #module_ident {
+            ::wit_bindgen::generate!({ inline: #wit_doc, world: #world });
+            struct __FidiusComponent;
+            impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
+                #(#guest_methods)*
+                fn fidius_interface_hash() -> u64 {
+                    super::#hash_const
+                }
+            }
+            export!(__FidiusComponent);
+        }
     })
 }
 
