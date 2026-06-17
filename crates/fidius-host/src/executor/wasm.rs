@@ -27,7 +27,7 @@
 //! from the package manifest's allow-list.
 
 use fidius_core::Value;
-use wasmtime::component::{Component, Linker, Val};
+use wasmtime::component::{Component, InstancePre, Linker, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::add_to_linker_sync;
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
@@ -127,7 +127,11 @@ pub struct WasmMethod {
 /// WASM component execution backend.
 pub struct WasmComponentExecutor {
     engine: Engine,
-    component: Component,
+    /// Pre-linked component (Linker + WASI wired in, typechecked) built once at
+    /// load. Per call we only create a fresh `Store` and `instance_pre.instantiate`
+    /// — instantiation stays per-call (isolation) but the expensive linking is
+    /// done once, not on every call (FIDIUS-I-0024).
+    instance_pre: InstancePre<HostState>,
     /// Fully-qualified exported interface name, e.g.
     /// `"fidius:greeter/greeter@1.0.0"`.
     interface: String,
@@ -155,14 +159,7 @@ impl WasmComponentExecutor {
             runtime: "wasm".into(),
             message: e.to_string(),
         })?;
-        Ok(Self {
-            engine,
-            component,
-            interface,
-            methods,
-            capabilities,
-            info,
-        })
+        Self::build(engine, &component, interface, methods, capabilities, info)
     }
 
     /// Build from a precompiled `.cwasm` (engine/version-specific). ~83 µs load
@@ -184,9 +181,35 @@ impl WasmComponentExecutor {
             runtime: "wasm".into(),
             message: e.to_string(),
         })?;
+        Self::build(engine, &component, interface, methods, capabilities, info)
+    }
+
+    /// Shared constructor: wire WASI into a `Linker` and pre-instantiate the
+    /// component **once**. The resulting `InstancePre` is reused for every call.
+    fn build(
+        engine: Engine,
+        component: &Component,
+        interface: String,
+        methods: Vec<WasmMethod>,
+        capabilities: Vec<String>,
+        info: PluginInfo,
+    ) -> Result<Self, CallError> {
+        let mut linker: Linker<HostState> = Linker::new(&engine);
+        // WASI present, zero grants (the deny-all/allow-list `WasiCtx` is built
+        // fresh per call in `instantiate`).
+        add_to_linker_sync(&mut linker).map_err(|e| CallError::Backend {
+            runtime: "wasm".into(),
+            message: e.to_string(),
+        })?;
+        let instance_pre = linker
+            .instantiate_pre(component)
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
         Ok(Self {
             engine,
-            component,
+            instance_pre,
             interface,
             methods,
             capabilities,
@@ -194,26 +217,22 @@ impl WasmComponentExecutor {
         })
     }
 
-    /// Instantiate a fresh sandboxed `Store` + component instance. Per-call
-    /// instantiation is cheap (~14 µs, spike) and gives per-call isolation.
+    /// Instantiate a fresh sandboxed `Store` + component instance from the cached
+    /// `InstancePre`. Per-call instantiation gives isolation; the linking cost is
+    /// already paid in `build` (FIDIUS-I-0024).
     fn instantiate(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError> {
-        let mut linker: Linker<HostState> = Linker::new(&self.engine);
-        // WASI present, zero grants (deny-all WasiCtx).
-        add_to_linker_sync(&mut linker).map_err(|e| CallError::Backend {
-            runtime: "wasm".into(),
-            message: e.to_string(),
-        })?;
         let host = HostState {
             ctx: build_wasi_ctx(&self.capabilities),
             table: ResourceTable::new(),
         };
         let mut store = Store::new(&self.engine, host);
-        let instance = linker
-            .instantiate(&mut store, &self.component)
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
+        let instance =
+            self.instance_pre
+                .instantiate(&mut store)
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: e.to_string(),
+                })?;
         Ok((store, instance))
     }
 
@@ -299,28 +318,29 @@ impl PluginExecutor for WasmComponentExecutor {
         let m = self.method(method, true)?.clone();
         let (mut store, instance) = self.instantiate()?;
         let func = self.func(&mut store, &instance, &m.name)?;
-        // list<u8> param.
-        let param = Val::List(input.iter().map(|b| Val::U8(*b)).collect());
-        let mut out = [Val::Bool(false)];
-        func.call(&mut store, &[param], &mut out)
+        // `#[wire(raw)]` is always `list<u8> -> list<u8>`. Use the *typed* call so
+        // wasmtime lowers/lifts the bytes as a bulk memcpy instead of building a
+        // `Val::List` of one `Val::U8` per byte (the dynamic path turned a 256 KiB
+        // payload into milliseconds — FIDIUS-I-0024).
+        let typed =
+            func.typed::<(Vec<u8>,), (Vec<u8>,)>(&store)
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: format!("raw method '{}' is not list<u8> -> list<u8>: {e}", m.name),
+                })?;
+        let (out,) = typed
+            .call(&mut store, (input.to_vec(),))
             .map_err(|e| CallError::Backend {
                 runtime: "wasm".into(),
                 message: e.to_string(),
             })?;
-        match &out[0] {
-            Val::List(items) => items
-                .iter()
-                .map(|v| match v {
-                    Val::U8(b) => Ok(*b),
-                    other => Err(CallError::Deserialization(format!(
-                        "raw return list element is not u8: {other:?}"
-                    ))),
-                })
-                .collect(),
-            other => Err(CallError::Deserialization(format!(
-                "raw method must return list<u8>, got {other:?}"
-            ))),
-        }
+        typed
+            .post_return(&mut store)
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+        Ok(out)
     }
 }
 
