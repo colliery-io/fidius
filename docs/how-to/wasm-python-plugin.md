@@ -154,6 +154,7 @@ and dispatches it exactly like the Rust one. That is the polyglot guarantee.
 
 ## See also
 
+- [A WASM Plugin in JavaScript](wasm-javascript-plugin.md) — the same interface, a third language
 - [Your First WASM Plugin (Rust)](../tutorials/your-first-wasm-plugin.md)
 - [Capabilities & the WASM Sandbox](../explanation/wasm-capabilities.md)
 - [WASM Component ABI](../explanation/wasm-component-abi.md)

@@ -63,6 +63,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       # Component toolchain (FIDIUS-I-0021). Versions pinned to those the
       # backend was developed against; bump deliberately.
       - name: Install component toolchain
@@ -74,6 +77,9 @@ jobs:
         run: |
           (cd tests/wasm-fixtures/greeter && cargo component build --release)
           tests/wasm-fixtures/greeter-py/build.sh
+          # JavaScript guest (FIDIUS-I-0025): same WIT via jco/ComponentizeJS —
+          # the third language proving the host is language-agnostic.
+          tests/wasm-fixtures/greeter-js/build.sh
           # Macro auto-export fixture (FIDIUS-T-0106/I-0022): a fidius-macro plugin
           # that builds straight to a component. Explicit build = fast, clear
           # failure if the macro's wasm codegen regresses.

@@ -551,3 +551,64 @@ fn tampered_wasm_package_fails_verification() {
         Ok(_) => panic!("expected SignatureInvalid after tampering, got a handle"),
     }
 }
+
+// ── Polyglot: JavaScript guest (FIDIUS-I-0025) ──────────────────────────────
+
+fn js_greeter_component() -> Option<Vec<u8>> {
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/wasm-fixtures/greeter-js/greeter_js.wasm");
+    std::fs::read(p).ok()
+}
+
+/// A JavaScript guest (jco/ComponentizeJS) implementing the SAME `greeter` WIT
+/// loads and is called through the identical `PluginHost::load_wasm` path as the
+/// Rust and Python guests — the third language, same host, same descriptor.
+#[test]
+fn polyglot_js_guest_behaves_identically() {
+    let Some(bytes) = js_greeter_component() else {
+        eprintln!(
+            "SKIP polyglot_js_guest: greeter_js.wasm not built \
+             (run tests/wasm-fixtures/greeter-js/build.sh)"
+        );
+        return;
+    };
+
+    let tmp = tempfile::TempDir::new().unwrap();
+    let dir = tmp.path().join("greeter-pkg");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("package.toml"),
+        r#"
+[package]
+name = "greeter-pkg"
+version = "0.1.0"
+interface = "greeter"
+interface_version = 1
+runtime = "wasm"
+
+[metadata]
+category = "test"
+
+[wasm]
+component = "greeter_js.wasm"
+"#,
+    )
+    .unwrap();
+    std::fs::write(dir.join("greeter_js.wasm"), bytes).unwrap();
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("greeter-pkg", &GREETER_DESC)
+        .expect("load JS component (interface hash must match the Rust/Python guests)");
+
+    // Identical results to the Rust + Python guests, through the identical API.
+    let s: String = handle.call_method(0, &("Ada".to_string(),)).unwrap();
+    assert_eq!(s, "Hello, Ada!");
+    let sum: i64 = handle.call_method(1, &(2i64, 3i64)).unwrap();
+    assert_eq!(sum, 5);
+    let rev = handle.call_method_raw(2, b"xyz").unwrap();
+    assert_eq!(rev, b"zyx");
+}
