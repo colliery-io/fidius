@@ -69,6 +69,17 @@ impl<M> PackageManifest<M> {
                 }
                 Ok(())
             }
+            PackageRuntime::Wasm => {
+                // A wasm component carries its contract in WIT, not a [python]
+                // section. Reject a stray [python] section; otherwise accept.
+                // Phase 2 will add wasm-specific manifest validation.
+                if self.python.is_some() {
+                    return Err(PackageError::InvalidManifest(
+                        "[python] section is only valid when runtime = \"python\"".into(),
+                    ));
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -108,6 +119,7 @@ impl PackageHeader {
         match self.runtime.as_deref() {
             None | Some("rust") => PackageRuntime::Rust,
             Some("python") => PackageRuntime::Python,
+            Some("wasm") => PackageRuntime::Wasm,
             // Unknown values fall back to Rust for `runtime()`, but the
             // strict validator rejects them. Keep the lenient form so display
             // code never panics on an unfamiliar manifest.
@@ -120,8 +132,9 @@ impl PackageHeader {
         match self.runtime.as_deref() {
             None | Some("rust") => Ok(PackageRuntime::Rust),
             Some("python") => Ok(PackageRuntime::Python),
+            Some("wasm") => Ok(PackageRuntime::Wasm),
             Some(other) => Err(PackageError::InvalidManifest(format!(
-                "unknown runtime '{other}': allowed values are \"rust\", \"python\""
+                "unknown runtime '{other}': allowed values are \"rust\", \"python\", \"wasm\""
             ))),
         }
     }
@@ -138,6 +151,11 @@ pub enum PackageRuntime {
     /// `fidius-python` via an embedded interpreter. Requires the host crate
     /// to enable the `python` feature.
     Python,
+    /// Plugin is a signed `.wasm` **component** (Component Model + WIT),
+    /// loaded by the `WasmComponentExecutor`. Reserved by FIDIUS-I-0021 Phase 1;
+    /// the loader lands in Phase 2 (until then, loading a wasm package errors
+    /// clearly rather than silently falling back to rust).
+    Wasm,
 }
 
 impl PackageRuntime {
@@ -146,6 +164,7 @@ impl PackageRuntime {
         match self {
             PackageRuntime::Rust => "rust",
             PackageRuntime::Python => "python",
+            PackageRuntime::Wasm => "wasm",
         }
     }
 }

@@ -15,6 +15,7 @@
 pub mod arch;
 pub mod arena;
 pub mod error;
+pub mod executor;
 pub mod handle;
 pub mod host;
 pub mod loader;
@@ -23,6 +24,7 @@ pub mod signing;
 pub mod types;
 
 pub use error::{CallError, LoadError};
+pub use executor::PluginExecutor;
 pub use handle::PluginHandle;
 pub use host::PluginHost;
 pub use loader::{LoadedLibrary, LoadedPlugin};

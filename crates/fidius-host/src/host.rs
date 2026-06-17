@@ -140,7 +140,7 @@ impl PluginHost {
                 if is_dylib(&path) {
                     self.discover_cdylib(&path, &mut plugins);
                 } else if path.is_dir() && path.join("package.toml").exists() {
-                    self.discover_python_package(&path, &mut plugins);
+                    self.discover_package(&path, &mut plugins);
                 }
             }
         }
@@ -170,16 +170,21 @@ impl PluginHost {
         }
     }
 
-    fn discover_python_package(&self, dir: &Path, plugins: &mut Vec<PluginInfo>) {
+    /// Discover a directory-based package (`package.toml`) and surface it by
+    /// runtime. Rust source packages are discovered via their built dylib (the
+    /// loadable artifact), not here, so they're skipped.
+    fn discover_package(&self, dir: &Path, plugins: &mut Vec<PluginInfo>) {
         let Ok(manifest) = fidius_core::package::load_manifest_untyped(dir) else {
             return;
         };
-        if !matches!(
-            manifest.package.runtime(),
-            fidius_core::package::PackageRuntime::Python
-        ) {
-            return;
-        }
+        use fidius_core::package::PackageRuntime;
+        let runtime = match manifest.package.runtime() {
+            PackageRuntime::Python => PluginRuntimeKind::Python,
+            PackageRuntime::Wasm => PluginRuntimeKind::Wasm,
+            // The cdylib is the loadable artifact for a Rust package; the
+            // source directory isn't discovered.
+            PackageRuntime::Rust => return,
+        };
         plugins.push(PluginInfo {
             name: manifest.package.name.clone(),
             interface_name: manifest.package.interface.clone(),
@@ -190,7 +195,7 @@ impl PluginHost {
             interface_version: manifest.package.interface_version,
             capabilities: 0,
             buffer_strategy: BufferStrategyKind::PluginAllocated,
-            runtime: PluginRuntimeKind::Python,
+            runtime,
         });
     }
 
@@ -293,10 +298,25 @@ impl PluginHost {
         &self,
         name: &str,
         descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
-    ) -> Result<fidius_python::PythonPluginHandle, LoadError> {
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
         let dir = self.find_python_package(name)?;
-        fidius_python::load_python_plugin(&dir, descriptor)
-            .map_err(|e| LoadError::PythonLoad(e.to_string()))
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let py = fidius_python::load_python_plugin(&dir, descriptor)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        // Build the host-facing metadata from the manifest header + the
+        // interface descriptor. `capabilities`/`buffer_strategy` are cdylib
+        // concepts and take their no-op defaults for Python.
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Python,
+        };
+        Ok(crate::handle::PluginHandle::from_python(py, info))
     }
 }
 

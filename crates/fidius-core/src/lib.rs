@@ -19,6 +19,7 @@ pub mod package;
 pub mod python_descriptor;
 pub mod registry;
 pub mod status;
+pub mod value;
 pub mod wire;
 
 #[cfg(feature = "async")]
@@ -27,6 +28,7 @@ pub mod async_runtime;
 pub use descriptor::*;
 pub use error::PluginError;
 pub use status::*;
+pub use value::{from_value, to_value, Value, ValueError};
 
 // Re-export inventory so generated code can reference it via fidius_core::inventory
 pub use inventory;

@@ -26,6 +26,11 @@ pub enum PluginRuntimeKind {
     /// `.py` package loaded via `fidius-python`'s embedded interpreter.
     /// Only produced when the `python` feature is enabled on `fidius-host`.
     Python,
+    /// Signed `.wasm` **component** (Component Model + WIT). Surfaced by
+    /// discovery; the loader (`WasmComponentExecutor`) lands in FIDIUS-I-0021
+    /// Phase 2. Reserved now so routing and `PluginInfo` model all three
+    /// backends.
+    Wasm,
 }
 
 /// Owned metadata for a discovered or loaded plugin.
@@ -62,6 +67,11 @@ impl PluginInfo {
     /// True if this is a Python plugin.
     pub fn is_python(&self) -> bool {
         matches!(self.runtime, PluginRuntimeKind::Python)
+    }
+
+    /// True if this is a WASM component plugin.
+    pub fn is_wasm(&self) -> bool {
+        matches!(self.runtime, PluginRuntimeKind::Wasm)
     }
 }
 

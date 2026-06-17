@@ -300,3 +300,45 @@ fn has_capability_returns_false_for_high_bits() {
     assert!(!handle.has_capability(64));
     assert!(!handle.has_capability(100));
 }
+
+/// Routing reserves the WASM seat (FIDIUS-I-0021 Phase 1): a `runtime = "wasm"`
+/// package is surfaced by discovery with `PluginRuntimeKind::Wasm`, not silently
+/// mistaken for a Rust package. The loader lands in Phase 2.
+#[test]
+fn discover_surfaces_wasm_package_with_wasm_runtime() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let dir = tmp.path().join("wasm-thing");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("package.toml"),
+        r#"
+[package]
+name = "wasm-thing"
+version = "0.1.0"
+interface = "thinger"
+interface_version = 2
+runtime = "wasm"
+
+[metadata]
+category = "test"
+"#,
+    )
+    .unwrap();
+    // Minimal wasm preamble bytes — discovery only reads the manifest.
+    std::fs::write(dir.join("thing.wasm"), b"\0asm\x01\0\0\0").unwrap();
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let infos = host.discover().unwrap();
+
+    let w = infos
+        .iter()
+        .find(|i| i.name == "wasm-thing")
+        .expect("wasm package should be surfaced by discovery");
+    assert!(matches!(w.runtime, fidius_host::PluginRuntimeKind::Wasm));
+    assert!(w.is_wasm());
+    assert_eq!(w.interface_name, "thinger");
+    assert_eq!(w.interface_version, 2);
+}
