@@ -59,3 +59,10 @@ fidius-test = { path = "../fidius-test" }
 # used by the tests is a separate cargo invocation and does NOT pull this
 # feature.
 test-plugin-smoke = { path = "../../tests/test-plugin-smoke", features = ["host"] }
+# Backend latency benchmark (FIDIUS-I-0024).
+criterion = "0.5"
+
+[[bench]]
+name = "backends"
+harness = false
+required-features = ["wasm"]
