@@ -220,6 +220,7 @@ fn magic_bytes_value() {
 fn version_constants() {
     assert_eq!(REGISTRY_VERSION, 1);
     // ABI_VERSION = MAJOR * 10000 + MINOR * 100 when MAJOR == 0 (pre-1.0 rule).
-    // For fidius-core at 0.2.0: 0 + 200 = 200. See ADR-0002.
-    assert_eq!(ABI_VERSION, 200);
+    // For fidius-core at 0.3.0: 0 + 300 = 300. See ADR-0002. (Pre-1.0, every
+    // minor bump is an ABI break — cdylib plugins must be recompiled.)
+    assert_eq!(ABI_VERSION, 300);
 }
