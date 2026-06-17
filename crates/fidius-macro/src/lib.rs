@@ -80,3 +80,23 @@ pub fn plugin_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(err) => err.to_compile_error().into(),
     }
 }
+
+/// Mark a `struct`/`enum` as usable in a WASM plugin interface (FIDIUS-I-0023).
+///
+/// This is a **marker** derive: it emits no code. The `fidius wit` generator
+/// (run from `build.rs`) keys on the `#[derive(WitType)]` attribute when it
+/// parses the crate source, mapping the struct to a WIT `record` (named fields)
+/// or the enum to a WIT `variant` (unit / single-field cases) and emitting the
+/// generated↔author conversions the wasm adapter uses. The same type continues
+/// to cross the cdylib/Python boundary via serde, unchanged.
+///
+/// ```ignore
+/// #[derive(WitType, serde::Serialize, serde::Deserialize, Clone)]
+/// pub struct Point { pub x: i32, pub y: i32 }
+/// ```
+#[proc_macro_derive(WitType)]
+pub fn derive_wit_type(_item: TokenStream) -> TokenStream {
+    // Intentionally empty — the build-time WIT generator reads the annotation
+    // from source; no per-type codegen is needed here.
+    TokenStream::new()
+}

@@ -283,8 +283,10 @@ fn generate_wasm_adapter(
     methods: &[MethodInfo],
 ) -> TokenStream {
     use crate::wit::{
-        render_wit, result_ok_type, return_to_wit, rust_type_to_wit, to_kebab_case, WitMethod,
+        conv_expr, render_wit, result_ok_type, return_to_wit, return_to_wit_with, rust_type_to_wit,
+        to_kebab_case, wit_type_with, WitMethod,
     };
+    use std::collections::BTreeSet;
 
     let iface_kebab = to_kebab_case(&trait_name.to_string());
     let iface_snake = iface_kebab.replace('-', "_");
@@ -294,87 +296,278 @@ fn generate_wasm_adapter(
     // module (`__fidius_<Trait>`), a sibling of the impl — reference it there.
     let companion = format_ident!("__fidius_{}", trait_name);
     let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
+    let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
 
-    // Build the WIT. On a reference arg or an unsupported type, emit a
-    // wasm-gated `compile_error!` rather than silently skipping the adapter
-    // (which would yield a component exporting nothing — a load-time surprise).
-    let mut wit_methods = Vec::new();
+    // Collect candidate user types (non-primitive path idents in signatures;
+    // `#[derive(WitType)]` records/variants). Reject reference args (owned only,
+    // v1). Then validate every type maps to WIT — a structurally-unsupported
+    // type emits a wasm-gated compile_error rather than a silently-broken export.
+    let mut known: BTreeSet<String> = BTreeSet::new();
     for m in methods {
-        let mut params = Vec::new();
-        for (name, ty) in m.arg_names.iter().zip(&m.arg_types) {
+        for ty in &m.arg_types {
             if matches!(ty, Type::Reference(_)) {
                 return wasm_unsupported(
                     m.name,
                     "reference arguments are not supported — take owned types (String, Vec<u8>, …)",
                 );
             }
-            match rust_type_to_wit(ty) {
-                Ok(wt) => params.push((to_kebab_case(&name.to_string()), wt)),
-                Err(e) => return wasm_unsupported(m.name, &e),
+            collect_user_idents(ty, &mut known);
+        }
+        if m.returns_result {
+            if let Some(ok) = m.ret_type.and_then(result_ok_type) {
+                collect_user_idents(ok, &mut known);
+            }
+        } else if let Some(rt) = m.ret_type {
+            collect_user_idents(rt, &mut known);
+        }
+    }
+    for m in methods {
+        for ty in &m.arg_types {
+            if let Err(e) = wit_type_with(ty, &known) {
+                return wasm_unsupported(m.name, &e);
             }
         }
-        let ret = match return_to_wit(m.ret_type) {
-            Ok(r) => r,
-            Err(e) => return wasm_unsupported(m.name, &e),
-        };
-        wit_methods.push(WitMethod {
-            name: to_kebab_case(&m.name.to_string()),
-            params,
-            ret,
-        });
+        if let Err(e) = return_to_wit_with(m.ret_type, &known) {
+            return wasm_unsupported(m.name, &e);
+        }
     }
-    let wit_doc = render_wit(&iface_kebab, &wit_methods);
 
+    let has_user = !known.is_empty();
+
+    if !has_user {
+        // ── Primitives-only: self-contained inline WIT (no build.rs needed). ──
+        let mut wit_methods = Vec::new();
+        for m in methods {
+            let mut params = Vec::new();
+            for (name, ty) in m.arg_names.iter().zip(&m.arg_types) {
+                let wt = rust_type_to_wit(ty).expect("validated above");
+                params.push((to_kebab_case(&name.to_string()), wt));
+            }
+            wit_methods.push(WitMethod {
+                name: to_kebab_case(&m.name.to_string()),
+                params,
+                ret: return_to_wit(m.ret_type).expect("validated above"),
+            });
+        }
+        let wit_doc = render_wit(&iface_kebab, &wit_methods);
+        let guest_methods: Vec<TokenStream> = methods
+            .iter()
+            .map(|m| {
+                let mname = m.name;
+                let arg_names = &m.arg_names;
+                let arg_types = &m.arg_types;
+                let call = quote! { super::#instance_name.#mname(#(#arg_names),*) };
+                if m.returns_result {
+                    let ok = match m.ret_type.and_then(result_ok_type) {
+                        Some(t) => quote! { #t },
+                        None => quote! { () },
+                    };
+                    quote! {
+                        fn #mname(#(#arg_names: #arg_types),*)
+                            -> Result<#ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
+                            #call.map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
+                                code: __e.code, message: __e.message, details: __e.details,
+                            })
+                        }
+                    }
+                } else {
+                    match m.ret_type {
+                        Some(rt) => {
+                            quote! { fn #mname(#(#arg_names: #arg_types),*) -> #rt { #call } }
+                        }
+                        None => quote! { fn #mname(#(#arg_names: #arg_types),*) { #call } },
+                    }
+                }
+            })
+            .collect();
+        return quote! {
+            #[cfg(target_family = "wasm")]
+            #[allow(warnings, clippy::all)]
+            mod #module_ident {
+                use super::*;
+                ::wit_bindgen::generate!({ inline: #wit_doc, world: #world });
+                struct __FidiusComponent;
+                impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
+                    #(#guest_methods)*
+                    fn fidius_interface_hash() -> u64 { super::#companion::#hash_const }
+                }
+                export!(__FidiusComponent);
+            }
+        };
+    }
+
+    // ── User types present: consume the build.rs-generated wit/ + conversions. ──
+    // The Guest uses wit-bindgen's generated types; we convert at the boundary
+    // via the generated `From` impls (`conv_expr` is identity for primitive-only
+    // fields and `.into()`/map for user types).
     let guest_methods: Vec<TokenStream> = methods
         .iter()
         .map(|m| {
             let mname = m.name;
-            let arg_names = &m.arg_names;
-            let arg_types = &m.arg_types;
-            let call = quote! { super::#instance_name.#mname(#(#arg_names),*) };
+            let arg_sig: Vec<TokenStream> = m
+                .arg_names
+                .iter()
+                .zip(&m.arg_types)
+                .map(|(n, t)| {
+                    let gt = gen_type(t, &known, &pkg_seg);
+                    quote! { #n: #gt }
+                })
+                .collect();
+            let call_args: Vec<syn::Expr> = m
+                .arg_names
+                .iter()
+                .zip(&m.arg_types)
+                .map(|(n, t)| {
+                    let s = conv_expr(&n.to_string(), t, &known);
+                    syn::parse_str::<syn::Expr>(&s).expect("conv expr parses")
+                })
+                .collect();
+            let call = quote! { super::#instance_name.#mname(#(#call_args),*) };
             if m.returns_result {
-                let ok_tokens = match m.ret_type.and_then(result_ok_type) {
-                    Some(t) => quote! { #t },
+                let ok = m.ret_type.and_then(result_ok_type);
+                let gen_ok = match ok {
+                    Some(t) => gen_type(t, &known, &pkg_seg),
                     None => quote! { () },
                 };
+                let ok_map = match ok {
+                    Some(t) => {
+                        let e: syn::Expr =
+                            syn::parse_str(&conv_expr("__v", t, &known)).expect("conv expr");
+                        quote! { .map(|__v| #e) }
+                    }
+                    None => quote! {},
+                };
                 quote! {
-                    fn #mname(#(#arg_names: #arg_types),*)
-                        -> Result<#ok_tokens, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
-                        #call.map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
-                            code: __e.code,
-                            message: __e.message,
-                            details: __e.details,
+                    fn #mname(#(#arg_sig),*)
+                        -> Result<#gen_ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
+                        #call #ok_map .map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
+                            code: __e.code, message: __e.message, details: __e.details,
                         })
                     }
                 }
             } else {
                 match m.ret_type {
-                    Some(rt) => quote! { fn #mname(#(#arg_names: #arg_types),*) -> #rt { #call } },
-                    None => quote! { fn #mname(#(#arg_names: #arg_types),*) { #call } },
+                    Some(rt) => {
+                        let gen_ret = gen_type(rt, &known, &pkg_seg);
+                        let e: syn::Expr =
+                            syn::parse_str(&conv_expr("__r", rt, &known)).expect("conv expr");
+                        quote! { fn #mname(#(#arg_sig),*) -> #gen_ret { let __r = #call; #e } }
+                    }
+                    None => quote! { fn #mname(#(#arg_sig),*) { #call } },
                 }
             }
         })
         .collect();
 
-    let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
     quote! {
         #[cfg(target_family = "wasm")]
         #[allow(warnings, clippy::all)]
         mod #module_ident {
-            // Bring the trait + the plugin's static instance into scope so the
-            // Guest impl can call the trait methods on it.
             use super::*;
-            ::wit_bindgen::generate!({ inline: #wit_doc, world: #world });
+            // wit/ + the conversions are (re)generated from source by the crate's
+            // build.rs (`fidius_build::emit_wit()`), since a proc-macro can't see
+            // external type definitions.
+            ::wit_bindgen::generate!({ path: "wit", world: #world });
+            include!(concat!(env!("OUT_DIR"), "/fidius_wit_conversions.rs"));
             struct __FidiusComponent;
             impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
                 #(#guest_methods)*
-                fn fidius_interface_hash() -> u64 {
-                    super::#companion::#hash_const
-                }
+                fn fidius_interface_hash() -> u64 { super::#companion::#hash_const }
             }
             export!(__FidiusComponent);
         }
     }
+}
+
+/// Collect candidate user-type idents (non-primitive path leaves) from a type,
+/// descending through `Vec`/`Option`/`Box` and `Result`'s ok type.
+fn collect_user_idents(ty: &Type, out: &mut std::collections::BTreeSet<String>) {
+    match ty {
+        Type::Reference(r) => collect_user_idents(&r.elem, out),
+        Type::Slice(s) => collect_user_idents(&s.elem, out),
+        Type::Path(p) => {
+            if let Some(seg) = p.path.segments.last() {
+                let id = seg.ident.to_string();
+                let prim = matches!(
+                    id.as_str(),
+                    "bool"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "f32"
+                        | "f64"
+                        | "char"
+                        | "String"
+                        | "str"
+                        | "PluginError"
+                );
+                match id.as_str() {
+                    "Vec" | "Option" | "Box" => {
+                        if let Some(inner) = wasm_first_generic(seg) {
+                            collect_user_idents(inner, out);
+                        }
+                    }
+                    "Result" => {
+                        if let Some(ok) = wasm_first_generic(seg) {
+                            collect_user_idents(ok, out);
+                        }
+                    }
+                    _ if !prim => {
+                        out.insert(id);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The wit-bindgen-generated type for an author type: identity for types holding
+/// no user type (wit-bindgen uses the same Rust type), else the generated path
+/// `exports::fidius::<iface>::<iface>::<T>`, recursing through `Vec`/`Option`.
+fn gen_type(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> TokenStream {
+    if !crate::wit::contains_user_type(ty, known) {
+        return quote! { #ty };
+    }
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            let id = seg.ident.to_string();
+            if id == "Vec" {
+                if let Some(inner) = wasm_first_generic(seg) {
+                    let g = gen_type(inner, known, pkg_seg);
+                    return quote! { ::std::vec::Vec<#g> };
+                }
+            }
+            if id == "Option" {
+                if let Some(inner) = wasm_first_generic(seg) {
+                    let g = gen_type(inner, known, pkg_seg);
+                    return quote! { ::core::option::Option<#g> };
+                }
+            }
+            if known.contains(&id) {
+                let tid = &seg.ident;
+                return quote! { exports::fidius::#pkg_seg::#pkg_seg::#tid };
+            }
+        }
+    }
+    quote! { #ty }
+}
+
+fn wasm_first_generic(seg: &syn::PathSegment) -> Option<&Type> {
+    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+        for a in &ab.args {
+            if let syn::GenericArgument::Type(t) = a {
+                return Some(t);
+            }
+        }
+    }
+    None
 }
 
 /// Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method

@@ -28,7 +28,7 @@ use std::collections::BTreeSet;
 use syn::{Fields, GenericArgument, ItemEnum, ItemStruct, PathArguments, Type};
 
 mod generate;
-pub use generate::{generate, Generated};
+pub use generate::{contains_user_type, conv_expr, generate, Generated};
 
 /// Convert a Rust identifier (CamelCase or snake_case) to kebab-case, the WIT
 /// naming convention. `BytePipe` → `byte-pipe`, `echo_bytes` → `echo-bytes`.

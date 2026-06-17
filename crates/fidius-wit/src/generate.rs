@@ -221,8 +221,10 @@ fn render_conversions(
 /// Conversion expression for a field/payload `access` of type `ty`. Identity
 /// (move) when the type holds no user type (generated and author types are then
 /// identical); otherwise `.into()` (user type), or a `map`/`into_iter().map()`
-/// recursing through `Option`/`Vec`.
-fn conv_expr(access: &str, ty: &Type, known: &BTreeSet<String>) -> String {
+/// recursing through `Option`/`Vec`. Symmetric — works generated→author and
+/// author→generated, since `From` is generated both ways. Public so the macro's
+/// adapter reuses the exact same boundary conversions.
+pub fn conv_expr(access: &str, ty: &Type, known: &BTreeSet<String>) -> String {
     if !contains_user_type(ty, known) {
         return access.to_string();
     }
@@ -251,7 +253,9 @@ fn conv_expr(access: &str, ty: &Type, known: &BTreeSet<String>) -> String {
     access.to_string()
 }
 
-fn contains_user_type(ty: &Type, known: &BTreeSet<String>) -> bool {
+/// Whether `ty` is, or contains (through `Vec`/`Option`/`Box`), a user type in
+/// `known`. Public so the macro can classify args/returns.
+pub fn contains_user_type(ty: &Type, known: &BTreeSet<String>) -> bool {
     if let Type::Path(p) = ty {
         if let Some(seg) = p.path.segments.last() {
             let ident = seg.ident.to_string();

@@ -19,5 +19,6 @@
 //! (FIDIUS-I-0023). This module re-exports the pieces the macro uses.
 
 pub(crate) use fidius_wit::{
-    rust_type_to_wit, render_wit, result_ok_type, return_to_wit, to_kebab_case, WitMethod,
+    contains_user_type, conv_expr, render_wit, result_ok_type, return_to_wit, return_to_wit_with,
+    rust_type_to_wit, to_kebab_case, wit_type_with, WitMethod,
 };
