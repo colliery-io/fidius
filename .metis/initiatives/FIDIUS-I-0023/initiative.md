@@ -4,14 +4,14 @@ level: initiative
 title: "WASM user-defined types — struct/enum support in plugin interfaces via #[derive(WitType)]"
 short_code: "FIDIUS-I-0023"
 created_at: 2026-06-17T12:52:11.568766+00:00
-updated_at: 2026-06-17T13:00:47.930511+00:00
+updated_at: 2026-06-17T13:46:18.114471+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
