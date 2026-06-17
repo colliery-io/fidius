@@ -395,15 +395,21 @@ impl PluginHost {
         let interface = descriptor.interface_export.to_string();
         let capabilities = wasm_meta.capabilities.clone();
 
-        // Prefer the precompiled .cwasm AOT fast path when present; else JIT.
-        let executor = if let Some(cwasm) = &wasm_meta.precompiled {
-            let bytes = std::fs::read(dir.join(cwasm))?;
-            // SAFETY: bytes are produced by `fidius pack` with a matching engine;
-            // wasmtime validates the header and refuses a mismatch.
-            unsafe {
-                WasmComponentExecutor::from_cwasm(&bytes, interface, methods, capabilities, info)
-            }
-        } else {
+        // Resolve a precompiled .cwasm: explicit `[wasm].precompiled`, or an
+        // auto-detected sibling `<component-stem>.cwasm`. The AOT path is purely
+        // a load-latency optimization, so a stale/mismatched .cwasm (built by a
+        // different wasmtime) is non-fatal — we log and JIT-compile the
+        // component instead (FIDIUS-T-0107).
+        let cwasm_path = wasm_meta
+            .precompiled
+            .as_ref()
+            .map(|p| dir.join(p))
+            .or_else(|| {
+                let sibling = dir.join(&wasm_meta.component).with_extension("cwasm");
+                sibling.exists().then_some(sibling)
+            });
+
+        let jit = |interface: String, methods, capabilities, info| -> Result<_, LoadError> {
             let bytes = std::fs::read(dir.join(&wasm_meta.component))?;
             WasmComponentExecutor::from_component_bytes(
                 &bytes,
@@ -412,8 +418,39 @@ impl PluginHost {
                 capabilities,
                 info,
             )
-        }
-        .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))
+        };
+
+        let executor = match cwasm_path {
+            Some(cwasm) if cwasm.exists() => {
+                let bytes = std::fs::read(&cwasm)?;
+                // SAFETY: .cwasm is produced by `fidius pack`
+                // (Engine::precompile_component); wasmtime validates the header
+                // and refuses a mismatched engine/version (→ Err → JIT fallback).
+                let aot = unsafe {
+                    WasmComponentExecutor::from_cwasm(
+                        &bytes,
+                        interface.clone(),
+                        methods.clone(),
+                        capabilities.clone(),
+                        info.clone(),
+                    )
+                };
+                match aot {
+                    Ok(e) => e,
+                    Err(_err) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!(
+                            cwasm = %cwasm.display(),
+                            error = %_err,
+                            "precompiled .cwasm rejected (likely engine/version mismatch); falling back to JIT"
+                        );
+                        jit(interface, methods, capabilities, info)?
+                    }
+                }
+            }
+            _ => jit(interface, methods, capabilities, info)?,
+        };
 
         // Interface-hash integrity check (parity with cdylib/Python).
         let got = executor

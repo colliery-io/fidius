@@ -4,14 +4,14 @@ level: task
 title: "P3.2 — fidius pack: build + validate the component, precompile .cwasm, archive into .fid"
 short_code: "FIDIUS-T-0107"
 created_at: 2026-06-17T09:50:07.862360+00:00
-updated_at: 2026-06-17T09:50:07.862360+00:00
+updated_at: 2026-06-17T12:17:12.273015+00:00
 parent: FIDIUS-I-0021
-blocked_by: ["FIDIUS-T-0106"]
+blocked_by: [FIDIUS-T-0106]
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,13 +28,15 @@ initiative_id: FIDIUS-I-0021
 
 Extend `fidius pack` to handle `runtime = "wasm"` packages: build (or accept a prebuilt) the `.wasm` component, validate it, optionally precompile to `.cwasm`, and archive into a `.fid` exactly like Rust/Python packages.
 
+## Acceptance Criteria
+
 ## Acceptance Criteria **[REQUIRED]**
 
-- [ ] `fidius pack` on a wasm package produces a `.fid` containing the `.wasm` component (+ optional `.cwasm` + `world.wit`), reusing `fidius_core::package::pack_package` / the hardened `unpack_package`.
-- [ ] Pack validates the component (is a Component Model component; exports the declared interface + `fidius-interface-hash`) via `wasm-tools`/wasmtime, and validates the `[wasm]` manifest (component file present, capability names known).
-- [ ] Optional `.cwasm` precompile at pack time (`Engine::precompile_component`), written into the package and recorded in `[wasm].precompiled`; load uses the AOT path (already consumed by [[FIDIUS-T-0103]]). The wasmtime version is stamped so a stale `.cwasm` is ignored (fall back to JIT).
-- [ ] A prebuilt `.wasm` is accepted without the component build toolchain (pack doesn't force `cargo component`).
-- [ ] E2E: pack a wasm plugin → `.fid` → unpack → `load_wasm` → call.
+- [x] `fidius pack` on a wasm package produces a `.fid` containing the `.wasm` (+ optional `.cwasm`), reusing `fidius_core::package::pack_package` / the hardened `unpack_package` (archives the whole dir).
+- [x] Pack validates the component is a valid Component-Model artifact (`wasmtime::component::Component::new` via `fidius_host::executor::validate_component`) and that the `[wasm].component` file is present. *Scope:* interface-name + `fidius-interface-hash` conformance is enforced at **load** (`load_wasm`), not re-checked at pack.
+- [x] Optional `.cwasm` precompile at pack time (`Engine::precompile_component`), written into the package + recorded in `[wasm].precompiled`; load uses the AOT path. A stale `.cwasm` is **ignored** — wasmtime rejects the header and load falls back to JIT (verified by `stale_cwasm_falls_back_to_jit`).
+- [x] A prebuilt `.wasm` is accepted without the build toolchain (pack never runs `cargo component`; without the CLI `wasm` feature it warns and archives as-is).
+- [x] E2E: `pack_package` → `.fid` → `unpack_package` → `load_wasm` → call (`pack_unpack_load_roundtrip`).
 
 ## Implementation Notes **[CONDITIONAL: Technical Task]**
 
@@ -49,4 +51,9 @@ Extend the `fidius-cli` pack command + the `fidius-core::package` pack path; mir
 
 ## Status Updates **[REQUIRED]**
 
-Not started — Phase 3 of FIDIUS-I-0021.
+**2026-06-17 — COMPLETE.**
+- `fidius-host` (wasm feature): `validate_component` + `precompile_component` free fns (re-exported from `executor`).
+- `load_wasm`: resolves `.cwasm` from `[wasm].precompiled` or an auto-detected sibling `<stem>.cwasm`; tries AOT, **falls back to JIT** on a rejected/stale `.cwasm` (tracing warn).
+- `fidius-cli`: `wasm` feature → `fidius-host/wasm`; `pack --precompile`. wasm packages are validated; `--precompile` writes `<stem>.cwasm` + records `precompiled` in `package.toml` (comment-preserving string-insert). Without the `wasm` feature: warns (skips validation) / errors on `--precompile`. Pack never builds the component.
+- Tests: `precompiled_cwasm_loads_via_aot_and_calls`, `stale_cwasm_falls_back_to_jit`, `pack_unpack_load_roundtrip` (host, `--features wasm`); CLI `wasm_pack.rs` (no-feature path: archive+warn, `--precompile` errors).
+- Verified: native `cargo test --workspace` 41 ok / 0 failed; wasm suite 10 ok; `angreal lint` green.

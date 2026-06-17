@@ -471,3 +471,35 @@ fn val_to_value(v: &Val) -> Value {
         other => Value::String(format!("{other:?}")),
     }
 }
+
+// ── Pack-time helpers (FIDIUS-T-0107) ───────────────────────────────────────
+// Used by `fidius pack` to validate and (optionally) precompile a component
+// without constructing a full executor (pack has no descriptor/method list).
+
+/// Validate that `bytes` is a well-formed WASM **component** (Component Model),
+/// not a core module or a corrupt artifact. This is the pack-time gate;
+/// interface-name + `fidius-interface-hash` conformance is enforced at load
+/// (`PluginHost::load_wasm`).
+pub fn validate_component(bytes: &[u8]) -> Result<(), CallError> {
+    let engine = Engine::default();
+    Component::new(&engine, bytes)
+        .map(|_| ())
+        .map_err(|e| CallError::Backend {
+            runtime: "wasm".into(),
+            message: format!("not a valid WASM component: {e}"),
+        })
+}
+
+/// Ahead-of-time compile a component into engine/version-specific `.cwasm`
+/// bytes (`Engine::precompile_component`). Written into the package at pack time
+/// and consumed by the AOT load path; a stale `.cwasm` is ignored at load (JIT
+/// fallback), so this is purely a load-latency optimization.
+pub fn precompile_component(bytes: &[u8]) -> Result<Vec<u8>, CallError> {
+    let engine = Engine::default();
+    engine
+        .precompile_component(bytes)
+        .map_err(|e| CallError::Backend {
+            runtime: "wasm".into(),
+            message: format!("failed to precompile component: {e}"),
+        })
+}

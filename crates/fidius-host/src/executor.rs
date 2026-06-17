@@ -54,7 +54,7 @@ pub use cdylib::CdylibExecutor;
 #[cfg(feature = "python")]
 pub use python::Pyo3Executor;
 #[cfg(feature = "wasm")]
-pub use wasm::{WasmComponentExecutor, WasmMethod};
+pub use wasm::{precompile_component, validate_component, WasmComponentExecutor, WasmMethod};
 
 /// The surface every execution backend shares.
 ///

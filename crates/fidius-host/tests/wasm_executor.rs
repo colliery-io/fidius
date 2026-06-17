@@ -387,3 +387,87 @@ fn unknown_capability_rejected_at_load() {
         "expected a clear unknown-capability error",
     );
 }
+
+// ── Pack / precompile (FIDIUS-T-0107) ───────────────────────────────────────
+
+/// Record `precompiled = "<name>"` under `[wasm]` in a staged package.toml.
+fn set_precompiled(pkg_dir: &std::path::Path, cwasm: &str) {
+    let p = pkg_dir.join("package.toml");
+    let content = std::fs::read_to_string(&p).unwrap();
+    let pos = content.find("[wasm]").unwrap();
+    let after = pos + "[wasm]".len();
+    let line_end = content[after..].find('\n').map(|i| after + i + 1).unwrap();
+    let mut out = content[..line_end].to_string();
+    out.push_str(&format!("precompiled = \"{cwasm}\"\n"));
+    out.push_str(&content[line_end..]);
+    std::fs::write(&p, out).unwrap();
+}
+
+#[test]
+fn precompiled_cwasm_loads_via_aot_and_calls() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &[]);
+    let dir = tmp.path().join("greeter-pkg");
+
+    let cwasm = fidius_host::executor::precompile_component(greeter_component())
+        .expect("precompile greeter");
+    std::fs::write(dir.join("greeter_guest.cwasm"), &cwasm).unwrap();
+    set_precompiled(&dir, "greeter_guest.cwasm");
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("greeter-pkg", &GREETER_DESC)
+        .expect("AOT load");
+    let s: String = handle.call_method(0, &("Zed".to_string(),)).unwrap();
+    assert_eq!(s, "Hello, Zed!");
+}
+
+#[test]
+fn stale_cwasm_falls_back_to_jit() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &[]);
+    let dir = tmp.path().join("greeter-pkg");
+
+    // A garbage .cwasm (wrong engine/version) must be ignored, not fatal.
+    std::fs::write(dir.join("greeter_guest.cwasm"), b"not a real cwasm header").unwrap();
+    set_precompiled(&dir, "greeter_guest.cwasm");
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("greeter-pkg", &GREETER_DESC)
+        .expect("stale .cwasm should fall back to JIT, not fail");
+    let s: String = handle.call_method(0, &("Q".to_string(),)).unwrap();
+    assert_eq!(s, "Hello, Q!");
+}
+
+#[test]
+fn pack_unpack_load_roundtrip() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &[]);
+    let dir = tmp.path().join("greeter-pkg");
+
+    let fid = tmp.path().join("greeter.fid");
+    fidius_core::package::pack_package(&dir, Some(&fid)).expect("pack");
+
+    let unpacked = tmp.path().join("unpacked");
+    std::fs::create_dir_all(&unpacked).unwrap();
+    let pkg_dir = fidius_core::package::unpack_package(&fid, &unpacked).expect("unpack");
+    assert!(pkg_dir.join("package.toml").exists());
+    assert!(pkg_dir.join("greeter_guest.wasm").exists());
+
+    let host = PluginHost::builder()
+        .search_path(&unpacked)
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("greeter-pkg", &GREETER_DESC)
+        .expect("load from unpacked .fid");
+    let s: String = handle.call_method(0, &("Pax".to_string(),)).unwrap();
+    assert_eq!(s, "Hello, Pax!");
+}
