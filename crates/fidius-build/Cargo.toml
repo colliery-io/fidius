@@ -1,0 +1,13 @@
+[package]
+name = "fidius-build"
+version = "0.2.1"
+edition = "2021"
+description = "build.rs helper for Fidius WASM plugins: regenerates the wit/ dir and the author↔component conversions from the crate source, so #[derive(WitType)] user types work with plain `cargo build`."
+license = "Apache-2.0"
+repository = "https://github.com/colliery-io/fidius"
+
+[dependencies]
+fidius-wit = { path = "../fidius-wit", version = "0.2.1" }
+
+[dev-dependencies]
+tempfile = "3"

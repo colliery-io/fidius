@@ -873,6 +873,31 @@ fn record_precompiled(dir: &Path, cwasm_name: &str) -> Result {
     Ok(())
 }
 
+// ─── wit ──────────────────────────────────────────────────────────────────
+
+/// Generate `<dir>/wit/<interface>.wit` from `<dir>/src/lib.rs` (the
+/// `#[plugin_interface]` trait + `#[derive(WitType)]` types). The `build.rs`
+/// helper (`fidius_build::emit_wit`) does this automatically on every build;
+/// this subcommand is for CI / manual inspection.
+pub fn wit(dir: Option<&Path>) -> Result {
+    let dir = dir.unwrap_or_else(|| Path::new("."));
+    let lib = dir.join("src").join("lib.rs");
+    let src =
+        std::fs::read_to_string(&lib).map_err(|e| format!("reading {}: {e}", lib.display()))?;
+    let generated = fidius_wit::generate(&src)?;
+    let wit_dir = dir.join("wit");
+    std::fs::create_dir_all(&wit_dir)?;
+    let path = wit_dir.join(format!("{}.wit", generated.iface_kebab));
+    std::fs::write(&path, &generated.wit)?;
+    println!(
+        "Wrote {} (interface {}, {} user type(s))",
+        path.display(),
+        generated.interface_name,
+        generated.user_types.len()
+    );
+    Ok(())
+}
+
 // ─── package unpack ─────────────────────────────────────────────────────────
 
 pub fn package_unpack(archive: &Path, dest: Option<&Path>) -> Result {

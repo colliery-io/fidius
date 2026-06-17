@@ -2,6 +2,7 @@
 members = [
     "crates/fidius-guest",
     "crates/fidius-wit",
+    "crates/fidius-build",
     "crates/fidius-core",
     "crates/fidius-macro",
     "crates/fidius-host",

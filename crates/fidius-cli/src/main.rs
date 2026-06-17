@@ -135,6 +135,13 @@ enum Commands {
         #[arg(long)]
         trait_name: Option<String>,
     },
+    /// Generate the WIT for a WASM plugin crate from its source (the `build.rs`
+    /// `fidius_build::emit_wit()` does this automatically; this is for CI/manual use).
+    Wit {
+        /// Path to the plugin crate directory (default: current dir). Reads
+        /// `<dir>/src/lib.rs` and writes `<dir>/wit/<interface>.wit`.
+        dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -263,6 +270,7 @@ fn main() {
             out,
             trait_name,
         } => commands::python_stub(&interface, &out, trait_name.as_deref()),
+        Commands::Wit { dir } => commands::wit(dir.as_deref()),
     };
 
     if let Err(e) = result {

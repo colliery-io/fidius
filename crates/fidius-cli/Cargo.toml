@@ -18,6 +18,8 @@ wasm = ["fidius-host/wasm"]
 [dependencies]
 fidius-core = { path = "../fidius-core", version = "0.2.1" }
 fidius-host = { path = "../fidius-host", version = "0.2.1" }
+# WIT generation for `fidius wit` (shared with the build.rs helper).
+fidius-wit = { path = "../fidius-wit", version = "0.2.1" }
 clap = { workspace = true }
 ed25519-dalek = { workspace = true }
 ureq = { workspace = true }
