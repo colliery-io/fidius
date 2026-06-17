@@ -83,6 +83,46 @@ Notes:
   component's own type information (wasmtime exposes them), and uses those to
   drive the `Value → Val` lowering (e.g. knowing a `u32` param vs `s64`).
 
+## User-defined types — records & variants (FIDIUS-I-0023)
+
+A plugin author's own `struct`/`enum` types in an interface map to WIT
+`record`/`variant` when annotated with `#[derive(WitType)]`:
+
+| Rust | WIT |
+|---|---|
+| `struct P { x: i32, y: i32 }` | `record p { x: s32, y: s32 }` |
+| `enum S { Circle(u32), Rect(P), Dot }` | `variant s { circle(u32), rect(p), dot }` |
+
+Two constraints shape the implementation:
+
+1. **A proc-macro can't see external type definitions.** `#[plugin_impl]` sees
+   only the method *signatures* (type names), not the fields of `P`. And
+   `wit_bindgen::generate!{ inline }` needs the complete WIT as a literal at
+   expansion. So the records/variants can't be assembled inside the macro — they
+   are generated from the **source** by a build step (`fidius_build::emit_wit()`
+   in `build.rs`, sharing the `fidius-wit` generator with the `fidius wit` CLI).
+   It writes `wit/<iface>.wit`; the adapter consumes it via
+   `generate!{ path: "wit" }`.
+
+2. **wit-bindgen won't remap an *exported* interface's types onto your structs**
+   (its `with` option is for imports). The guest therefore uses wit-bindgen's
+   *generated* types, and `fidius-wit` also emits `From` conversions both ways
+   (`exports::…::P ↔ crate::P`, recursing through `Vec`/`Option`/nested types).
+   The `build.rs` writes them to `$OUT_DIR`; the adapter `include!`s them and
+   converts at the `Guest` boundary. `#[derive(WitType)]` itself is just a marker
+   the generator reads — it emits no code.
+
+**Name normalization.** WIT uses kebab-case; serde produces snake_case fields and
+PascalCase enum variants. The executor normalizes record-field and variant-case
+names at the `Value ↔ Val` boundary (`to_kebab` inbound; `kebab → snake` for
+fields and `kebab → PascalCase` for variants outbound), so a host `Shape::Circle`
+matches the WIT `circle` case and a `y_pos` field matches `y-pos`.
+
+The same `#[derive(WitType)]` type still crosses the **cdylib/Python** boundary
+unchanged (via serde/bincode) — the records/variants are the WASM projection
+only. v1 limits: named-field records; unit or single-field variant cases; types
+in `src/lib.rs`.
+
 ## Fallible methods
 
 A fidius method returning `Result<T, PluginError>` maps to a WIT

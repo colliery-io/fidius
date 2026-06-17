@@ -107,12 +107,11 @@ implementation that exports your interface as a WIT component (the native cdylib
 machinery is compiled out). `#[plugin_interface]` also emits a
 `Greeter_WASM_DESCRIPTOR` constant the host uses to load it.
 
-!!! note "Supported types (v1)"
+!!! note "Supported types"
     Auto-generated WIT covers `bool`, the sized integers, `f32`/`f64`, `char`,
     `String`, `Vec<T>` (`Vec<u8>` → `list<u8>`), `Option<T>`, and
-    `Result<T, PluginError>`. A method using a user `struct`/`enum` is a clear
-    compile error — a proc-macro can't see external type definitions. Mapping
-    those to WIT `record`/`variant` is a planned `#[derive(WitType)]`. See the
+    `Result<T, PluginError>`. **Your own `struct`s and `enum`s** also work — see
+    [Using your own types](#using-your-own-types-records--variants) below. See the
     [WASM Component ABI](../explanation/wasm-component-abi.md) for the full table.
 
 ## 3. Build the component
@@ -227,6 +226,62 @@ assert_eq!(greeting, "Hello, Ada!");
 `load_wasm` validates the component's `fidius-interface-hash` against the
 descriptor (rejecting a plugin built against a different interface) and runs the
 guest in the deny-all sandbox.
+
+## Using your own types (records & variants)
+
+Real interfaces pass domain types, not just primitives. Annotate a `struct` with
+`#[derive(WitType)]` to map it to a WIT `record`, and an `enum` to a WIT
+`variant` (unit cases or single-field cases):
+
+```rust
+use fidius_macro::{plugin_impl, plugin_interface, WitType};
+
+#[derive(WitType, Clone)]
+pub struct Point { pub x: i32, pub y: i32 }     // → record point { x: s32, y: s32 }
+
+#[derive(WitType, Clone)]
+pub enum Shape {                                 // → variant shape { ... }
+    Circle(u32),
+    Rect(Point),
+    Dot,
+}
+
+#[plugin_interface(version = 1, buffer = PluginAllocated, crate = "fidius_guest")]
+pub trait Geo: Send + Sync {
+    fn midpoint(&self, a: Point, b: Point) -> Point;
+    fn describe(&self, s: Shape) -> String;
+}
+```
+
+A proc-macro can't see the *definitions* of `Point`/`Shape` (it only sees the
+method signatures), so the WIT for them is generated from your source by a tiny
+`build.rs`:
+
+```rust
+// build.rs
+fn main() {
+    fidius_build::emit_wit();
+}
+```
+
+```toml
+# Cargo.toml
+[build-dependencies]
+fidius-build = "0.3"
+```
+
+On `cargo build`, `emit_wit()` parses your `src/lib.rs`, regenerates
+`wit/<interface>.wit` (with the `record`/`variant` definitions) and the
+generated↔your-type conversions, and `#[plugin_impl]` wires them in. Nothing else
+changes — the build, packaging, signing, and loading steps above are identical.
+Your types cross the wire as **real WIT records/variants**, so a
+[Python guest](../how-to/wasm-python-plugin.md) sees them as native types too.
+
+!!! note "v1 limits"
+    Records need named fields; variant cases are unit or single-field. Put the
+    `#[derive(WitType)]` types and the `#[plugin_interface]` trait in `src/lib.rs`.
+    A type fidius can't map is a clear compile error on the wasm build. (`cargo`
+    users can also run `fidius wit` to regenerate `wit/` manually.)
 
 ## What you built
 
