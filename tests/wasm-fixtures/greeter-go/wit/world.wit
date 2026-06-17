@@ -1,0 +1,6 @@
+package fidius:greeter-go@1.0.0;
+
+world greeter-plugin {
+    include wasi:cli/imports@0.2.0;
+    export fidius:greeter/greeter@1.0.0;
+}

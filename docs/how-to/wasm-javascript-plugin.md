@@ -126,6 +126,7 @@ polyglot guarantee.
 
 ## See also
 
+- [A WASM Plugin in Go](wasm-go-plugin.md) — the same interface, natively compiled
 - [A WASM Plugin in Python](wasm-python-plugin.md)
 - [Your First WASM Plugin (Rust)](../tutorials/your-first-wasm-plugin.md)
 - [WASM Component ABI](../explanation/wasm-component-abi.md)
