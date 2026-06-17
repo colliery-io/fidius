@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Ed25519 signature verification for plugin dylibs.
+//! Ed25519 signature verification for plugins: dylibs (sign the file bytes) and
+//! packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
 
 use std::path::Path;
 
@@ -65,6 +66,49 @@ pub fn verify_signature(dylib_path: &Path, trusted_keys: &[VerifyingKey]) -> Res
     // Try each trusted key
     for key in trusted_keys {
         if key.verify(&dylib_bytes, &signature).is_ok() {
+            return Ok(());
+        }
+    }
+
+    Err(LoadError::SignatureInvalid { path: path_str })
+}
+
+/// Verify a **package** signature: `package.sig` in `dir`, an Ed25519 signature
+/// over `package_digest(dir)` (the runtime-agnostic content hash), against any
+/// trusted key. Used for package-based runtimes (Python, WASM) where the signed
+/// artifact is the whole package directory, not a single dylib file.
+///
+/// `package_digest` excludes `*.sig`, so the digest is identical at sign and
+/// verify time, and tampering with any package file (e.g. the `.wasm`
+/// component) changes the digest and fails verification.
+pub fn verify_package_signature(
+    dir: &Path,
+    trusted_keys: &[VerifyingKey],
+) -> Result<(), LoadError> {
+    let path_str = dir.display().to_string();
+    let sig_path = dir.join("package.sig");
+
+    let sig_bytes = std::fs::read(&sig_path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            LoadError::SignatureRequired {
+                path: path_str.clone(),
+            }
+        } else {
+            LoadError::Io(e)
+        }
+    })?;
+
+    let signature = Signature::from_slice(&sig_bytes).map_err(|_| LoadError::SignatureInvalid {
+        path: path_str.clone(),
+    })?;
+
+    let digest =
+        fidius_core::package::package_digest(dir).map_err(|_| LoadError::SignatureInvalid {
+            path: path_str.clone(),
+        })?;
+
+    for key in trusted_keys {
+        if key.verify(&digest, &signature).is_ok() {
             return Ok(());
         }
     }

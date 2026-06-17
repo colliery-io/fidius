@@ -682,6 +682,21 @@ pub fn package_inspect(dir: &Path) -> Result {
         println!("    Entry module: {}", py.entry_module);
         println!("    Requirements: {}", py.requirements_path());
     }
+    if let Some(w) = manifest.wasm.as_ref() {
+        println!("  WASM:");
+        println!("    Component: {}", w.component);
+        match &w.precompiled {
+            Some(pc) => println!("    Precompiled (.cwasm): {pc}"),
+            None => println!("    Precompiled (.cwasm): (none — JIT at load)"),
+        }
+        // The capability allow-list is the security-relevant bit a deployer
+        // reviews. Empty = deny-all; filesystem is never grantable in v1.
+        if w.capabilities.is_empty() {
+            println!("    Capabilities: (none — deny-all sandbox)");
+        } else {
+            println!("    Capabilities: {}", w.capabilities.join(", "));
+        }
+    }
     if let Some(table) = manifest.metadata.as_table() {
         println!("  Metadata:");
         for (key, value) in table {

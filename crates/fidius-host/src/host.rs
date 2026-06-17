@@ -300,6 +300,10 @@ impl PluginHost {
         descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
         let dir = self.find_python_package(name)?;
+        // Signature policy — enforced identically to cdylib/WASM loads.
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
         let manifest = fidius_core::package::load_manifest_untyped(&dir)
             .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
         let py = fidius_python::load_python_plugin(&dir, descriptor)
@@ -368,6 +372,10 @@ impl PluginHost {
         use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
 
         let dir = self.find_wasm_package(name)?;
+        // Signature policy — enforced identically to cdylib/Python loads.
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
         let manifest = fidius_core::package::load_manifest_untyped(&dir)
             .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
         let wasm_meta = manifest

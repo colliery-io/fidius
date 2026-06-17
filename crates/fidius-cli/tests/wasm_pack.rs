@@ -85,3 +85,79 @@ fn precompile_without_wasm_feature_errors() {
         .failure()
         .stderr(predicates::str::contains("--features wasm"));
 }
+
+#[test]
+fn inspect_renders_wasm_fields() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let dir = tmp.path().join("p");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(
+        dir.join("package.toml"),
+        r#"
+[package]
+name = "wp"
+version = "0.1.0"
+interface = "greeter"
+interface_version = 1
+runtime = "wasm"
+
+[metadata]
+category = "test"
+
+[wasm]
+component = "plugin.wasm"
+precompiled = "plugin.cwasm"
+capabilities = ["clocks", "stdout"]
+"#,
+    )
+    .unwrap();
+    fs::write(dir.join("plugin.wasm"), b"x").unwrap();
+
+    Command::cargo_bin("fidius")
+        .unwrap()
+        .args(["package", "inspect", dir.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Runtime: wasm"))
+        .stdout(predicates::str::contains("Component: plugin.wasm"))
+        .stdout(predicates::str::contains(
+            "Precompiled (.cwasm): plugin.cwasm",
+        ))
+        .stdout(predicates::str::contains("Capabilities: clocks, stdout"));
+}
+
+#[test]
+fn sign_verify_and_tamper_wasm_package() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let dir = tmp.path().join("p");
+    stage_wasm_pkg(&dir);
+
+    let keybase = tmp.path().join("key");
+    Command::cargo_bin("fidius")
+        .unwrap()
+        .args(["keygen", "--out", keybase.to_str().unwrap()])
+        .assert()
+        .success();
+    let secret = format!("{}.secret", keybase.display());
+    let public = format!("{}.public", keybase.display());
+
+    // Sign the (artifact-agnostic) package, then verify.
+    Command::cargo_bin("fidius")
+        .unwrap()
+        .args(["package", "sign", "--key", &secret, dir.to_str().unwrap()])
+        .assert()
+        .success();
+    Command::cargo_bin("fidius")
+        .unwrap()
+        .args(["package", "verify", "--key", &public, dir.to_str().unwrap()])
+        .assert()
+        .success();
+
+    // Tamper the component → verification must fail.
+    fs::write(dir.join("plugin.wasm"), b"tampered component bytes").unwrap();
+    Command::cargo_bin("fidius")
+        .unwrap()
+        .args(["package", "verify", "--key", &public, dir.to_str().unwrap()])
+        .assert()
+        .failure();
+}

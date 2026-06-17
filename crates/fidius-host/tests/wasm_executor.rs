@@ -471,3 +471,83 @@ fn pack_unpack_load_roundtrip() {
     let s: String = handle.call_method(0, &("Pax".to_string(),)).unwrap();
     assert_eq!(s, "Hello, Pax!");
 }
+
+// ── Signature policy for wasm packages (FIDIUS-T-0108) ──────────────────────
+
+/// Sign a staged package dir over its `package_digest` (the same scheme
+/// `fidius package sign` uses) and return the verifying key.
+fn sign_pkg(pkg_dir: &std::path::Path) -> ed25519_dalek::VerifyingKey {
+    use ed25519_dalek::Signer;
+    let sk = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
+    let digest = fidius_core::package::package_digest(pkg_dir).unwrap();
+    let sig = sk.sign(&digest);
+    std::fs::write(pkg_dir.join("package.sig"), sig.to_bytes()).unwrap();
+    sk.verifying_key()
+}
+
+#[test]
+fn signed_wasm_package_loads_when_signature_required() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &[]);
+    let vk = sign_pkg(&tmp.path().join("greeter-pkg"));
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .require_signature(true)
+        .trusted_keys(&[vk])
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("greeter-pkg", &GREETER_DESC)
+        .expect("signed package should load");
+    let s: String = handle.call_method(0, &("Sig".to_string(),)).unwrap();
+    assert_eq!(s, "Hello, Sig!");
+}
+
+#[test]
+fn unsigned_wasm_package_rejected_when_signature_required() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &[]); // no package.sig
+    let vk = {
+        use ed25519_dalek::SigningKey;
+        SigningKey::from_bytes(&[7u8; 32]).verifying_key()
+    };
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .require_signature(true)
+        .trusted_keys(&[vk])
+        .build()
+        .unwrap();
+    match host.load_wasm("greeter-pkg", &GREETER_DESC) {
+        Err(LoadError::SignatureRequired { .. }) => {}
+        Err(e) => panic!("expected SignatureRequired, got {e:?}"),
+        Ok(_) => panic!("expected SignatureRequired, got a handle"),
+    }
+}
+
+#[test]
+fn tampered_wasm_package_fails_verification() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &[]);
+    let dir = tmp.path().join("greeter-pkg");
+    let vk = sign_pkg(&dir);
+
+    // Tamper the component after signing → package_digest changes.
+    let comp = dir.join("greeter_guest.wasm");
+    let mut bytes = std::fs::read(&comp).unwrap();
+    bytes.push(0);
+    std::fs::write(&comp, &bytes).unwrap();
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .require_signature(true)
+        .trusted_keys(&[vk])
+        .build()
+        .unwrap();
+    match host.load_wasm("greeter-pkg", &GREETER_DESC) {
+        Err(LoadError::SignatureInvalid { .. }) => {}
+        Err(e) => panic!("expected SignatureInvalid after tampering, got {e:?}"),
+        Ok(_) => panic!("expected SignatureInvalid after tampering, got a handle"),
+    }
+}

@@ -4,14 +4,14 @@ level: task
 title: "P3.3 — Signing + inspect for .wasm components (Ed25519 artifact-agnostic; inspect understands wasm runtime)"
 short_code: "FIDIUS-T-0108"
 created_at: 2026-06-17T09:50:14.312918+00:00
-updated_at: 2026-06-17T09:50:14.312918+00:00
+updated_at: 2026-06-17T12:26:27.539844+00:00
 parent: FIDIUS-I-0021
-blocked_by: ["FIDIUS-T-0107"]
+blocked_by: [FIDIUS-T-0107]
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,12 +28,14 @@ initiative_id: FIDIUS-I-0021
 
 Ensure Ed25519 signing covers `.wasm` component packages (artifact-agnostic — nearly free) and `fidius inspect` understands the wasm runtime, so a wasm `.fid` signs/verifies/inspects like cdylib and Python.
 
+## Acceptance Criteria
+
 ## Acceptance Criteria **[REQUIRED]**
 
-- [ ] `fidius sign` / `fidius verify` work on a wasm `.fid` (signing is over the package digest — confirm no `.so`/`.py`-specific assumptions; add tests). Tampering a wasm package fails verification.
-- [ ] `fidius inspect` on a wasm package reports `runtime = wasm`, interface + version, the component file, the `[wasm].capabilities` allow-list, the interface hash, and the `.cwasm` if present.
-- [ ] Load policy (signature required vs lenient) is enforced for wasm packages identically to cdylib/python (`LoadPolicy`).
-- [ ] E2E: sign a wasm `.fid`, verify OK, tamper → verify fails; `inspect` output is correct for a wasm package.
+- [x] `fidius sign`/`verify` work on a wasm package — signing is over `package_digest` (excludes `*.sig`, covers all files incl. the `.wasm`), no artifact-type assumptions. Tampering the component fails verification (CLI `sign_verify_and_tamper_wasm_package`).
+- [x] `fidius inspect` on a wasm package reports `runtime = wasm`, interface + version, the component file, the `.cwasm` (or "none — JIT"), and the `[wasm].capabilities` allow-list (surfaced prominently). *Note:* the interface hash isn't in the manifest (it lives in the component + descriptor, validated at load), so inspect doesn't print it.
+- [x] Load policy enforced for wasm identically to cdylib — new `signing::verify_package_signature`; `load_wasm` (and `load_python`, for true parity) call it when `require_signature`. Verified: signed loads, unsigned → `SignatureRequired`, tampered → `SignatureInvalid`.
+- [x] E2E: CLI sign→verify→tamper→verify-fails (`fidius-cli/tests/wasm_pack.rs`); host signed/unsigned/tampered `load_wasm` (`fidius-host/tests/wasm_executor.rs`); inspect output asserted.
 
 ## Implementation Notes **[CONDITIONAL: Technical Task]**
 
@@ -48,4 +50,9 @@ Extend `fidius-cli` `inspect` to render `[wasm]` fields (mirror the Python inspe
 
 ## Status Updates **[REQUIRED]**
 
-Not started — Phase 3 of FIDIUS-I-0021.
+**2026-06-17 — COMPLETE.**
+- Signing was already artifact-agnostic (`package_digest` over all non-`.sig` files) — no change needed for sign/verify; added wasm coverage.
+- `signing::verify_package_signature(dir, keys)` (new) — package.sig over `package_digest`. `load_wasm` + `load_python` enforce it under `require_signature` (parity with cdylib `load()`).
+- `package inspect` renders a `WASM:` block (component, precompiled/`.cwasm` or "none — JIT", capabilities prominently).
+- Tests: host (`--features wasm`) signed/unsigned/tampered `load_wasm`; CLI `inspect_renders_wasm_fields` + `sign_verify_and_tamper_wasm_package`.
+- Verified: wasm suite 18 ok; CLI wasm_pack 4 ok; python suite 10 ok (load_python change safe); native `cargo test --workspace` 41 ok; `angreal lint` green.
