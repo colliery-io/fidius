@@ -6,3 +6,11 @@ Cargo.lock
 .DS_Store
 site/
 .venv/
+
+# WASM component build artifacts (rebuilt via cargo-component / componentize-py)
+tests/wasm-fixtures/**/*.wasm
+tests/wasm-fixtures/**/*.cwasm
+tests/wasm-fixtures/**/gen/
+tests/wasm-fixtures/**/bindings.rs
+__pycache__/
+tests/wasm-fixtures/records-greeter/wit/

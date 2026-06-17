@@ -104,6 +104,7 @@ pub use fidius_core::error;
 pub use fidius_core::hash;
 pub use fidius_core::python_descriptor;
 pub use fidius_core::status;
+pub use fidius_core::wasm_descriptor;
 pub use fidius_core::wire;
 
 // Also re-export key types at the crate root for convenience

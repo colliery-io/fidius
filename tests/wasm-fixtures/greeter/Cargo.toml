@@ -1,0 +1,28 @@
+# Standalone — kept out of the parent fidius workspace.
+[workspace]
+
+[package]
+name = "greeter-guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "fidius:greeter-guest"
+
+[package.metadata.component.target]
+path = "wit"
+world = "greeter-plugin"
+
+[package.metadata.component.dependencies]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

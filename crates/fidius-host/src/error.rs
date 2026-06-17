@@ -69,6 +69,12 @@ pub enum LoadError {
     /// fidius-host public error enum type-clean across feature gates.
     #[error("python load failed: {0}")]
     PythonLoad(String),
+
+    /// WASM component loader failed (only produced with the `wasm` feature on).
+    /// Wraps wasmtime/instantiation errors as a string to keep the public enum
+    /// type-clean across feature gates.
+    #[error("wasm load failed: {0}")]
+    WasmLoad(String),
 }
 
 /// Errors that can occur when calling a plugin method.
@@ -100,4 +106,57 @@ pub enum CallError {
 
     #[error("unknown FFI status code: {code}")]
     UnknownStatus { code: i32 },
+
+    /// A method was dispatched through the wrong wire path — a `#[wire(raw)]`
+    /// method called via the typed path, or vice versa. Backend-agnostic: the
+    /// Python and (future) WASM executors both enforce the raw/typed split.
+    #[error(
+        "wire-mode mismatch on method '{method}': declared wire_raw={declared}, dispatcher used wire_raw={attempted}"
+    )]
+    WireModeMismatch {
+        method: String,
+        declared: bool,
+        attempted: bool,
+    },
+
+    /// A runtime-level fault originating inside an execution backend that is
+    /// *not* a plugin-raised [`PluginError`] — e.g. a future WASM trap
+    /// (unreachable, out-of-bounds) or an interpreter-level failure. Carries
+    /// the backend's runtime name and a message. Plugin-raised errors (Python
+    /// exceptions included) stay in [`CallError::Plugin`] so their structured
+    /// `code`/`message`/`details` (including tracebacks) round-trip.
+    #[error("{runtime} backend error: {message}")]
+    Backend { runtime: String, message: String },
+}
+
+/// Fold the Python backend's call error into the unified [`CallError`].
+///
+/// `fidius-python` deliberately does not depend on `fidius-host` (that would
+/// cycle — the host optionally depends on it), so the conversion lives here,
+/// behind the `python` feature, where both types are visible. Plugin-raised
+/// Python exceptions map to [`CallError::Plugin`] with the traceback preserved
+/// in `PluginError.details` (built by `fidius_python::pyerr_to_plugin_error`).
+#[cfg(feature = "python")]
+impl From<fidius_python::PythonCallError> for CallError {
+    fn from(e: fidius_python::PythonCallError) -> Self {
+        use fidius_python::PythonCallError as P;
+        match e {
+            P::InvalidMethodIndex { index, count } => CallError::InvalidMethodIndex {
+                index,
+                count: count as u32,
+            },
+            P::WireModeMismatch {
+                method,
+                declared,
+                attempted,
+            } => CallError::WireModeMismatch {
+                method: method.to_string(),
+                declared,
+                attempted,
+            },
+            P::InputDecode(msg) => CallError::Deserialization(msg),
+            P::OutputEncode(msg) => CallError::Serialization(msg),
+            P::Plugin(err) => CallError::Plugin(err),
+        }
+    }
 }

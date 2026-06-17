@@ -18,6 +18,7 @@ fidius lets you define a Rust trait, annotate it with a macro, and get a compile
 - **Optional methods & interface evolution** — add methods without breaking existing plugins.
 - **Signing & verification** — Ed25519 signatures over plugin artifacts.
 - **Python plugins** — write plugins in Python that satisfy a Rust trait via `fidius-python`.
+- **Sandboxed WASM plugins** — compile a plugin to a WebAssembly component that runs in a deny-all wasmtime sandbox with a capability allow-list; polyglot (Rust *and* other languages implement the same interface).
 - **CLI tooling** — scaffold interfaces and plugins, sign, inspect, and package.
 
 ## Workspace Layout
@@ -31,6 +32,7 @@ fidius lets you define a Rust trait, annotate it with a macro, and get a compile
 | `fidius-cli` | `fidius` command-line tool |
 | `fidius-test` | Test helpers (dylib fixtures, signing fixtures) |
 | `fidius-python` | Python plugin support |
+| `fidius-guest` | wasm-buildable guest types for plugins compiled to WASM components |
 
 ## Installation
 
@@ -112,6 +114,8 @@ Full documentation lives in [`docs/`](docs/index.md) and covers tutorials, how-t
 
 - [Your First Plugin](docs/tutorials/your-first-plugin.md)
 - [Your First Python Plugin](docs/tutorials/python-plugin.md)
+- [Your First WASM Plugin](docs/tutorials/your-first-wasm-plugin.md)
+- [Capabilities & the WASM Sandbox](docs/explanation/wasm-capabilities.md)
 - [Architecture Overview](docs/explanation/architecture.md)
 - [ABI Specification](docs/reference/abi-specification.md)
 - [CLI Reference](docs/reference/cli.md)

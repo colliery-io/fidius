@@ -41,6 +41,9 @@ struct MethodInfo<'a> {
     /// as an interface-hash mismatch (the trait's `#[wire(raw)]` flips a
     /// `!raw` marker in the signature string the hash is computed over).
     wire_raw: bool,
+    /// The method's return type, if any (`None` for `-> ()`). Used by the
+    /// WASM component WIT generator (FIDIUS-T-0106).
+    ret_type: Option<&'a Type>,
 }
 
 /// Detect a `#[wire(raw)]` attribute on an impl-side method. Mirrors the
@@ -157,10 +160,11 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let mut impl_methods: Vec<MethodInfo> = Vec::new();
     for impl_item in &item.items {
         if let ImplItem::Fn(method) = impl_item {
-            let returns_result = match &method.sig.output {
-                ReturnType::Type(_, ty) => is_result_type(ty),
-                ReturnType::Default => false,
+            let ret_type: Option<&Type> = match &method.sig.output {
+                ReturnType::Type(_, ty) => Some(ty.as_ref()),
+                ReturnType::Default => None,
             };
+            let returns_result = ret_type.map(is_result_type).unwrap_or(false);
             let mut arg_types = Vec::new();
             let mut arg_names = Vec::new();
             for arg in &method.sig.inputs {
@@ -181,6 +185,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                 arg_types,
                 arg_names,
                 wire_raw,
+                ret_type,
             });
         }
     }
@@ -217,6 +222,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
     let free_buffer = match buffer_strategy {
         BufferStrategyAttr::PluginAllocated => quote! {
+            #[cfg(not(target_family = "wasm"))]
             unsafe extern "C" fn #free_fn_name(ptr: *mut u8, len: usize) {
                 if !ptr.is_null() && len > 0 {
                     // Reconstruct the Box<[u8]> from its raw parts. Safe because the
@@ -244,6 +250,13 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     // Register descriptor via inventory for multi-plugin collection
     let registration = generate_inventory_registration(&impl_ident, crate_path);
 
+    // WASM Component Model auto-export (FIDIUS-T-0106). Emitted under
+    // `#[cfg(target_family = "wasm")]`; on a wasm build with an unsupported
+    // method signature it emits a clear `compile_error!` instead of silently
+    // producing a component that exports nothing. cdylib/Python builds cfg this
+    // out entirely, so they are never affected.
+    let wasm_adapter = generate_wasm_adapter(trait_name, &instance_name, &impl_methods);
+
     Ok(quote! {
         #item_emit
         #instance
@@ -252,7 +265,325 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         #vtable
         #descriptor
         #registration
+        #wasm_adapter
     })
+}
+
+/// Generate the WASM component auto-export adapter for `#[plugin_impl]`.
+///
+/// Emits, under `#[cfg(target_family = "wasm")]`, a `wit_bindgen::generate!`
+/// invocation (inline WIT generated from the method signatures) plus a `Guest`
+/// impl that forwards to the plugin's static instance, and `export!`. If any
+/// method has a reference argument or a type outside the supported set, it
+/// instead emits a wasm-gated `compile_error!` (a clear failure on wasm builds;
+/// a no-op on cdylib/Python builds where the whole adapter is cfg'd out).
+fn generate_wasm_adapter(
+    trait_name: &Ident,
+    instance_name: &Ident,
+    methods: &[MethodInfo],
+) -> TokenStream {
+    use crate::wit::{
+        conv_expr, render_wit, result_ok_type, return_to_wit, return_to_wit_with, rust_type_to_wit,
+        to_kebab_case, wit_type_with, WitMethod,
+    };
+    use std::collections::BTreeSet;
+
+    let iface_kebab = to_kebab_case(&trait_name.to_string());
+    let iface_snake = iface_kebab.replace('-', "_");
+    let pkg_seg = format_ident!("{}", iface_snake);
+    let world = format!("{iface_kebab}-plugin");
+    // The interface-hash const lives in the `#[plugin_interface]` companion
+    // module (`__fidius_<Trait>`), a sibling of the impl — reference it there.
+    let companion = format_ident!("__fidius_{}", trait_name);
+    let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
+    let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
+
+    // Collect candidate user types (non-primitive path idents in signatures;
+    // `#[derive(WitType)]` records/variants). Reject reference args (owned only,
+    // v1). Then validate every type maps to WIT — a structurally-unsupported
+    // type emits a wasm-gated compile_error rather than a silently-broken export.
+    let mut known: BTreeSet<String> = BTreeSet::new();
+    for m in methods {
+        for ty in &m.arg_types {
+            if matches!(ty, Type::Reference(_)) {
+                return wasm_unsupported(
+                    m.name,
+                    "reference arguments are not supported — take owned types (String, Vec<u8>, …)",
+                );
+            }
+            collect_user_idents(ty, &mut known);
+        }
+        if m.returns_result {
+            if let Some(ok) = m.ret_type.and_then(result_ok_type) {
+                collect_user_idents(ok, &mut known);
+            }
+        } else if let Some(rt) = m.ret_type {
+            collect_user_idents(rt, &mut known);
+        }
+    }
+    for m in methods {
+        for ty in &m.arg_types {
+            if let Err(e) = wit_type_with(ty, &known) {
+                return wasm_unsupported(m.name, &e);
+            }
+        }
+        if let Err(e) = return_to_wit_with(m.ret_type, &known) {
+            return wasm_unsupported(m.name, &e);
+        }
+    }
+
+    let has_user = !known.is_empty();
+
+    if !has_user {
+        // ── Primitives-only: self-contained inline WIT (no build.rs needed). ──
+        let mut wit_methods = Vec::new();
+        for m in methods {
+            let mut params = Vec::new();
+            for (name, ty) in m.arg_names.iter().zip(&m.arg_types) {
+                let wt = rust_type_to_wit(ty).expect("validated above");
+                params.push((to_kebab_case(&name.to_string()), wt));
+            }
+            wit_methods.push(WitMethod {
+                name: to_kebab_case(&m.name.to_string()),
+                params,
+                ret: return_to_wit(m.ret_type).expect("validated above"),
+            });
+        }
+        let wit_doc = render_wit(&iface_kebab, &wit_methods);
+        let guest_methods: Vec<TokenStream> = methods
+            .iter()
+            .map(|m| {
+                let mname = m.name;
+                let arg_names = &m.arg_names;
+                let arg_types = &m.arg_types;
+                let call = quote! { super::#instance_name.#mname(#(#arg_names),*) };
+                if m.returns_result {
+                    let ok = match m.ret_type.and_then(result_ok_type) {
+                        Some(t) => quote! { #t },
+                        None => quote! { () },
+                    };
+                    quote! {
+                        fn #mname(#(#arg_names: #arg_types),*)
+                            -> Result<#ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
+                            #call.map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
+                                code: __e.code, message: __e.message, details: __e.details,
+                            })
+                        }
+                    }
+                } else {
+                    match m.ret_type {
+                        Some(rt) => {
+                            quote! { fn #mname(#(#arg_names: #arg_types),*) -> #rt { #call } }
+                        }
+                        None => quote! { fn #mname(#(#arg_names: #arg_types),*) { #call } },
+                    }
+                }
+            })
+            .collect();
+        return quote! {
+            #[cfg(target_family = "wasm")]
+            #[allow(warnings, clippy::all)]
+            mod #module_ident {
+                use super::*;
+                ::wit_bindgen::generate!({ inline: #wit_doc, world: #world });
+                struct __FidiusComponent;
+                impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
+                    #(#guest_methods)*
+                    fn fidius_interface_hash() -> u64 { super::#companion::#hash_const }
+                }
+                export!(__FidiusComponent);
+            }
+        };
+    }
+
+    // ── User types present: consume the build.rs-generated wit/ + conversions. ──
+    // The Guest uses wit-bindgen's generated types; we convert at the boundary
+    // via the generated `From` impls (`conv_expr` is identity for primitive-only
+    // fields and `.into()`/map for user types).
+    let guest_methods: Vec<TokenStream> = methods
+        .iter()
+        .map(|m| {
+            let mname = m.name;
+            let arg_sig: Vec<TokenStream> = m
+                .arg_names
+                .iter()
+                .zip(&m.arg_types)
+                .map(|(n, t)| {
+                    let gt = gen_type(t, &known, &pkg_seg);
+                    quote! { #n: #gt }
+                })
+                .collect();
+            let call_args: Vec<syn::Expr> = m
+                .arg_names
+                .iter()
+                .zip(&m.arg_types)
+                .map(|(n, t)| {
+                    let s = conv_expr(&n.to_string(), t, &known);
+                    syn::parse_str::<syn::Expr>(&s).expect("conv expr parses")
+                })
+                .collect();
+            let call = quote! { super::#instance_name.#mname(#(#call_args),*) };
+            if m.returns_result {
+                let ok = m.ret_type.and_then(result_ok_type);
+                let gen_ok = match ok {
+                    Some(t) => gen_type(t, &known, &pkg_seg),
+                    None => quote! { () },
+                };
+                let ok_map = match ok {
+                    Some(t) => {
+                        let e: syn::Expr =
+                            syn::parse_str(&conv_expr("__v", t, &known)).expect("conv expr");
+                        quote! { .map(|__v| #e) }
+                    }
+                    None => quote! {},
+                };
+                quote! {
+                    fn #mname(#(#arg_sig),*)
+                        -> Result<#gen_ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
+                        #call #ok_map .map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
+                            code: __e.code, message: __e.message, details: __e.details,
+                        })
+                    }
+                }
+            } else {
+                match m.ret_type {
+                    Some(rt) => {
+                        let gen_ret = gen_type(rt, &known, &pkg_seg);
+                        let e: syn::Expr =
+                            syn::parse_str(&conv_expr("__r", rt, &known)).expect("conv expr");
+                        quote! { fn #mname(#(#arg_sig),*) -> #gen_ret { let __r = #call; #e } }
+                    }
+                    None => quote! { fn #mname(#(#arg_sig),*) { #call } },
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[cfg(target_family = "wasm")]
+        #[allow(warnings, clippy::all)]
+        mod #module_ident {
+            use super::*;
+            // wit/ + the conversions are (re)generated from source by the crate's
+            // build.rs (`fidius_build::emit_wit()`), since a proc-macro can't see
+            // external type definitions.
+            ::wit_bindgen::generate!({ path: "wit", world: #world });
+            include!(concat!(env!("OUT_DIR"), "/fidius_wit_conversions.rs"));
+            struct __FidiusComponent;
+            impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
+                #(#guest_methods)*
+                fn fidius_interface_hash() -> u64 { super::#companion::#hash_const }
+            }
+            export!(__FidiusComponent);
+        }
+    }
+}
+
+/// Collect candidate user-type idents (non-primitive path leaves) from a type,
+/// descending through `Vec`/`Option`/`Box` and `Result`'s ok type.
+fn collect_user_idents(ty: &Type, out: &mut std::collections::BTreeSet<String>) {
+    match ty {
+        Type::Reference(r) => collect_user_idents(&r.elem, out),
+        Type::Slice(s) => collect_user_idents(&s.elem, out),
+        Type::Path(p) => {
+            if let Some(seg) = p.path.segments.last() {
+                let id = seg.ident.to_string();
+                let prim = matches!(
+                    id.as_str(),
+                    "bool"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "f32"
+                        | "f64"
+                        | "char"
+                        | "String"
+                        | "str"
+                        | "PluginError"
+                );
+                match id.as_str() {
+                    "Vec" | "Option" | "Box" => {
+                        if let Some(inner) = wasm_first_generic(seg) {
+                            collect_user_idents(inner, out);
+                        }
+                    }
+                    "Result" => {
+                        if let Some(ok) = wasm_first_generic(seg) {
+                            collect_user_idents(ok, out);
+                        }
+                    }
+                    _ if !prim => {
+                        out.insert(id);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The wit-bindgen-generated type for an author type: identity for types holding
+/// no user type (wit-bindgen uses the same Rust type), else the generated path
+/// `exports::fidius::<iface>::<iface>::<T>`, recursing through `Vec`/`Option`.
+fn gen_type(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> TokenStream {
+    if !crate::wit::contains_user_type(ty, known) {
+        return quote! { #ty };
+    }
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            let id = seg.ident.to_string();
+            if id == "Vec" {
+                if let Some(inner) = wasm_first_generic(seg) {
+                    let g = gen_type(inner, known, pkg_seg);
+                    return quote! { ::std::vec::Vec<#g> };
+                }
+            }
+            if id == "Option" {
+                if let Some(inner) = wasm_first_generic(seg) {
+                    let g = gen_type(inner, known, pkg_seg);
+                    return quote! { ::core::option::Option<#g> };
+                }
+            }
+            if known.contains(&id) {
+                let tid = &seg.ident;
+                return quote! { exports::fidius::#pkg_seg::#pkg_seg::#tid };
+            }
+        }
+    }
+    quote! { #ty }
+}
+
+fn wasm_first_generic(seg: &syn::PathSegment) -> Option<&Type> {
+    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+        for a in &ab.args {
+            if let syn::GenericArgument::Type(t) = a {
+                return Some(t);
+            }
+        }
+    }
+    None
+}
+
+/// Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
+/// the WASM auto-export can't handle. On native (cdylib/Python) builds the cfg
+/// is false, so this is a no-op there; on a wasm build it fails the compile with
+/// a clear message instead of silently producing a component that exports nothing.
+fn wasm_unsupported(method: &Ident, reason: &str) -> TokenStream {
+    let msg = format!(
+        "fidius WASM auto-export: method `{method}` cannot be exported to a component — {reason}. \
+         Supported types: bool, i8..i64, u8..u64, f32/f64, char, String, Vec<T>, Option<T>, \
+         and Result<T, PluginError>. (User struct/enum support via #[derive(WitType)] is planned.)"
+    );
+    quote! {
+        #[cfg(target_family = "wasm")]
+        ::core::compile_error!(#msg);
+    }
 }
 
 /// Generate extern "C" shim functions for each method. Shim signatures and
@@ -460,7 +791,10 @@ fn generate_shims(
         })
         .collect();
 
-    quote! { #(#shim_fns)* }
+    // cdylib FFI shims are only meaningful for native dynamic loading. Gate
+    // them off wasm so a component build (which exports via the WIT adapter,
+    // not these extern "C" shims) doesn't compile them.
+    quote! { #(#[cfg(not(target_family = "wasm"))] #shim_fns)* }
 }
 
 /// Generate the static vtable with function pointers.
@@ -486,6 +820,7 @@ fn generate_vtable_static(
         .collect();
 
     quote! {
+        #[cfg(not(target_family = "wasm"))]
         static #vtable_name: #companion::#vtable_type = #companion::#constructor(#(#shim_args),*);
     }
 }
@@ -521,10 +856,12 @@ fn generate_descriptor(
     };
 
     quote! {
+        #[cfg(not(target_family = "wasm"))]
         const #plugin_name_const: &std::ffi::CStr = unsafe {
             std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#impl_name_str, "\0").as_bytes())
         };
 
+        #[cfg(not(target_family = "wasm"))]
         static #descriptor_name: #crate_path::descriptor::PluginDescriptor = unsafe {
             // Compute capabilities inline: check which impl'd methods
             // appear in the optional methods list.
@@ -576,6 +913,7 @@ fn generate_inventory_registration(impl_ident: &Ident, crate_path: &Path) -> Tok
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
 
     quote! {
+        #[cfg(not(target_family = "wasm"))]
         #crate_path::inventory::submit! {
             #crate_path::registry::DescriptorEntry {
                 descriptor: &#descriptor_name,

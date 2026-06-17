@@ -12,21 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod descriptor;
-pub mod error;
-pub mod hash;
+// Host-only modules (archive/compression/filesystem, inventory collection).
 pub mod package;
-pub mod python_descriptor;
 pub mod registry;
-pub mod status;
-pub mod wire;
 
 #[cfg(feature = "async")]
 pub mod async_runtime;
 
+// Guest-essential, wasm-buildable modules now live in `fidius-guest`. They are
+// re-exported here so every existing `fidius_core::*` path (and the `fidius`
+// facade re-exports) resolves unchanged — the split (FIDIUS-I-0022) is internal.
+pub use fidius_guest::{
+    descriptor, error, hash, python_descriptor, status, value, wasm_descriptor, wire,
+};
+
 pub use descriptor::*;
 pub use error::PluginError;
 pub use status::*;
+pub use value::{from_value, to_value, Value, ValueError};
 
 // Re-export inventory so generated code can reference it via fidius_core::inventory
 pub use inventory;

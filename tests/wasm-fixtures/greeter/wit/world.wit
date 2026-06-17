@@ -1,0 +1,53 @@
+// Copyright 2026 Colliery, Inc. Licensed under Apache 2.0
+//
+// Reference fidius interface projected to WIT (FIDIUS-I-0021 Phase 2, T-0101).
+// Used by the Phase-2 test components: a Rust guest (T-0102) and a non-Rust
+// polyglot guest (T-0105). See docs/explanation/wasm-component-abi.md.
+//
+// Each func corresponds to a fidius trait method in declaration order — the
+// same index the cdylib vtable and the Python loader use. The host dispatches
+// dynamically by name/index via wasmtime's component::Val API.
+
+package fidius:greeter@1.0.0;
+
+interface greeter {
+    /// Error payload mirroring `fidius_core::PluginError`. A fallible method
+    /// maps to `result<T, plugin-error>`; the host turns `err` into
+    /// `CallError::Plugin(PluginError { code, message, details })`.
+    record plugin-error {
+        code: string,
+        message: string,
+        details: option<string>,
+    }
+
+    /// Typed method — fidius `fn greet(name: String) -> String`.
+    /// Args cross as positional WIT params (tuple-packed `Value::List`).
+    greet: func(name: string) -> string;
+
+    /// Typed, multi-arg, fallible — fidius
+    /// `fn add(a: i64, b: i64) -> Result<i64, PluginError>`.
+    add: func(a: s64, b: s64) -> result<s64, plugin-error>;
+
+    /// `#[wire(raw)]` method — opaque bulk bytes in/out as `list<u8>`,
+    /// dispatched via the host's `call_method_raw` path (no marshalling).
+    echo-bytes: func(data: list<u8>) -> list<u8>;
+
+    /// Capability probe (FIDIUS-T-0104): returns whether the env var
+    /// `FIDIUS_TEST_CAP` is visible to the guest. The sandbox grants env access
+    /// only when the package's `[wasm].capabilities` allow-list includes `"env"`,
+    /// so this returns false under the deny-all default and true when granted.
+    probe-env: func() -> bool;
+
+    /// Interface-hash carrier — parity with the cdylib descriptor's
+    /// `interface_hash` and the Python `__interface_hash__` constant. The host
+    /// calls this at load and rejects a mismatch (integrity check; signing is
+    /// the security boundary).
+    fidius-interface-hash: func() -> u64;
+}
+
+/// The component world a greeter plugin implements: it exports the `greeter`
+/// interface. The host instantiates the component and dispatches the interface's
+/// funcs by index/name.
+world greeter-plugin {
+    export greeter;
+}

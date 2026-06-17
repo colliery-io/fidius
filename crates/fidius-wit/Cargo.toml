@@ -1,0 +1,12 @@
+[package]
+name = "fidius-wit"
+version = "0.3.0"
+edition = "2021"
+description = "WIT generation for the Fidius WASM backend: maps Rust interface types (incl. #[derive(WitType)] structs/enums) to WIT records/variants, and emits the generated↔author conversions. Shared by fidius-macro, the build helper, and the CLI."
+license = "Apache-2.0"
+repository = "https://github.com/colliery-io/fidius"
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }

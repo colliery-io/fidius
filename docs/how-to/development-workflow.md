@@ -10,6 +10,10 @@ This guide covers the development tools and workflows for contributing to fidius
 - [angreal](https://github.com/angreal/angreal) — task runner
 - [pre-commit](https://pre-commit.com/) — git hook manager
 
+Working on the WASM execution backend additionally needs the component build
+toolchain — see [How to Set Up the WASM Component Toolchain](wasm-component-toolchain.md).
+Not required for the cdylib or Python backends.
+
 ## Install Pre-commit Hooks
 
 ```bash

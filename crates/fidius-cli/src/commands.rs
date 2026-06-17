@@ -682,6 +682,21 @@ pub fn package_inspect(dir: &Path) -> Result {
         println!("    Entry module: {}", py.entry_module);
         println!("    Requirements: {}", py.requirements_path());
     }
+    if let Some(w) = manifest.wasm.as_ref() {
+        println!("  WASM:");
+        println!("    Component: {}", w.component);
+        match &w.precompiled {
+            Some(pc) => println!("    Precompiled (.cwasm): {pc}"),
+            None => println!("    Precompiled (.cwasm): (none — JIT at load)"),
+        }
+        // The capability allow-list is the security-relevant bit a deployer
+        // reviews. Empty = deny-all; filesystem is never grantable in v1.
+        if w.capabilities.is_empty() {
+            println!("    Capabilities: (none — deny-all sandbox)");
+        } else {
+            println!("    Capabilities: {}", w.capabilities.join(", "));
+        }
+    }
     if let Some(table) = manifest.metadata.as_table() {
         println!("  Metadata:");
         for (key, value) in table {
@@ -750,7 +765,28 @@ pub fn package_verify(key_path: &Path, dir: &Path) -> Result {
 
 // ─── package pack ───────────────────────────────────────────────────────────
 
-pub fn package_pack(dir: &Path, output: Option<&Path>) -> Result {
+pub fn package_pack(dir: &Path, output: Option<&Path>, precompile: bool) -> Result {
+    use fidius_core::package::PackageRuntime;
+
+    // WASM packages: validate (and optionally precompile) the component before
+    // archiving. Building the component (cargo-component / componentize-py) is
+    // the author's job — pack only consumes a prebuilt `.wasm` (FIDIUS-T-0107).
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    if manifest.package.runtime() == PackageRuntime::Wasm {
+        let component = manifest
+            .wasm
+            .as_ref()
+            .ok_or("runtime = \"wasm\" requires a [wasm] section with `component`")?
+            .component
+            .clone();
+        if !dir.join(&component).exists() {
+            return Err(format!("wasm component `{component}` not found in package dir").into());
+        }
+        prepare_wasm_pack(dir, &component, precompile)?;
+    } else if precompile {
+        return Err("--precompile only applies to wasm packages".into());
+    }
+
     let result = fidius_core::package::pack_package(dir, output)?;
 
     if result.unsigned {
@@ -767,6 +803,96 @@ pub fn package_pack(dir: &Path, output: Option<&Path>) -> Result {
     };
 
     println!("Packed: {} ({human_size})", result.path.display());
+    Ok(())
+}
+
+/// Validate (and optionally precompile) a wasm component at pack time. Requires
+/// the CLI built with `--features wasm` (pulls wasmtime via `fidius-host/wasm`).
+#[cfg(feature = "wasm")]
+fn prepare_wasm_pack(dir: &Path, component: &str, precompile: bool) -> Result {
+    let component_path = dir.join(component);
+    let bytes = std::fs::read(&component_path)?;
+    fidius_host::executor::validate_component(&bytes)
+        .map_err(|e| format!("component validation failed: {e}"))?;
+    println!("Validated wasm component: {component}");
+
+    if precompile {
+        let cwasm = fidius_host::executor::precompile_component(&bytes)
+            .map_err(|e| format!("precompile failed: {e}"))?;
+        let cwasm_path = component_path.with_extension("cwasm");
+        let cwasm_name = cwasm_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or("invalid component filename")?
+            .to_string();
+        std::fs::write(&cwasm_path, &cwasm)?;
+        record_precompiled(dir, &cwasm_name)?;
+        println!(
+            "Precompiled: {cwasm_name} ({:.1} KB)",
+            cwasm.len() as f64 / 1024.0
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(feature = "wasm"))]
+fn prepare_wasm_pack(_dir: &Path, component: &str, precompile: bool) -> Result {
+    if precompile {
+        return Err("--precompile requires the CLI built with --features wasm".into());
+    }
+    eprintln!(
+        "warning: CLI built without wasm support — component `{component}` was not validated \
+         (rebuild with --features wasm to validate/precompile)"
+    );
+    Ok(())
+}
+
+/// Record `precompiled = "<name>"` under the `[wasm]` table in package.toml,
+/// preserving the rest of the file (string-insert; skips if already present).
+#[cfg(feature = "wasm")]
+fn record_precompiled(dir: &Path, cwasm_name: &str) -> Result {
+    let manifest_path = dir.join("package.toml");
+    let content = std::fs::read_to_string(&manifest_path)?;
+    if content.contains("precompiled") {
+        return Ok(()); // already recorded (re-pack)
+    }
+    let header = "[wasm]";
+    let pos = content
+        .find(header)
+        .ok_or("package.toml missing [wasm] section")?;
+    let after_header = pos + header.len();
+    let line_end = content[after_header..]
+        .find('\n')
+        .map(|i| after_header + i + 1)
+        .unwrap_or(content.len());
+    let mut out = String::with_capacity(content.len() + 48);
+    out.push_str(&content[..line_end]);
+    out.push_str(&format!("precompiled = \"{cwasm_name}\"\n"));
+    out.push_str(&content[line_end..]);
+    std::fs::write(&manifest_path, out)?;
+    Ok(())
+}
+
+// ─── wit ──────────────────────────────────────────────────────────────────
+
+/// Generate `<dir>/wit/<interface>.wit` from `<dir>/src/lib.rs` (the
+/// `#[plugin_interface]` trait + `#[derive(WitType)]` types). The `build.rs`
+/// helper (`fidius_build::emit_wit`) does this automatically on every build;
+/// this subcommand is for CI / manual inspection.
+pub fn wit(dir: Option<&Path>) -> Result {
+    let dir = dir.unwrap_or_else(|| Path::new("."));
+    let lib = dir.join("src").join("lib.rs");
+    let generated = fidius_wit::generate_from_path(&lib)?;
+    let wit_dir = dir.join("wit");
+    std::fs::create_dir_all(&wit_dir)?;
+    let path = wit_dir.join(format!("{}.wit", generated.iface_kebab));
+    std::fs::write(&path, &generated.wit)?;
+    println!(
+        "Wrote {} (interface {}, {} user type(s))",
+        path.display(),
+        generated.interface_name,
+        generated.user_types.len()
+    );
     Ok(())
 }
 

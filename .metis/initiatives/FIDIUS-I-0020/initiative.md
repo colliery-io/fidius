@@ -4,14 +4,14 @@ level: initiative
 title: "fidius-python — Python functions as first-class fidius plugins"
 short_code: "FIDIUS-I-0020"
 created_at: 2026-04-22T12:37:14.746135+00:00
-updated_at: 2026-04-24T12:41:07.940045+00:00
+updated_at: 2026-06-17T02:53:18.993625+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

@@ -151,9 +151,11 @@ fn load_python_dispatches_through_host() {
         .load_python("py-shouter-load", desc)
         .expect("load_python");
 
-    let input = serde_json::to_vec(&("loud".to_string(),)).unwrap();
-    let out = handle.call_typed_json(0, &input).expect("shout");
-    let result: String = serde_json::from_slice(&out).unwrap();
+    // Unified typed path: the host serialises the concrete args through the
+    // neutral `Value` currency to the Python backend and back.
+    let result: String = handle
+        .call_method(0, &("loud".to_string(),))
+        .expect("shout");
     assert_eq!(result, "LOUD");
 }
 
@@ -166,7 +168,11 @@ fn load_python_unknown_name_returns_not_found() {
         .search_path(tmp.path())
         .build()
         .unwrap();
-    let err = host.load_python("does-not-exist", desc).unwrap_err();
+    // `PluginHandle` (the Ok type) is not `Debug`, so match rather than unwrap_err.
+    let err = match host.load_python("does-not-exist", desc) {
+        Ok(_) => panic!("expected PluginNotFound for an unknown plugin"),
+        Err(e) => e,
+    };
     assert!(
         matches!(err, fidius_host::LoadError::PluginNotFound { .. }),
         "expected PluginNotFound, got: {err:?}"

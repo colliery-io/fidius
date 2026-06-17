@@ -61,6 +61,7 @@ nav:
   - Tutorials:
     - Your First Plugin: tutorials/your-first-plugin.md
     - Your First Python Plugin: tutorials/python-plugin.md
+    - Your First WASM Plugin: tutorials/your-first-wasm-plugin.md
     - Optional Methods: tutorials/optional-methods.md
     - Signing Plugins: tutorials/signing-plugins.md
     - Source Packages: tutorials/source-packages.md
@@ -74,6 +75,11 @@ nav:
     - Development Workflow: how-to/development-workflow.md
     - Package Metadata Schema: how-to/create-package-schema.md
     - White-Label Interface: how-to/white-label-interface.md
+    - Set Up the WASM Toolchain: how-to/wasm-component-toolchain.md
+    - A WASM Plugin in Python: how-to/wasm-python-plugin.md
+    - A WASM Plugin in JavaScript: how-to/wasm-javascript-plugin.md
+    - A WASM Plugin in Go: how-to/wasm-go-plugin.md
+    - A WASM Plugin in C: how-to/wasm-c-plugin.md
   - Reference:
     - CLI: reference/cli.md
     - ABI Specification: reference/abi-specification.md
@@ -111,3 +117,6 @@ nav:
     - Interface Evolution: explanation/interface-evolution.md
     - Buffer Strategies: explanation/buffer-strategies.md
     - Wire Format: explanation/wire-format.md
+    - WASM Component ABI: explanation/wasm-component-abi.md
+    - Capabilities & the WASM Sandbox: explanation/wasm-capabilities.md
+    - Performance (plugins vs microservice): explanation/performance.md

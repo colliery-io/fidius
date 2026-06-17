@@ -123,11 +123,9 @@ fn typed_method_round_trips() {
         .load_python("py-byte-pipe", byte_pipe_descriptor())
         .expect("load_python should succeed");
 
-    // BytePipe.name has index 1 (reverse is 0). Typed call: zero-arg
-    // method, encoded as the empty tuple (= JSON `[]`).
-    let input = serde_json::to_vec(&()).unwrap();
-    let out = handle.call_typed_json(1, &input).expect("name");
-    let result: String = serde_json::from_slice(&out).unwrap();
+    // BytePipe.name has index 1 (reverse is 0). Unified typed call: zero-arg
+    // method, encoded as the empty tuple.
+    let result: String = handle.call_method(1, &()).expect("name");
     assert_eq!(result, "py-byte-pipe");
 }
 
@@ -145,7 +143,7 @@ fn raw_wire_method_round_trips_2mb() {
         .map(|i| (i & 0xFF) as u8)
         .collect();
     let result = handle
-        .call_raw(0, &payload)
+        .call_method_raw(0, &payload)
         .expect("reverse_bytes should round-trip");
 
     assert_eq!(result.len(), payload.len());
@@ -178,9 +176,11 @@ fn tampered_interface_hash_is_rejected_at_load() {
     std::fs::write(&manifest_path, manifest).unwrap();
 
     let host = PluginHost::builder().search_path(&plugins).build().unwrap();
-    let err = host
-        .load_python("py-byte-pipe", byte_pipe_descriptor())
-        .unwrap_err();
+    // `PluginHandle` (the Ok type) is not `Debug`, so match rather than unwrap_err.
+    let err = match host.load_python("py-byte-pipe", byte_pipe_descriptor()) {
+        Ok(_) => panic!("expected interface-hash mismatch to reject the load"),
+        Err(e) => e,
+    };
 
     let msg = format!("{err}");
     assert!(

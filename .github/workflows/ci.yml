@@ -51,3 +51,62 @@ jobs:
           else
             cargo test --workspace
           fi
+
+  wasm:
+    name: WASM backend (component model)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: acifani/setup-tinygo@v2
+        with:
+          tinygo-version: "0.41.1"
+      # Component toolchain (FIDIUS-I-0021). Versions pinned to those the
+      # backend was developed against; bump deliberately.
+      - name: Install component toolchain
+        run: |
+          cargo install --locked cargo-component@0.21.1
+          cargo install --locked wasm-tools@1.252.0
+          pipx install componentize-py==0.24.0
+          # Go guest (FIDIUS-I-0025): TinyGo needs binaryen's wasm-opt; the
+          # bindings come from wit-bindgen-go.
+          sudo apt-get update && sudo apt-get install -y binaryen
+          go install go.bytecodealliance.org/cmd/wit-bindgen-go@v0.7.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          # C guest (FIDIUS-I-0025): wit-bindgen + wasi-sdk clang (wasm32-wasip2).
+          cargo install --locked wit-bindgen-cli@0.44.0
+          curl -fsSL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz | tar xz -C /opt
+          echo "WASI_SDK=/opt/wasi-sdk-25.0-x86_64-linux" >> "$GITHUB_ENV"
+      - name: Build polyglot fixtures
+        run: |
+          (cd tests/wasm-fixtures/greeter && cargo component build --release)
+          tests/wasm-fixtures/greeter-py/build.sh
+          # JavaScript guest (FIDIUS-I-0025): same WIT via jco/ComponentizeJS —
+          # the third language proving the host is language-agnostic.
+          tests/wasm-fixtures/greeter-js/build.sh
+          # Go guest (FIDIUS-I-0025): same WIT via TinyGo + wit-bindgen-go —
+          # a native-compiled component (~0.5 MB, no embedded interpreter).
+          tests/wasm-fixtures/greeter-go/build.sh
+          # C guest (FIDIUS-I-0025): same WIT via wit-bindgen + wasi-sdk —
+          # the leanest component (~18 KB, no runtime).
+          tests/wasm-fixtures/greeter-c/build.sh
+          # Macro auto-export fixture (FIDIUS-T-0106/I-0022): a fidius-macro plugin
+          # that builds straight to a component. Explicit build = fast, clear
+          # failure if the macro's wasm codegen regresses.
+          (cd tests/wasm-fixtures/macro-greeter && cargo build --target wasm32-wasip2 --release)
+          # User-type fixture (FIDIUS-I-0023): record + variant via #[derive(WitType)],
+          # with build.rs-generated wit/ + conversions.
+          (cd tests/wasm-fixtures/records-greeter && cargo build --target wasm32-wasip2 --release)
+      - name: Run wasm-backend tests
+        run: cargo test -p fidius-host --features wasm

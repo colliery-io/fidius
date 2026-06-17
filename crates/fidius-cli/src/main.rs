@@ -135,6 +135,13 @@ enum Commands {
         #[arg(long)]
         trait_name: Option<String>,
     },
+    /// Generate the WIT for a WASM plugin crate from its source (the `build.rs`
+    /// `fidius_build::emit_wit()` does this automatically; this is for CI/manual use).
+    Wit {
+        /// Path to the plugin crate directory (default: current dir). Reads
+        /// `<dir>/src/lib.rs` and writes `<dir>/wit/<interface>.wit`.
+        dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -180,6 +187,10 @@ enum PackageCommands {
         /// Output file path (default: {name}-{version}.fid in current dir)
         #[arg(long)]
         output: Option<PathBuf>,
+        /// For wasm packages: precompile the component to a .cwasm (AOT) and
+        /// record it in the manifest. Requires the CLI built with --features wasm.
+        #[arg(long)]
+        precompile: bool,
     },
     /// Unpack a .fid archive
     Unpack {
@@ -245,9 +256,11 @@ fn main() {
             PackageCommands::Inspect { dir } => commands::package_inspect(&dir),
             PackageCommands::Sign { key, dir } => commands::package_sign(&key, &dir),
             PackageCommands::Verify { key, dir } => commands::package_verify(&key, &dir),
-            PackageCommands::Pack { dir, output } => {
-                commands::package_pack(&dir, output.as_deref())
-            }
+            PackageCommands::Pack {
+                dir,
+                output,
+                precompile,
+            } => commands::package_pack(&dir, output.as_deref(), precompile),
             PackageCommands::Unpack { archive, dest } => {
                 commands::package_unpack(&archive, dest.as_deref())
             }
@@ -257,6 +270,7 @@ fn main() {
             out,
             trait_name,
         } => commands::python_stub(&interface, &out, trait_name.as_deref()),
+        Commands::Wit { dir } => commands::wit(dir.as_deref()),
     };
 
     if let Err(e) = result {

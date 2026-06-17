@@ -1,0 +1,29 @@
+# Standalone — kept out of the parent fidius workspace. WASM-only author crate:
+# a fidius plugin whose `#[plugin_impl]` auto-exports a WIT component (T-0106).
+# Depends on fidius-guest (wasm-buildable types) + fidius-macro (proc-macros,
+# host build-time) + wit-bindgen. crate_path = fidius_guest; no `host` feature.
+[workspace]
+
+[package]
+name = "macro-greeter"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+# The fidius macros emit a `#[cfg(feature = "host")]`-gated Client; declare the
+# feature (unused here) so the cfg is "expected" and doesn't warn.
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
