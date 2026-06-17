@@ -4,14 +4,14 @@ level: task
 title: "W.4 — records-greeter fixture + E2E (record-in/variant-out load+call) + native regression"
 short_code: "FIDIUS-T-0116"
 created_at: 2026-06-17T13:01:03.854384+00:00
-updated_at: 2026-06-17T13:01:03.854384+00:00
+updated_at: 2026-06-17T13:41:38.822494+00:00
 parent: FIDIUS-I-0023
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,7 +28,11 @@ initiative_id: FIDIUS-I-0023
 
 ## Objective **[REQUIRED]**
 
-{Clear statement of what this task accomplishes}
+Prove the `#[derive(WitType)]` path end to end: a fixture whose interface passes a user record + variant builds via `build.rs` and round-trips through `load_wasm`; full regression stays green.
+
+## Status Updates **[REQUIRED]**
+
+**2026-06-17 — COMPLETE.** Commit `a81854a`. `records-greeter` fixture (record `Point` + variant `Shape`) builds to a valid component (real WIT record/variant). Executor `Value↔Val` now normalizes record/variant names kebab↔snake/Pascal (serde `Circle`/`y_pos` ↔ WIT `circle`/`y-pos`). E2E `records_wasm.rs`: midpoint round-trips records, describe round-trips all variant cases. wasm 11 ok / native 46 ok; primitive paths unaffected; CI builds the fixture.
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -63,6 +67,10 @@ initiative_id: FIDIUS-I-0023
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

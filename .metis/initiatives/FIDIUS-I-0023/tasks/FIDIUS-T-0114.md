@@ -4,14 +4,14 @@ level: task
 title: "W.2 — #[derive(WitType)] marker + adapter rework (path-based generate! + conversions + .into() boundary)"
 short_code: "FIDIUS-T-0114"
 created_at: 2026-06-17T13:01:00.557934+00:00
-updated_at: 2026-06-17T13:01:00.557934+00:00
+updated_at: 2026-06-17T13:30:00.262903+00:00
 parent: FIDIUS-I-0023
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,47 +28,16 @@ initiative_id: FIDIUS-I-0023
 
 ## Objective **[REQUIRED]**
 
-{Clear statement of what this task accomplishes}
+Add `#[derive(WitType)]` and rework the `#[plugin_impl]` wasm adapter so a user-typed interface emits `generate!{path:"wit"}` + the generated conversions + a converting `Guest` boundary, while primitives-only interfaces keep the inline path (no regression).
 
-## Backlog Item Details **[CONDITIONAL: Backlog Item]**
-
-{Delete this section when task is assigned to an initiative}
-
-### Type
-- [ ] Bug - Production issue that needs fixing
-- [ ] Feature - New functionality or enhancement  
-- [ ] Tech Debt - Code improvement or refactoring
-- [ ] Chore - Maintenance or setup work
-
-### Priority
-- [ ] P0 - Critical (blocks users/revenue)
-- [ ] P1 - High (important for user experience)
-- [ ] P2 - Medium (nice to have)
-- [ ] P3 - Low (when time permits)
-
-### Impact Assessment **[CONDITIONAL: Bug]**
-- **Affected Users**: {Number/percentage of users affected}
-- **Reproduction Steps**: 
-  1. {Step 1}
-  2. {Step 2}
-  3. {Step 3}
-- **Expected vs Actual**: {What should happen vs what happens}
-
-### Business Justification **[CONDITIONAL: Feature]**
-- **User Value**: {Why users need this}
-- **Business Value**: {Impact on metrics/revenue}
-- **Effort Estimate**: {Rough size - S/M/L/XL}
-
-### Technical Debt Impact **[CONDITIONAL: Tech Debt]**
-- **Current Problems**: {What's difficult/slow/buggy now}
-- **Benefits of Fixing**: {What improves after refactoring}
-- **Risk Assessment**: {Risks of not addressing this}
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
-- [ ] {Specific, testable requirement 1}
-- [ ] {Specific, testable requirement 2}
-- [ ] {Specific, testable requirement 3}
+- [x] `#[derive(WitType)]` proc-macro (marker; emits nothing — the build-time generator reads the annotation from source).
+- [x] `generate_wasm_adapter` is dual-path: primitives-only → inline WIT (unchanged, no `build.rs`); user types present → `generate!{ path: "wit" }` + `include!(OUT_DIR/fidius_wit_conversions.rs)` + Guest methods using `gen_type` (signatures) + `conv_expr` (boundary, reusing `fidius-wit`).
+- [x] Reference args rejected (owned-only v1); structurally-unsupported types still emit the wasm-gated `compile_error!`.
+- [x] Macro builds + tests pass; workspace green; macro-greeter (inline) unchanged. (User-type path compile-verified E2E in [[FIDIUS-T-0116]].)
 
 ## Test Cases **[CONDITIONAL: Testing Task]**
 
@@ -133,4 +102,4 @@ initiative_id: FIDIUS-I-0023
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**2026-06-17 — COMPLETE.** Commit `0fa3999`. `#[derive(WitType)]` marker + dual-path adapter (`gen_type`/`conv_expr` reused from `fidius-wit`). Macro tests pass; macro-greeter (primitives, inline) unchanged; workspace green. The user-type path's generated conversions are compile-verified end-to-end by T-0116 (records fixture + build.rs).

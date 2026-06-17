@@ -4,14 +4,14 @@ level: task
 title: "W.3 — fidius-build (build.rs emit_wit helper) + fidius wit CLI subcommand"
 short_code: "FIDIUS-T-0115"
 created_at: 2026-06-17T13:01:02.437845+00:00
-updated_at: 2026-06-17T13:01:02.437845+00:00
+updated_at: 2026-06-17T13:32:59.631132+00:00
 parent: FIDIUS-I-0023
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,7 +28,11 @@ initiative_id: FIDIUS-I-0023
 
 ## Objective **[REQUIRED]**
 
-{Clear statement of what this task accomplishes}
+Ship the build-time WIT generation: a `fidius_build::emit_wit()` `build.rs` one-liner that (re)generates `wit/` + the conversions from source on every build, and a `fidius wit` CLI for CI/manual use.
+
+## Status Updates **[REQUIRED]**
+
+**2026-06-17 — COMPLETE.** Commit `9f65e3b`. `fidius-build::emit_wit()` (+ testable `run(manifest, out)`) writes `wit/<iface>.wit` + `$OUT_DIR/fidius_wit_conversions.rs` from `src/lib.rs`; `fidius wit [dir]` CLI. 2 unit tests (user-typed + primitives-only); CLI builds; workspace green.
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -63,6 +67,10 @@ initiative_id: FIDIUS-I-0023
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

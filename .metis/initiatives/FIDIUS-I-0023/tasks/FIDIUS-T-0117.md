@@ -4,14 +4,14 @@ level: task
 title: "W.5 — Docs: record/variant in the ABI explanation + #[derive(WitType)]/build.rs in the tutorial"
 short_code: "FIDIUS-T-0117"
 created_at: 2026-06-17T13:01:04.926045+00:00
-updated_at: 2026-06-17T13:01:04.926045+00:00
+updated_at: 2026-06-17T13:43:50.879433+00:00
 parent: FIDIUS-I-0023
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,7 +28,11 @@ initiative_id: FIDIUS-I-0023
 
 ## Objective **[REQUIRED]**
 
-{Clear statement of what this task accomplishes}
+Document the user-type story: `#[derive(WitType)]` + `build.rs` in the Rust tutorial, and the record/variant mapping + mechanism in the WASM ABI explanation.
+
+## Status Updates **[REQUIRED]**
+
+**2026-06-17 — COMPLETE.** Commit `d64db5a`. Tutorial gained a "Using your own types (records & variants)" section (+ corrected the supported-types note); the ABI explanation gained a "User-defined types" section (mapping table, the two constraints, name normalization). Both pages already in the mkdocs nav.
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -63,6 +67,10 @@ initiative_id: FIDIUS-I-0023
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
