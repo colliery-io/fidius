@@ -27,6 +27,9 @@ use std::collections::BTreeSet;
 
 use syn::{Fields, GenericArgument, ItemEnum, ItemStruct, PathArguments, Type};
 
+mod generate;
+pub use generate::{generate, Generated};
+
 /// Convert a Rust identifier (CamelCase or snake_case) to kebab-case, the WIT
 /// naming convention. `BytePipe` → `byte-pipe`, `echo_bytes` → `echo-bytes`.
 pub fn to_kebab_case(s: &str) -> String {
@@ -335,7 +338,10 @@ mod tests {
         let v: Type = syn::parse_str("Vec<Point>").unwrap();
         assert_eq!(wit_type_with(&v, &k).unwrap(), "list<point>");
         let o: Type = syn::parse_str("Option<BytePipe>").unwrap();
-        assert_eq!(wit_type_with(&o, &known(&["BytePipe"])).unwrap(), "option<byte-pipe>");
+        assert_eq!(
+            wit_type_with(&o, &known(&["BytePipe"])).unwrap(),
+            "option<byte-pipe>"
+        );
     }
 
     #[test]
@@ -388,7 +394,10 @@ mod tests {
         assert!(doc.contains("package fidius:geo@0.1.0;"));
         let rec_at = doc.find("record point {").unwrap();
         let fn_at = doc.find("midpoint: func").unwrap();
-        assert!(rec_at < fn_at, "records must precede funcs in the interface");
+        assert!(
+            rec_at < fn_at,
+            "records must precede funcs in the interface"
+        );
         assert!(doc.contains("midpoint: func(a: point, b: point) -> point;"));
         assert!(doc.contains("fidius-interface-hash: func() -> u64;"));
         assert!(doc.contains("world geo-plugin {"));
