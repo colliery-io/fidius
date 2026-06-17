@@ -74,5 +74,9 @@ jobs:
         run: |
           (cd tests/wasm-fixtures/greeter && cargo component build --release)
           tests/wasm-fixtures/greeter-py/build.sh
+          # Macro auto-export fixture (FIDIUS-T-0106/I-0022): a fidius-macro plugin
+          # that builds straight to a component. Explicit build = fast, clear
+          # failure if the macro's wasm codegen regresses.
+          (cd tests/wasm-fixtures/macro-greeter && cargo build --target wasm32-wasip2 --release)
       - name: Run wasm-backend tests
         run: cargo test -p fidius-host --features wasm

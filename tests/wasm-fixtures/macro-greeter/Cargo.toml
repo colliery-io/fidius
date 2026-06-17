@@ -13,6 +13,11 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
+# The fidius macros emit a `#[cfg(feature = "host")]`-gated Client; declare the
+# feature (unused here) so the cfg is "expected" and doesn't warn.
+[features]
+host = []
+
 [dependencies]
 fidius-guest = { path = "../../../crates/fidius-guest" }
 fidius-macro = { path = "../../../crates/fidius-macro" }

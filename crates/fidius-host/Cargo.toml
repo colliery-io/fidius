@@ -45,6 +45,9 @@ pyo3-build-config = { version = "0.25", features = ["resolve-config"] }
 tempfile = "3"
 ed25519-dalek = { workspace = true }
 serde = { workspace = true }
+# The macros, so the macro_wasm E2E can define an interface and use the
+# macro-emitted WasmInterfaceDescriptor (FIDIUS-T-0106). crate = "fidius_core".
+fidius-macro = { path = "../fidius-macro" }
 # Serialize e2e signing tests — they all read/write the same `.sig` file next
 # to the test-plugin-smoke dylib and race in parallel (FIDIUS-I-0020).
 serial_test = "3"

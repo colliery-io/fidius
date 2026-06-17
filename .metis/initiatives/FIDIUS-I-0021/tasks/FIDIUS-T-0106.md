@@ -4,14 +4,14 @@ level: task
 title: "P3.1 — Macro emits WIT + component target + WasmInterfaceDescriptor from the Rust interface"
 short_code: "FIDIUS-T-0106"
 created_at: 2026-06-17T09:50:06.607031+00:00
-updated_at: 2026-06-17T11:16:03.636087+00:00
+updated_at: 2026-06-17T12:00:45.579598+00:00
 parent: FIDIUS-I-0021
-blocked_by: [FIDIUS-I-0022]
+blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/blocked"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -30,15 +30,13 @@ Make the fidius macros generate the WASM artifacts a Rust plugin author needs �
 
 ## Acceptance Criteria
 
-## Acceptance Criteria
-
 ## Acceptance Criteria **[REQUIRED]**
 
-- [ ] `#[plugin_interface]` emits a `<Trait>_WASM_DESCRIPTOR: fidius_core::wasm_descriptor::WasmInterfaceDescriptor` const (interface_export, interface_hash, methods + wire_raw) — parity with the Python descriptor — so `load_wasm` callers reference it like `load_python`'s.
-- [ ] The interface's `.wit` is generated (macro-emitted or via a `fidius wit` CLI subcommand) per the T-0101 mapping: types, `#[wire(raw)]`→`list<u8>`, fallible→`result<T, plugin-error>`, and the `fidius-interface-hash` export. Validated by `wasm-tools`.
-- [ ] `#[plugin_impl]` emits the component export glue: implements the WIT world's exported interface from the author's `impl`, and exports `fidius-interface-hash` returning the same hash as the descriptor.
-- [ ] A Rust author builds a component (cargo-component / wit-bindgen) for a **macro-generated** interface (not the hand-written greeter) and it loads + calls through `PluginHost::load_wasm` against the generated `<Trait>_WASM_DESCRIPTOR`. E2E test.
-- [ ] The descriptor's `interface_hash` and the component's exported `fidius-interface-hash` are computed from the same source and match (verified at load).
+- [x] `#[plugin_interface]` emits a `<Trait>_WASM_DESCRIPTOR: fidius_core::wasm_descriptor::WasmInterfaceDescriptor` const (interface_export, interface_hash, methods + wire_raw) — parity with the Python descriptor.
+- [x] The interface's `.wit` is generated (macro-emitted, inline, via `crates/fidius-macro/src/wit.rs`) per the T-0101 mapping: types, `#[wire(raw)]`→`list<u8>`, fallible→`result<T, plugin-error>`, and the `fidius-interface-hash` export. Validated by `wasm-tools` (the macro-greeter component validates).
+- [x] `#[plugin_impl]` emits the component export glue: a `wit_bindgen::generate!{inline}` + `Guest` impl wiring the static instance + `export!`, under `#[cfg(target_family="wasm")]`, exporting `fidius-interface-hash`.
+- [x] A Rust author builds a component for a **macro-generated** interface (`tests/wasm-fixtures/macro-greeter`) and it loads + calls through `PluginHost::load_wasm` against the generated `Greeter_WASM_DESCRIPTOR`. E2E test (`tests/macro_wasm.rs`, `--features wasm`).
+- [x] The descriptor's `interface_hash` and the component's exported `fidius-interface-hash` derive from the same macro computation and match (verified at load — `load_wasm` validates and the E2E loads successfully).
 
 ## Implementation Notes **[CONDITIONAL: Technical Task]**
 
@@ -90,3 +88,10 @@ This reframes the chosen path: making a fidius-dependent crate *become* a compon
 **Key realization:** the WASM guests that already work (Phase-2 Rust greeter via cargo-component; greeter-py via componentize-py) depend on **nothing** from fidius — they just implement the WIT. That *is* the natural architecture (components are independent artifacts implementing a WIT contract). The macro's genuinely useful contribution is **generating the `.wit`** (the WIT generator — done, tested — feeds a `fidius wit` CLI) + the descriptor; not turning the author's crate into a component.
 
 **What's emitted now:** the adapter codegen is written and compiles on non-wasm (it's `#[cfg(target_family="wasm")]`), but it cannot be E2E-verified because no fidius-dependent crate compiles to wasm. Pausing to surface this — the heavy path needs an architectural prerequisite the user should weigh in on (pivot to the lean `fidius wit` + independent-component flow, or commit to the fidius-core split as a separate initiative).
+
+**2026-06-17 — COMPLETE (after FIDIUS-I-0022 unblocked it).** The `fidius-guest` split made a macro-using crate wasm-buildable. With the cdylib codegen gated off wasm (T-0111) and two adapter fixes (`use super::*;`; hash const read from the companion module `__fidius_<Trait>`), the full loop is proven end-to-end:
+- `tests/wasm-fixtures/macro-greeter` (`#[plugin_interface]`+`#[plugin_impl]`, `crate = "fidius_guest"`) builds to a valid 44 KB component exporting `fidius:greeter/greeter@0.1.0` (wasm-tools validate ✓).
+- `crates/fidius-host/tests/macro_wasm.rs` (`--features wasm`): loads that component via `PluginHost::load_wasm` against the **macro-emitted** `Greeter_WASM_DESCRIPTOR`; `greet("Ada")`→`"Hello, Ada!"`, raw `echo` reverses bytes, and the load's hash-validation passes (descriptor hash == component's `fidius-interface-hash`). 2/2 E2E + 14 other wasm tests pass; native suite green (40 ok).
+- CI `wasm` job builds macro-greeter as a regression guard.
+
+**Author flow now:** write a trait + impl with the fidius macros (`crate = "fidius_guest"`) → `cargo build --target wasm32-wasip2` → a sandboxable fidius component. **Scope note (documented follow-on):** WIT auto-generation covers the primitive/string/bytes/list/option/result set; user `struct`/`enum` types need a future `#[derive(WitType)]` (a proc-macro on the trait can't introspect external type defs).

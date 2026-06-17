@@ -4,14 +4,14 @@ level: initiative
 title: "fidius-guest — wasm-buildable guest runtime split out of host-heavy fidius-core"
 short_code: "FIDIUS-I-0022"
 created_at: 2026-06-17T11:14:30.392963+00:00
-updated_at: 2026-06-17T11:25:17.150193+00:00
+updated_at: 2026-06-17T11:55:42.886707+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
