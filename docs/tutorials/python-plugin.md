@@ -31,7 +31,7 @@ existing Rust-defined interface, packaging it, and loading it from a host.
   interpreter is not required for v1).
 - The `fidius` CLI installed: `cargo install fidius-cli`.
 - The host binary built with the `python` feature on `fidius-host`:
-  `[dependencies] fidius-host = { version = "0.2", features = ["python"] }`.
+  `[dependencies] fidius-host = { version = "0.3", features = ["python"] }`.
 
 ## What you will build
 
