@@ -4,14 +4,14 @@ level: task
 title: "W.1 — WIT generator lib: source-parse trait + WitType types → wit/ (records/variants/funcs) + From-conversions"
 short_code: "FIDIUS-T-0113"
 created_at: 2026-06-17T13:00:59.219805+00:00
-updated_at: 2026-06-17T13:00:59.219805+00:00
+updated_at: 2026-06-17T13:17:50.613540+00:00
 parent: FIDIUS-I-0023
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,109 +28,28 @@ initiative_id: FIDIUS-I-0023
 
 ## Objective **[REQUIRED]**
 
-{Clear statement of what this task accomplishes}
+A shared (non-proc-macro) `fidius-wit` crate that maps Rust interface types to WIT (incl. `#[derive(WitType)]` structs→records, enums→variants) and source-parses a plugin crate to emit a complete `wit/` + the generated↔author `From` conversions.
 
-## Backlog Item Details **[CONDITIONAL: Backlog Item]**
-
-{Delete this section when task is assigned to an initiative}
-
-### Type
-- [ ] Bug - Production issue that needs fixing
-- [ ] Feature - New functionality or enhancement  
-- [ ] Tech Debt - Code improvement or refactoring
-- [ ] Chore - Maintenance or setup work
-
-### Priority
-- [ ] P0 - Critical (blocks users/revenue)
-- [ ] P1 - High (important for user experience)
-- [ ] P2 - Medium (nice to have)
-- [ ] P3 - Low (when time permits)
-
-### Impact Assessment **[CONDITIONAL: Bug]**
-- **Affected Users**: {Number/percentage of users affected}
-- **Reproduction Steps**: 
-  1. {Step 1}
-  2. {Step 2}
-  3. {Step 3}
-- **Expected vs Actual**: {What should happen vs what happens}
-
-### Business Justification **[CONDITIONAL: Feature]**
-- **User Value**: {Why users need this}
-- **Business Value**: {Impact on metrics/revenue}
-- **Effort Estimate**: {Rough size - S/M/L/XL}
-
-### Technical Debt Impact **[CONDITIONAL: Tech Debt]**
-- **Current Problems**: {What's difficult/slow/buggy now}
-- **Benefits of Fixing**: {What improves after refactoring}
-- **Risk Assessment**: {Risks of not addressing this}
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
-- [ ] {Specific, testable requirement 1}
-- [ ] {Specific, testable requirement 2}
-- [ ] {Specific, testable requirement 3}
-
-## Test Cases **[CONDITIONAL: Testing Task]**
-
-{Delete unless this is a testing task}
-
-### Test Case 1: {Test Case Name}
-- **Test ID**: TC-001
-- **Preconditions**: {What must be true before testing}
-- **Steps**: 
-  1. {Step 1}
-  2. {Step 2}
-  3. {Step 3}
-- **Expected Results**: {What should happen}
-- **Actual Results**: {To be filled during execution}
-- **Status**: {Pass/Fail/Blocked}
-
-### Test Case 2: {Test Case Name}
-- **Test ID**: TC-002
-- **Preconditions**: {What must be true before testing}
-- **Steps**: 
-  1. {Step 1}
-  2. {Step 2}
-- **Expected Results**: {What should happen}
-- **Actual Results**: {To be filled during execution}
-- **Status**: {Pass/Fail/Blocked}
-
-## Documentation Sections **[CONDITIONAL: Documentation Task]**
-
-{Delete unless this is a documentation task}
-
-### User Guide Content
-- **Feature Description**: {What this feature does and why it's useful}
-- **Prerequisites**: {What users need before using this feature}
-- **Step-by-Step Instructions**:
-  1. {Step 1 with screenshots/examples}
-  2. {Step 2 with screenshots/examples}
-  3. {Step 3 with screenshots/examples}
-
-### Troubleshooting Guide
-- **Common Issue 1**: {Problem description and solution}
-- **Common Issue 2**: {Problem description and solution}
-- **Error Messages**: {List of error messages and what they mean}
-
-### API Documentation **[CONDITIONAL: API Documentation]**
-- **Endpoint**: {API endpoint description}
-- **Parameters**: {Required and optional parameters}
-- **Example Request**: {Code example}
-- **Example Response**: {Expected response format}
+- [x] `fidius-wit` crate (plain lib): `wit_type_with(ty, known)` (primitives + user types via a known-ident set), `struct_to_record`, `enum_to_variant` (unit + single-field cases), `render_wit_full` (type defs before funcs).
+- [x] `generate(src)` parses source (`syn`): finds the `#[plugin_interface]` trait + `#[derive(WitType)]` types → complete `.wit` (records/variants/funcs/`fidius-interface-hash`) + bidirectional `From` conversions (recursing `Vec`/`Option`/nested via `.into()`/`map`; identity move for user-free fields).
+- [x] `fidius-macro::wit` re-exports `fidius-wit` (no call-site churn); workspace + macro-greeter wasm build green.
+- [x] 12 unit tests (mapping, record/variant, ordering, parse→wit, conversions both ways, unsupported-type error); clippy clean.
 
 ## Implementation Notes **[CONDITIONAL: Technical Task]**
 
-{Keep for technical tasks, delete for non-technical. Technical details, approach, or important considerations}
-
 ### Technical Approach
-{How this will be implemented}
+`fidius-wit` is a plain lib (proc-macro crates can't export reusable fns). `fidius-macro` depends on it; the `build.rs` helper + CLI will too. Conversions target the deterministic generated path `exports::fidius::<iface>::<iface>::<T>` and `crate::<T>` (proven in the I-0023 spike).
 
 ### Dependencies
-{Other tasks or systems this depends on}
+First task of FIDIUS-I-0023. Feeds [[FIDIUS-T-0114]] (adapter rework consumes `generate()`'s wit + conversions) and [[FIDIUS-T-0115]] (build.rs + CLI call `generate()`).
 
 ### Risk Considerations
-{Technical risks and mitigation strategies}
+The conversion codegen is string-based; it is compile-verified end-to-end by T-0114/T-0116 (the records fixture). v1: WitType types at the crate root, single-file source.
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**2026-06-17 — COMPLETE.** Two commits: `3c6fa34` (mapping + record/variant + shared crate + macro rewire), `3dc24e7` (source-parser + conversions). 12 unit tests; clippy clean; workspace + macro-greeter wasm build green. The generator is ready for the adapter rework (T-0114), which compile-verifies the conversions end-to-end.
