@@ -222,6 +222,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
     let free_buffer = match buffer_strategy {
         BufferStrategyAttr::PluginAllocated => quote! {
+            #[cfg(not(target_family = "wasm"))]
             unsafe extern "C" fn #free_fn_name(ptr: *mut u8, len: usize) {
                 if !ptr.is_null() && len > 0 {
                     // Reconstruct the Box<[u8]> from its raw parts. Safe because the
@@ -288,6 +289,9 @@ fn generate_wasm_adapter(
     let iface_snake = iface_kebab.replace('-', "_");
     let pkg_seg = format_ident!("{}", iface_snake);
     let world = format!("{iface_kebab}-plugin");
+    // The interface-hash const lives in the `#[plugin_interface]` companion
+    // module (`__fidius_<Trait>`), a sibling of the impl — reference it there.
+    let companion = format_ident!("__fidius_{}", trait_name);
     let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
 
     // Build the WIT; bail (skip the adapter) on any reference arg or
@@ -347,12 +351,15 @@ fn generate_wasm_adapter(
         #[cfg(target_family = "wasm")]
         #[allow(warnings, clippy::all)]
         mod #module_ident {
+            // Bring the trait + the plugin's static instance into scope so the
+            // Guest impl can call the trait methods on it.
+            use super::*;
             ::wit_bindgen::generate!({ inline: #wit_doc, world: #world });
             struct __FidiusComponent;
             impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
                 #(#guest_methods)*
                 fn fidius_interface_hash() -> u64 {
-                    super::#hash_const
+                    super::#companion::#hash_const
                 }
             }
             export!(__FidiusComponent);
@@ -565,7 +572,10 @@ fn generate_shims(
         })
         .collect();
 
-    quote! { #(#shim_fns)* }
+    // cdylib FFI shims are only meaningful for native dynamic loading. Gate
+    // them off wasm so a component build (which exports via the WIT adapter,
+    // not these extern "C" shims) doesn't compile them.
+    quote! { #(#[cfg(not(target_family = "wasm"))] #shim_fns)* }
 }
 
 /// Generate the static vtable with function pointers.
@@ -591,6 +601,7 @@ fn generate_vtable_static(
         .collect();
 
     quote! {
+        #[cfg(not(target_family = "wasm"))]
         static #vtable_name: #companion::#vtable_type = #companion::#constructor(#(#shim_args),*);
     }
 }
@@ -626,10 +637,12 @@ fn generate_descriptor(
     };
 
     quote! {
+        #[cfg(not(target_family = "wasm"))]
         const #plugin_name_const: &std::ffi::CStr = unsafe {
             std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#impl_name_str, "\0").as_bytes())
         };
 
+        #[cfg(not(target_family = "wasm"))]
         static #descriptor_name: #crate_path::descriptor::PluginDescriptor = unsafe {
             // Compute capabilities inline: check which impl'd methods
             // appear in the optional methods list.
@@ -681,6 +694,7 @@ fn generate_inventory_registration(impl_ident: &Ident, crate_path: &Path) -> Tok
     let descriptor_name = format_ident!("__FIDIUS_DESCRIPTOR_{}", impl_ident);
 
     quote! {
+        #[cfg(not(target_family = "wasm"))]
         #crate_path::inventory::submit! {
             #crate_path::registry::DescriptorEntry {
                 descriptor: &#descriptor_name,
