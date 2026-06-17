@@ -389,6 +389,43 @@ fn plugin_error_from_val(payload: Option<&Val>) -> CallError {
 }
 
 /// fidius `Value` → wasmtime `Val`. Mirrors the Phase-1 serde bridge shapes.
+/// Rust identifier (snake_case / PascalCase) → kebab-case, matching the WIT
+/// naming the generator uses. `y_pos`→`y-pos`, `Circle`→`circle`.
+fn to_kebab(s: &str) -> String {
+    let mut out = String::new();
+    for (i, ch) in s.chars().enumerate() {
+        if ch == '_' {
+            out.push('-');
+        } else if ch.is_uppercase() {
+            if i != 0 {
+                out.push('-');
+            }
+            out.extend(ch.to_lowercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// kebab-case → snake_case (WIT record field → serde struct field).
+fn kebab_to_snake(s: &str) -> String {
+    s.replace('-', "_")
+}
+
+/// kebab-case → PascalCase (WIT variant case → serde enum variant).
+fn kebab_to_pascal(s: &str) -> String {
+    s.split('-')
+        .map(|seg| {
+            let mut c = seg.chars();
+            match c.next() {
+                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect()
+}
+
 fn value_to_val(v: &Value) -> Result<Val, CallError> {
     Ok(match v {
         Value::Bool(b) => Val::Bool(*b),
@@ -406,10 +443,13 @@ fn value_to_val(v: &Value) -> Result<Val, CallError> {
         Value::String(s) => Val::String(s.clone()),
         Value::Bytes(b) => Val::List(b.iter().map(|x| Val::U8(*x)).collect()),
         Value::List(items) => Val::List(items.iter().map(value_to_val).collect::<Result<_, _>>()?),
+        // Record/variant names cross as kebab-case (the WIT convention) — serde
+        // produces snake/PascalCase, so normalize here and un-normalize on the
+        // way back (see `val_to_value`).
         Value::Record(fields) => Val::Record(
             fields
                 .iter()
-                .map(|(k, v)| Ok::<_, CallError>((k.clone(), value_to_val(v)?)))
+                .map(|(k, v)| Ok::<_, CallError>((to_kebab(k), value_to_val(v)?)))
                 .collect::<Result<_, _>>()?,
         ),
         Value::Option(None) => Val::Option(None),
@@ -420,7 +460,7 @@ fn value_to_val(v: &Value) -> Result<Val, CallError> {
                 Value::Unit => None,
                 other => Some(Box::new(value_to_val(other)?)),
             };
-            Val::Variant(name.clone(), payload)
+            Val::Variant(to_kebab(name), payload)
         }
         Value::Unit => Val::Tuple(Vec::new()),
         Value::Map(_) => {
@@ -451,18 +491,18 @@ fn val_to_value(v: &Val) -> Value {
         Val::Record(fields) => Value::Record(
             fields
                 .iter()
-                .map(|(k, v)| (k.clone(), val_to_value(v)))
+                .map(|(k, v)| (kebab_to_snake(k), val_to_value(v)))
                 .collect(),
         ),
         Val::Tuple(items) => Value::List(items.iter().map(val_to_value).collect()),
         Val::Option(None) => Value::Option(None),
         Val::Option(Some(inner)) => Value::Option(Some(Box::new(val_to_value(inner)))),
         Val::Variant(name, payload) => Value::Variant {
-            name: name.clone(),
+            name: kebab_to_pascal(name),
             value: Box::new(payload.as_deref().map(val_to_value).unwrap_or(Value::Unit)),
         },
         Val::Enum(name) => Value::Variant {
-            name: name.clone(),
+            name: kebab_to_pascal(name),
             value: Box::new(Value::Unit),
         },
         Val::Result(Ok(inner)) => inner.as_deref().map(val_to_value).unwrap_or(Value::Unit),

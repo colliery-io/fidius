@@ -1,0 +1,29 @@
+# WASM author fixture (FIDIUS-I-0023): a plugin whose interface uses a user
+# `record` (Point) and `variant` (Shape). build.rs regenerates wit/ + the
+# conversions from source; #[plugin_impl] auto-exports the component.
+[workspace]
+
+[package]
+name = "records-greeter"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[build-dependencies]
+fidius-build = { path = "../../../crates/fidius-build" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

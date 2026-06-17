@@ -13,3 +13,4 @@ tests/wasm-fixtures/**/*.cwasm
 tests/wasm-fixtures/**/gen/
 tests/wasm-fixtures/**/bindings.rs
 __pycache__/
+tests/wasm-fixtures/records-greeter/wit/
