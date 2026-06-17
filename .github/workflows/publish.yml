@@ -32,9 +32,37 @@ jobs:
 
       # Publish in dependency order with index propagation delays.
       # --no-verify skips rebuild during publish (already tested above).
-      # Order: core → macro → python → host → test → fidius (facade) → cli.
+      # Order: guest → wit → build → core → macro → python → host → test →
+      # fidius (facade) → cli. (guest precedes core; wit precedes build/macro/cli.)
       # Each step tolerates "already exists" (idempotent re-tag) but fails
       # on any other error — no silent failures.
+      - name: Publish fidius-guest
+        run: |
+          out=$(cargo publish -p fidius-guest --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
+
+      - name: Wait for index
+        run: sleep 30
+
+      - name: Publish fidius-wit
+        run: |
+          out=$(cargo publish -p fidius-wit --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
+
+      - name: Wait for index
+        run: sleep 30
+
+      - name: Publish fidius-build
+        run: |
+          out=$(cargo publish -p fidius-build --no-verify 2>&1) && echo "$out" && exit 0
+          echo "$out"
+          echo "$out" | grep -q "already exists"
+
+      - name: Wait for index
+        run: sleep 30
+
       - name: Publish fidius-core
         run: |
           out=$(cargo publish -p fidius-core --no-verify 2>&1) && echo "$out" && exit 0
