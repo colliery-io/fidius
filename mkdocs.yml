@@ -79,6 +79,7 @@ nav:
     - A WASM Plugin in Python: how-to/wasm-python-plugin.md
     - A WASM Plugin in JavaScript: how-to/wasm-javascript-plugin.md
     - A WASM Plugin in Go: how-to/wasm-go-plugin.md
+    - A WASM Plugin in C: how-to/wasm-c-plugin.md
   - Reference:
     - CLI: reference/cli.md
     - ABI Specification: reference/abi-specification.md

@@ -672,3 +672,63 @@ component = "greeter_go.wasm"
     let rev = handle.call_method_raw(2, b"xyz").unwrap();
     assert_eq!(rev, b"zyx");
 }
+
+// ── Polyglot: C guest (wasi-sdk, FIDIUS-I-0025) ─────────────────────────────
+
+fn c_greeter_component() -> Option<Vec<u8>> {
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/wasm-fixtures/greeter-c/greeter_c.wasm");
+    std::fs::read(p).ok()
+}
+
+/// A C guest (wit-bindgen + wasi-sdk clang) implementing the SAME `greeter` WIT
+/// loads and is called through the identical host path as the Rust, Python,
+/// JavaScript, and Go guests — a fifth language, same host, same descriptor.
+#[test]
+fn polyglot_c_guest_behaves_identically() {
+    let Some(bytes) = c_greeter_component() else {
+        eprintln!(
+            "SKIP polyglot_c_guest: greeter_c.wasm not built \
+             (run tests/wasm-fixtures/greeter-c/build.sh)"
+        );
+        return;
+    };
+
+    let tmp = tempfile::TempDir::new().unwrap();
+    let dir = tmp.path().join("greeter-pkg");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("package.toml"),
+        r#"
+[package]
+name = "greeter-pkg"
+version = "0.1.0"
+interface = "greeter"
+interface_version = 1
+runtime = "wasm"
+
+[metadata]
+category = "test"
+
+[wasm]
+component = "greeter_c.wasm"
+"#,
+    )
+    .unwrap();
+    std::fs::write(dir.join("greeter_c.wasm"), bytes).unwrap();
+
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("greeter-pkg", &GREETER_DESC)
+        .expect("load C component (interface hash must match the other guests)");
+
+    let s: String = handle.call_method(0, &("Ada".to_string(),)).unwrap();
+    assert_eq!(s, "Hello, Ada!");
+    let sum: i64 = handle.call_method(1, &(2i64, 3i64)).unwrap();
+    assert_eq!(sum, 5);
+    let rev = handle.call_method_raw(2, b"xyz").unwrap();
+    assert_eq!(rev, b"zyx");
+}
