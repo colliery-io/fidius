@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/fidius-guest",
     "crates/fidius-core",
     "crates/fidius-macro",
     "crates/fidius-host",
