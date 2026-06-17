@@ -4,14 +4,14 @@ level: task
 title: "P3.4 — Docs: write-your-first-WASM-plugin (Rust) + non-Rust walkthrough + capability guide"
 short_code: "FIDIUS-T-0109"
 created_at: 2026-06-17T09:50:15.637150+00:00
-updated_at: 2026-06-17T09:50:15.637150+00:00
+updated_at: 2026-06-17T12:31:37.560469+00:00
 parent: FIDIUS-I-0021
-blocked_by: ["FIDIUS-T-0106", "FIDIUS-T-0107", "FIDIUS-T-0108"]
+blocked_by: [FIDIUS-T-0106, FIDIUS-T-0107, FIDIUS-T-0108]
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -28,12 +28,14 @@ initiative_id: FIDIUS-I-0021
 
 Document the WASM plugin author experience end-to-end: a Rust "write your first WASM fidius plugin" tutorial, a non-Rust (componentize-py) walkthrough, and a capability-declaration/security guide — closing out the initiative's user-facing story.
 
+## Acceptance Criteria
+
 ## Acceptance Criteria **[REQUIRED]**
 
-- [ ] A tutorial/how-to: author a Rust WASM plugin with the macro → build the component → `fidius pack` → `fidius sign` → load via `PluginHost::load_wasm`.
-- [ ] A non-Rust walkthrough (componentize-py, mirroring `tests/wasm-fixtures/greeter-py/`) implementing the same interface — the concrete polyglot story.
-- [ ] A capability guide: the `[wasm].capabilities` allow-list, deny-by-default, filesystem-never, granting network/env, and the security model (WASI present, zero grants — from [[FIDIUS-T-0104]]).
-- [ ] Cross-links to the WASM Component ABI explanation (`docs/explanation/wasm-component-abi.md`, [[FIDIUS-T-0101]]) and the toolchain how-to (`docs/how-to/wasm-component-toolchain.md`, [[FIDIUS-T-0094]]); docs index / nav updated.
+- [x] Tutorial `docs/tutorials/your-first-wasm-plugin.md`: author a Rust WASM plugin with the macros (`crate = "fidius_guest"`) → `cargo build --target wasm32-wasip2` → `fidius package pack` → `sign` → `load_wasm`.
+- [x] Non-Rust walkthrough `docs/how-to/wasm-python-plugin.md` (componentize-py, mirroring `tests/wasm-fixtures/greeter-py/`) implementing the same `greeter` WIT — the polyglot story, "no fidius dependency in the guest".
+- [x] Capability guide `docs/explanation/wasm-capabilities.md`: the allow-list, deny-by-default, "WASI present / zero grants", filesystem-never, coarse network, fail-closed unknowns, and the deployer trust workflow (inspect + signature).
+- [x] Cross-links to the ABI explanation + toolchain how-to throughout; `mkdocs.yml` nav updated with all five WASM docs (the pre-existing ABI + toolchain pages were also missing from nav — now added).
 
 ## Implementation Notes **[CONDITIONAL: Technical Task]**
 
@@ -48,4 +50,8 @@ Docs must match the real author flow, which depends on the T-0106 ergonomics dec
 
 ## Status Updates **[REQUIRED]**
 
-Not started — Phase 3 of FIDIUS-I-0021.
+**2026-06-17 — COMPLETE.** Three docs written + wired into `mkdocs.yml` nav:
+- Tutorial: `tutorials/your-first-wasm-plugin.md` (Rust, full author→load flow).
+- How-to: `how-to/wasm-python-plugin.md` (componentize-py polyglot walkthrough).
+- Explanation: `explanation/wasm-capabilities.md` (sandbox/security model).
+Examples are tied to the committed `greeter` / `greeter-py` / `macro-greeter` fixtures so they don't rot. Also added the pre-existing `wasm-component-abi.md` + `wasm-component-toolchain.md` to the nav (they'd never been linked). All five nav targets verified to exist (mkdocs not installed locally for a strict build).
