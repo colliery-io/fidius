@@ -87,12 +87,18 @@ The wasi-sdk `wasm32-wasip2` target links **straight to a component** (via
 
 ```bash
 "$WASI_SDK/bin/clang" --target=wasm32-wasip2 -mexec-model=reactor \
-  --sysroot="$WASI_SDK/share/wasi-sysroot" -O2 \
+  --sysroot="$WASI_SDK/share/wasi-sysroot" \
   -I gen gen/greeter_plugin.c greeter_impl.c gen/greeter_plugin_component_type.o \
   -o greeter_c.wasm
 
 wasm-tools validate --features component-model greeter_c.wasm
 ```
+
+!!! warning "Don't pass `-O2` if `wasm-opt` is on `PATH`"
+    With an optimization flag, the wasi-sdk clang runs `wasm-opt` (binaryen) as a
+    post-link pass — but binaryen can't parse a Component Model binary and fails
+    with *"surprising value (at 0:8)"*. Omit `-O` (the guest is tiny), or ensure
+    `wasm-opt` isn't on `PATH` for the link.
 
 The `greeter_plugin_component_type.o` (emitted by wit-bindgen) carries the
 component's type information; `-mexec-model=reactor` builds a library (no `main`).
