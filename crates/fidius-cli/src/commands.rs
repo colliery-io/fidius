@@ -882,9 +882,7 @@ fn record_precompiled(dir: &Path, cwasm_name: &str) -> Result {
 pub fn wit(dir: Option<&Path>) -> Result {
     let dir = dir.unwrap_or_else(|| Path::new("."));
     let lib = dir.join("src").join("lib.rs");
-    let src =
-        std::fs::read_to_string(&lib).map_err(|e| format!("reading {}: {e}", lib.display()))?;
-    let generated = fidius_wit::generate(&src)?;
+    let generated = fidius_wit::generate_from_path(&lib)?;
     let wit_dir = dir.join("wit");
     std::fs::create_dir_all(&wit_dir)?;
     let path = wit_dir.join(format!("{}.wit", generated.iface_kebab));

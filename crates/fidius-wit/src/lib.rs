@@ -28,7 +28,7 @@ use std::collections::BTreeSet;
 use syn::{Fields, GenericArgument, ItemEnum, ItemStruct, PathArguments, Type};
 
 mod generate;
-pub use generate::{contains_user_type, conv_expr, generate, Generated};
+pub use generate::{contains_user_type, conv_expr, generate, generate_from_path, Generated};
 
 /// Convert a Rust identifier (CamelCase or snake_case) to kebab-case, the WIT
 /// naming convention. `BytePipe` → `byte-pipe`, `echo_bytes` → `echo-bytes`.
@@ -194,10 +194,21 @@ pub fn struct_to_record(item: &ItemStruct, known: &BTreeSet<String>) -> Result<S
     Ok(out)
 }
 
-/// Render a `variant <name> { ... }` WIT block from a Rust enum. Each case is a
-/// unit variant (`case`) or a single-field tuple variant (`case(type)`).
-pub fn enum_to_variant(item: &ItemEnum, known: &BTreeSet<String>) -> Result<String, String> {
-    let name = to_kebab_case(&item.ident.to_string());
+/// Render a Rust enum to WIT: a `variant <name> { ... }` plus any **synthetic
+/// records** for struct-shaped cases. Returns `(synthetic_records, variant)`.
+///
+/// Case shapes: unit → `case`; single tuple field → `case(type)`; named fields
+/// (`Case { .. }`) → a synthesized `record <enum>-<case>` and `case(<enum>-<case>)`.
+/// A multi-field *tuple* case is rejected: WIT cases take one payload, and a
+/// multi-field tuple serializes as a sequence (not a record) via serde, so it
+/// can't round-trip — use a struct variant `Case { .. }` instead.
+pub fn enum_to_wit(
+    item: &ItemEnum,
+    known: &BTreeSet<String>,
+) -> Result<(Vec<String>, String), String> {
+    let ename = item.ident.to_string();
+    let name = to_kebab_case(&ename);
+    let mut records = Vec::new();
     let mut out = format!("    variant {name} {{\n");
     for v in &item.variants {
         let case = to_kebab_case(&v.ident.to_string());
@@ -205,20 +216,35 @@ pub fn enum_to_variant(item: &ItemEnum, known: &BTreeSet<String>) -> Result<Stri
             Fields::Unit => out.push_str(&format!("        {case},\n")),
             Fields::Unnamed(u) if u.unnamed.len() == 1 => {
                 let payload = wit_type_with(&u.unnamed[0].ty, known)
-                    .map_err(|e| format!("variant `{}::{}`: {e}", item.ident, v.ident))?;
+                    .map_err(|e| format!("variant `{ename}::{}`: {e}", v.ident))?;
                 out.push_str(&format!("        {case}({payload}),\n"));
             }
-            _ => {
+            Fields::Named(f) => {
+                // Synthesize `record <enum>-<case> { .. }` for the case payload.
+                let rec_name = format!("{name}-{case}");
+                let mut rec = format!("    record {rec_name} {{\n");
+                for fl in &f.named {
+                    let fname = to_kebab_case(&fl.ident.as_ref().unwrap().to_string());
+                    let fty = wit_type_with(&fl.ty, known)
+                        .map_err(|e| format!("field `{fname}` of `{ename}::{}`: {e}", v.ident))?;
+                    rec.push_str(&format!("        {fname}: {fty},\n"));
+                }
+                rec.push_str("    }\n");
+                records.push(rec);
+                out.push_str(&format!("        {case}({rec_name}),\n"));
+            }
+            Fields::Unnamed(_) => {
                 return Err(format!(
-                    "WitType enum `{}` variant `{}` must be a unit or single-field \
-                     variant (WIT `variant` cases carry at most one payload)",
-                    item.ident, v.ident
+                    "WitType enum `{ename}` variant `{}` has multiple tuple fields; \
+                     a WIT variant case takes one payload — use a struct variant \
+                     `{} {{ .. }}` (or a single field)",
+                    v.ident, v.ident
                 ));
             }
         }
     }
     out.push_str("    }\n");
-    Ok(out)
+    Ok((records, out))
 }
 
 /// Render a complete `.wit` document: package + interface (the `plugin-error`
@@ -365,7 +391,8 @@ mod tests {
     fn enum_renders_to_variant() {
         let item: ItemEnum =
             syn::parse_str("enum Shape { Circle(u32), Rect(Point), Dot }").unwrap();
-        let var = enum_to_variant(&item, &known(&["Point"])).unwrap();
+        let (records, var) = enum_to_wit(&item, &known(&["Point"])).unwrap();
+        assert!(records.is_empty());
         assert!(var.contains("variant shape {"));
         assert!(var.contains("circle(u32),"));
         assert!(var.contains("rect(point),"));
@@ -373,9 +400,21 @@ mod tests {
     }
 
     #[test]
-    fn enum_multifield_variant_is_error() {
+    fn struct_variant_synthesizes_a_record() {
+        let item: ItemEnum = syn::parse_str("enum Shape { Rect { w: u32, h: u32 }, Dot }").unwrap();
+        let (records, var) = enum_to_wit(&item, &BTreeSet::new()).unwrap();
+        assert_eq!(records.len(), 1);
+        assert!(records[0].contains("record shape-rect {"));
+        assert!(records[0].contains("w: u32,"));
+        assert!(records[0].contains("h: u32,"));
+        assert!(var.contains("rect(shape-rect),"));
+        assert!(var.contains("dot,"));
+    }
+
+    #[test]
+    fn multifield_tuple_variant_is_rejected() {
         let item: ItemEnum = syn::parse_str("enum E { Pair(u32, u32) }").unwrap();
-        assert!(enum_to_variant(&item, &BTreeSet::new()).is_err());
+        assert!(enum_to_wit(&item, &BTreeSet::new()).is_err());
     }
 
     #[test]

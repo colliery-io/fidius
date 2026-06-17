@@ -26,7 +26,7 @@ use std::collections::BTreeSet;
 use syn::{FnArg, Item, Pat, ReturnType, TraitItem, Type};
 
 use crate::{
-    enum_to_variant, return_to_wit_with, struct_to_record, to_kebab_case, wit_type_with, WitMethod,
+    enum_to_wit, return_to_wit_with, struct_to_record, to_kebab_case, wit_type_with, WitMethod,
 };
 
 /// The product of generating from a plugin crate's source.
@@ -44,50 +44,115 @@ pub struct Generated {
     pub conversions: String,
 }
 
-/// Generate WIT + conversions from a single source string (typically a crate's
-/// `lib.rs`). v1 expects the `#[plugin_interface]` trait and all
-/// `#[derive(WitType)]` types to be in the parsed file.
+/// Generate WIT + conversions from a crate's source string (`lib.rs`). Inline
+/// modules (`mod m { .. }`) are walked; external `mod m;` files cannot be read
+/// from a bare string — use [`generate_from_path`] (the `build.rs` helper does).
 pub fn generate(src: &str) -> Result<Generated, String> {
     let file = syn::parse_file(src).map_err(|e| format!("parse error: {e}"))?;
+    let mut acc = Collected::default();
+    collect(&file.items, &[], None, &mut acc)?;
+    assemble(acc)
+}
 
-    // Collect WitType structs/enums and locate the interface trait.
-    let mut structs: Vec<&syn::ItemStruct> = Vec::new();
-    let mut enums: Vec<&syn::ItemEnum> = Vec::new();
-    let mut the_trait: Option<&syn::ItemTrait> = None;
+/// Like [`generate`], but reads `lib_rs` and follows external `mod m;` files
+/// (resolving `m.rs` / `m/mod.rs`), so `#[derive(WitType)]` types and the
+/// `#[plugin_interface]` trait may live in submodules.
+pub fn generate_from_path(lib_rs: &std::path::Path) -> Result<Generated, String> {
+    let src = std::fs::read_to_string(lib_rs)
+        .map_err(|e| format!("reading {}: {e}", lib_rs.display()))?;
+    let file = syn::parse_file(&src).map_err(|e| format!("parse {}: {e}", lib_rs.display()))?;
+    let dir = lib_rs.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let mut acc = Collected::default();
+    collect(&file.items, &[], Some(dir), &mut acc)?;
+    assemble(acc)
+}
 
-    for item in &file.items {
+/// `#[derive(WitType)]` types (tagged with their Rust module path) + the
+/// `#[plugin_interface]` trait, gathered across the module tree.
+#[derive(Default)]
+struct Collected {
+    structs: Vec<(Vec<String>, syn::ItemStruct)>,
+    enums: Vec<(Vec<String>, syn::ItemEnum)>,
+    the_trait: Option<syn::ItemTrait>,
+}
+
+/// Recursively gather items, descending into inline `mod m { .. }` and (when
+/// `dir` is `Some`) external `mod m;` files (`m.rs` / `m/mod.rs`).
+fn collect(
+    items: &[Item],
+    mod_path: &[String],
+    dir: Option<&std::path::Path>,
+    acc: &mut Collected,
+) -> Result<(), String> {
+    for item in items {
         match item {
-            Item::Struct(s) if has_derive(&s.attrs, "WitType") => structs.push(s),
-            Item::Enum(e) if has_derive(&e.attrs, "WitType") => enums.push(e),
+            Item::Struct(s) if has_derive(&s.attrs, "WitType") => {
+                acc.structs.push((mod_path.to_vec(), s.clone()));
+            }
+            Item::Enum(e) if has_derive(&e.attrs, "WitType") => {
+                acc.enums.push((mod_path.to_vec(), e.clone()));
+            }
             Item::Trait(t) if has_attr(&t.attrs, "plugin_interface") => {
-                if the_trait.is_some() {
-                    return Err("multiple #[plugin_interface] traits in one file".into());
+                if acc.the_trait.is_some() {
+                    return Err("multiple #[plugin_interface] traits found".into());
                 }
-                the_trait = Some(t);
+                acc.the_trait = Some(t.clone());
+            }
+            Item::Mod(m) => {
+                let mut child = mod_path.to_vec();
+                child.push(m.ident.to_string());
+                if let Some((_, items)) = &m.content {
+                    let sub = dir.map(|d| d.join(m.ident.to_string()));
+                    collect(items, &child, sub.as_deref(), acc)?;
+                } else if let Some(d) = dir {
+                    let name = m.ident.to_string();
+                    let candidates = [d.join(format!("{name}.rs")), d.join(&name).join("mod.rs")];
+                    let file = candidates.iter().find(|p| p.exists()).ok_or_else(|| {
+                        format!(
+                            "cannot find module file for `mod {name};` near {}",
+                            d.display()
+                        )
+                    })?;
+                    let src = std::fs::read_to_string(file)
+                        .map_err(|e| format!("reading {}: {e}", file.display()))?;
+                    let parsed = syn::parse_file(&src)
+                        .map_err(|e| format!("parse {}: {e}", file.display()))?;
+                    collect(&parsed.items, &child, Some(&d.join(&name)), acc)?;
+                }
             }
             _ => {}
         }
     }
+    Ok(())
+}
 
-    let the_trait = the_trait.ok_or("no #[plugin_interface] trait found in source")?;
+/// Build the `.wit` + conversions from the collected items.
+fn assemble(acc: Collected) -> Result<Generated, String> {
+    let the_trait = acc
+        .the_trait
+        .ok_or("no #[plugin_interface] trait found in source")?;
     let interface_name = the_trait.ident.to_string();
     let iface_kebab = to_kebab_case(&interface_name);
 
     let mut user_types: Vec<String> = Vec::new();
-    user_types.extend(structs.iter().map(|s| s.ident.to_string()));
-    user_types.extend(enums.iter().map(|e| e.ident.to_string()));
+    user_types.extend(acc.structs.iter().map(|(_, s)| s.ident.to_string()));
+    user_types.extend(acc.enums.iter().map(|(_, e)| e.ident.to_string()));
     let known: BTreeSet<String> = user_types.iter().cloned().collect();
 
-    // Type defs (records then variants) in declaration order.
+    // Type defs: records (struct records + synthetic struct-variant payload
+    // records) before variants, so forward references resolve cleanly.
     let mut type_defs: Vec<String> = Vec::new();
-    for s in &structs {
+    let mut variant_defs: Vec<String> = Vec::new();
+    for (_, s) in &acc.structs {
         type_defs.push(struct_to_record(s, &known)?);
     }
-    for e in &enums {
-        type_defs.push(enum_to_variant(e, &known)?);
+    for (_, e) in &acc.enums {
+        let (synthetic, variant) = enum_to_wit(e, &known)?;
+        type_defs.extend(synthetic);
+        variant_defs.push(variant);
     }
+    type_defs.extend(variant_defs);
 
-    // Methods → WIT funcs.
     let mut methods: Vec<WitMethod> = Vec::new();
     for item in &the_trait.items {
         let TraitItem::Fn(f) = item else { continue };
@@ -116,7 +181,7 @@ pub fn generate(src: &str) -> Result<Generated, String> {
     }
 
     let wit = crate::render_wit_full(&iface_kebab, &type_defs, &methods);
-    let conversions = render_conversions(&iface_kebab, &structs, &enums, &known);
+    let conversions = render_conversions(&iface_kebab, &acc.structs, &acc.enums, &known);
 
     Ok(Generated {
         interface_name,
@@ -127,14 +192,23 @@ pub fn generate(src: &str) -> Result<Generated, String> {
     })
 }
 
+/// `crate::<mod::path>::<Name>` — the author-side path for a type at `mod_path`.
+fn author_path(mod_path: &[String], name: &str) -> String {
+    if mod_path.is_empty() {
+        format!("crate::{name}")
+    } else {
+        format!("crate::{}::{name}", mod_path.join("::"))
+    }
+}
+
 /// Render `From` impls (both directions) between each user type and its
 /// wit-bindgen-generated mirror. Emitted into the adapter module, where the
-/// generated types live at `exports::fidius::<iface>::<iface>::<Type>` and the
-/// author types at `crate::<Type>` (v1: WitType types live at the crate root).
+/// generated types live (flat) at `exports::fidius::<iface>::<iface>::<Type>`
+/// and the author types at `crate::<mod::path>::<Type>`.
 fn render_conversions(
     iface_kebab: &str,
-    structs: &[&syn::ItemStruct],
-    enums: &[&syn::ItemEnum],
+    structs: &[(Vec<String>, syn::ItemStruct)],
+    enums: &[(Vec<String>, syn::ItemEnum)],
     known: &BTreeSet<String>,
 ) -> String {
     if structs.is_empty() && enums.is_empty() {
@@ -145,10 +219,10 @@ fn render_conversions(
     let mut out = String::new();
     out.push_str("// Generated by fidius-wit: author <-> wit-bindgen conversions.\n");
 
-    for s in structs {
+    for (path, s) in structs {
         let name = s.ident.to_string();
         let g = format!("{gen_path}::{name}");
-        let a = format!("crate::{name}");
+        let a = author_path(path, &name);
         let fields: Vec<String> = match &s.fields {
             syn::Fields::Named(f) => f
                 .named
@@ -183,36 +257,73 @@ fn render_conversions(
         ));
     }
 
-    for e in enums {
-        let name = e.ident.to_string();
-        let g = format!("{gen_path}::{name}");
-        let a = format!("crate::{name}");
-        let arms = |from: &str, to: &str| -> String {
-            e.variants
-                .iter()
-                .map(|v| {
-                    let case = v.ident.to_string();
-                    match &v.fields {
-                        syn::Fields::Unit => {
-                            format!("{from}::{case} => {to}::{case}")
-                        }
-                        syn::Fields::Unnamed(u) if u.unnamed.len() == 1 => {
-                            let conv = conv_expr("x", &u.unnamed[0].ty, known);
-                            format!("{from}::{case}(x) => {to}::{case}({conv})")
-                        }
-                        _ => format!("{from}::{case} {{ .. }} => unreachable!()"),
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+    for (path, e) in enums {
+        let ename = e.ident.to_string();
+        let g = format!("{gen_path}::{ename}");
+        let a = author_path(path, &ename);
+
+        let mut g2a = Vec::new(); // generated -> author
+        let mut a2g = Vec::new(); // author -> generated
+        for v in &e.variants {
+            let case = v.ident.to_string();
+            match &v.fields {
+                syn::Fields::Unit => {
+                    g2a.push(format!("{g}::{case} => {a}::{case}"));
+                    a2g.push(format!("{a}::{case} => {g}::{case}"));
+                }
+                syn::Fields::Unnamed(u) if u.unnamed.len() == 1 => {
+                    let ty = &u.unnamed[0].ty;
+                    g2a.push(format!(
+                        "{g}::{case}(x) => {a}::{case}({})",
+                        conv_expr("x", ty, known)
+                    ));
+                    a2g.push(format!(
+                        "{a}::{case}(x) => {g}::{case}({})",
+                        conv_expr("x", ty, known)
+                    ));
+                }
+                syn::Fields::Named(f) => {
+                    // The gen side wraps the case payload in a synthesized record
+                    // (`<Enum><Case>`, e.g. `ShapeRect`); the author side is a
+                    // struct variant with inline fields.
+                    let gen_rec = format!("{gen_path}::{ename}{case}");
+                    let fnames: Vec<String> = f
+                        .named
+                        .iter()
+                        .map(|fl| fl.ident.as_ref().unwrap().to_string())
+                        .collect();
+                    let g2a_inits = fnames
+                        .iter()
+                        .zip(f.named.iter())
+                        .map(|(n, fl)| {
+                            format!("{n}: {}", conv_expr(&format!("__r.{n}"), &fl.ty, known))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    g2a.push(format!("{g}::{case}(__r) => {a}::{case} {{ {g2a_inits} }}"));
+
+                    let binds = fnames.join(", ");
+                    let a2g_inits = fnames
+                        .iter()
+                        .zip(f.named.iter())
+                        .map(|(n, fl)| format!("{n}: {}", conv_expr(n, &fl.ty, known)))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    a2g.push(format!(
+                        "{a}::{case} {{ {binds} }} => {g}::{case}({gen_rec} {{ {a2g_inits} }})"
+                    ));
+                }
+                // Multi-field tuple cases are rejected by `enum_to_wit`.
+                syn::Fields::Unnamed(_) => unreachable!("rejected by enum_to_wit"),
+            }
+        }
         out.push_str(&format!(
             "impl ::core::convert::From<{g}> for {a} {{ fn from(v: {g}) -> Self {{ match v {{ {} }} }} }}\n",
-            arms(&g, &a)
+            g2a.join(", ")
         ));
         out.push_str(&format!(
             "impl ::core::convert::From<{a}> for {g} {{ fn from(v: {a}) -> Self {{ match v {{ {} }} }} }}\n",
-            arms(&a, &g)
+            a2g.join(", ")
         ));
     }
     out

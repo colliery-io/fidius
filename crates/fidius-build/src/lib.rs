@@ -51,11 +51,13 @@ pub fn emit_wit() {
 /// testable without a cargo build-script environment.
 pub fn run(manifest_dir: &Path, out_dir: &Path) -> Result<(), String> {
     let lib = manifest_dir.join("src").join("lib.rs");
-    println!("cargo:rerun-if-changed={}", lib.display());
+    // Re-run on any source change — the generator may read submodule files too.
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir.join("src").display()
+    );
 
-    let src =
-        std::fs::read_to_string(&lib).map_err(|e| format!("reading {}: {e}", lib.display()))?;
-    let generated = fidius_wit::generate(&src)?;
+    let generated = fidius_wit::generate_from_path(&lib)?;
 
     let wit_dir = manifest_dir.join("wit");
     std::fs::create_dir_all(&wit_dir).map_err(|e| format!("creating wit/: {e}"))?;
@@ -103,6 +105,40 @@ mod tests {
 
         let conv = std::fs::read_to_string(out.join("fidius_wit_conversions.rs")).unwrap();
         assert!(conv.contains("From<exports::fidius::geo::geo::Point> for crate::Point"));
+    }
+
+    #[test]
+    fn follows_external_modules() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let manifest = tmp.path();
+        let src = manifest.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        // WitType type lives in a separate file: src/geom.rs
+        std::fs::write(
+            src.join("lib.rs"),
+            r#"
+                pub mod geom;
+                #[plugin_interface(version = 1, crate = "fidius_guest")]
+                pub trait Geo { fn area(&self, p: geom::Point) -> u32; }
+            "#,
+        )
+        .unwrap();
+        std::fs::write(
+            src.join("geom.rs"),
+            "#[derive(WitType)] pub struct Point { pub x: u32, pub y: u32 }",
+        )
+        .unwrap();
+        let out = manifest.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+
+        run(manifest, &out).unwrap();
+
+        let wit = std::fs::read_to_string(manifest.join("wit/geo.wit")).unwrap();
+        assert!(wit.contains("record point {"), "wit:\n{wit}");
+        assert!(wit.contains("area: func(p: point) -> u32;"));
+        // Conversions reference the type at its module path.
+        let conv = std::fs::read_to_string(out.join("fidius_wit_conversions.rs")).unwrap();
+        assert!(conv.contains("for crate::geom::Point"), "conv:\n{conv}");
     }
 
     #[test]

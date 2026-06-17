@@ -231,19 +231,25 @@ guest in the deny-all sandbox.
 
 Real interfaces pass domain types, not just primitives. Annotate a `struct` with
 `#[derive(WitType)]` to map it to a WIT `record`, and an `enum` to a WIT
-`variant` (unit cases or single-field cases):
+`variant`. Enum cases may be unit, single-field, or **struct-style**
+(`Case { .. }`, which synthesizes a payload record). The types may live in
+submodules:
 
 ```rust
 use fidius_macro::{plugin_impl, plugin_interface, WitType};
 
-#[derive(WitType, Clone)]
-pub struct Point { pub x: i32, pub y: i32 }     // → record point { x: s32, y: s32 }
+pub mod geom {                                   // types can live in submodules
+    #[derive(super::WitType, Clone)]
+    pub struct Point { pub x: i32, pub y: i32 }   // → record point { x: s32, y: s32 }
+}
+use geom::Point;
 
 #[derive(WitType, Clone)]
-pub enum Shape {                                 // → variant shape { ... }
-    Circle(u32),
-    Rect(Point),
-    Dot,
+pub enum Shape {                                  // → variant shape { ... }
+    Circle(u32),                                  //   single-field case
+    Rect(Point),                                  //   case carrying a record
+    Triangle { base: u32, height: u32 },          //   struct case → synthetic record
+    Dot,                                          //   unit case
 }
 
 #[plugin_interface(version = 1, buffer = PluginAllocated, crate = "fidius_guest")]
@@ -277,10 +283,12 @@ changes — the build, packaging, signing, and loading steps above are identical
 Your types cross the wire as **real WIT records/variants**, so a
 [Python guest](../how-to/wasm-python-plugin.md) sees them as native types too.
 
-!!! note "v1 limits"
-    Records need named fields; variant cases are unit or single-field. Put the
-    `#[derive(WitType)]` types and the `#[plugin_interface]` trait in `src/lib.rs`.
-    A type fidius can't map is a clear compile error on the wasm build. (`cargo`
+!!! note "Shapes & limits"
+    Records need named fields. Enum cases may be unit, single-field, or
+    struct-style (`Case { .. }`); a **multi-field tuple** case (`Case(A, B)`) is
+    rejected — use a struct case, since a tuple serializes as a sequence and
+    can't round-trip as a WIT record. Types may be in submodules of the crate. A
+    type fidius can't map is a clear compile error on the wasm build. (`cargo`
     users can also run `fidius wit` to regenerate `wit/` manually.)
 
 ## What you built

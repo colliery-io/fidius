@@ -120,8 +120,19 @@ matches the WIT `circle` case and a `y_pos` field matches `y-pos`.
 
 The same `#[derive(WitType)]` type still crosses the **cdylib/Python** boundary
 unchanged (via serde/bincode) — the records/variants are the WASM projection
-only. v1 limits: named-field records; unit or single-field variant cases; types
-in `src/lib.rs`.
+only.
+
+**Enum case shapes.** A unit case → `case`; a single-field case → `case(type)`;
+a **struct-style** case (`Case { .. }`) synthesizes a `record <enum>-<case>` and
+maps to `case(<enum>-<case>)`. A **multi-field tuple** case (`Case(A, B)`) is
+rejected: a WIT case takes one payload, and serde serializes a multi-field tuple
+as a *sequence* (not a record), so it can't round-trip — use a struct case.
+
+**Where types live.** `#[derive(WitType)]` types may be in submodules; the
+generator follows inline `mod m { .. }` and external `mod m;` files
+(`m.rs` / `m/mod.rs`) and emits conversions against each type's real module path
+(`crate::<mod::path>::<T>`). Limit: record/variant *names* share one flat WIT
+namespace, so type names must be unique across the interface.
 
 ## Fallible methods
 

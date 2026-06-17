@@ -44,6 +44,7 @@ pub struct Point {
 pub enum Shape {
     Circle(u32),
     Rect(Point),
+    Triangle { base: u32, height: u32 },
     Dot,
 }
 
@@ -136,6 +137,12 @@ fn variant_in_round_trips_all_cases() {
         .call_method(1, &(Shape::Rect(Point { x: 1, y: 2 }),))
         .unwrap();
     assert_eq!(rect, "rect at 1,2");
+
+    // Struct variant → synthetic WIT record payload.
+    let tri: String = handle
+        .call_method(1, &(Shape::Triangle { base: 3, height: 4 },))
+        .unwrap();
+    assert_eq!(tri, "triangle 3x4");
 
     let dot: String = handle.call_method(1, &(Shape::Dot,)).unwrap();
     assert_eq!(dot, "dot");
