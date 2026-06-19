@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-19T23:19:46Z | 138 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-19T23:44:33Z | 138 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -898,28 +898,29 @@
 - pub `PluginHost` struct L31-43 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
 - pub `PluginHostBuilder` struct L46-55 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
 - pub `egress` function L77-80 — `(mut self, policy: impl crate::executor::wasm::EgressPolicy) -> Self` — Set a host-wide default `wasi:http` egress policy (FIDIUS-I-0027).
-- pub `search_path` function L83-86 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
-- pub `load_policy` function L89-92 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
-- pub `require_signature` function L95-98 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
-- pub `trusted_keys` function L101-104 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
-- pub `interface_hash` function L107-110 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
-- pub `buffer_strategy` function L113-116 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
-- pub `build` function L119-130 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
-- pub `builder` function L135-137 — `() -> PluginHostBuilder` — Create a new builder.
-- pub `discover` function L148-173 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
-- pub `load` function L230-274 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
-- pub `find_python_package` function L279-309 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
-- pub `load_python` function L321-348 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
-- pub `find_wasm_package` function L353-379 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
-- pub `load_wasm` function L396-402 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
-- pub `load_wasm_with_egress` function L410-417 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
--  `PluginHostBuilder` type L57-131 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
+- pub `egress_policy` function L88-91 — `(mut self, policy: Arc<dyn crate::executor::wasm::EgressPolicy>) -> Self` — Like [`Self::egress`] but accepts an already-erased
+- pub `search_path` function L94-97 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
+- pub `load_policy` function L100-103 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
+- pub `require_signature` function L106-109 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
+- pub `trusted_keys` function L112-115 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
+- pub `interface_hash` function L118-121 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
+- pub `buffer_strategy` function L124-127 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
+- pub `build` function L130-141 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
+- pub `builder` function L146-148 — `() -> PluginHostBuilder` — Create a new builder.
+- pub `discover` function L159-184 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
+- pub `load` function L241-285 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+- pub `find_python_package` function L290-320 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
+- pub `load_python` function L332-359 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
+- pub `find_wasm_package` function L364-390 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
+- pub `load_wasm` function L407-413 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
+- pub `load_wasm_with_egress` function L421-428 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
+-  `PluginHostBuilder` type L57-142 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
 -  `new` function L58-69 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L133-533 — `= PluginHost` — PluginHost builder and plugin discovery.
--  `discover_cdylib` function L175-195 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
--  `discover_package` function L200-224 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — Discover a directory-based package (`package.toml`) and surface it by
--  `load_wasm_impl` function L420-532 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — PluginHost builder and plugin discovery.
--  `is_dylib` function L536-545 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+-  `PluginHost` type L144-544 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `discover_cdylib` function L186-206 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
+-  `discover_package` function L211-235 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — Discover a directory-based package (`package.toml`) and surface it by
+-  `load_wasm_impl` function L431-543 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L547-556 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### crates/fidius-host/src/lib.rs
 
@@ -1260,6 +1261,7 @@
 -  `egress_via_builder_default_policy` function L204-222 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
 -  `egress_via_per_plugin_policy` function L225-244 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
 -  `load_wasm_without_egress_fails_closed` function L247-265 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `egress_via_builder_arc_dyn_policy` function L268-287 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
 
 #### crates/fidius-host/tests/wasm_executor.rs
 

@@ -1,6 +1,6 @@
 [package]
 name = "fidius-guest"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "Guest-side, wasm-buildable shared types for the Fidius plugin framework — interface hashing, descriptors, the neutral Value model, and the bincode wire format. No host-only dependencies (no archive/compression/filesystem), so it compiles to wasm32-wasip2."
 license = "Apache-2.0"
