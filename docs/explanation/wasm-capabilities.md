@@ -145,6 +145,7 @@ Outbound HTTP is enabled only when **both** keys are present:
    ```rust
    // Host-wide default: every load_wasm'd plugin uses this policy.
    let host = PluginHost::builder().search_path(dir).egress(my_policy).build()?;
+   // (already hold an `Arc<dyn EgressPolicy>`? use `.egress_policy(arc)` instead.)
    let p = host.load_wasm("rest-connector", &Connector_WASM_DESCRIPTOR)?;
 
    // Or per-plugin (isolate connectors — a host-wide policy can't tell which

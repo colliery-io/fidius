@@ -79,6 +79,17 @@ impl PluginHostBuilder {
         self
     }
 
+    /// Like [`Self::egress`] but accepts an already-erased
+    /// `Arc<dyn EgressPolicy>` — for a policy that is shared across hosts, or
+    /// selected/constructed at runtime (where the concrete type isn't known at
+    /// the call site). Threads through `load_wasm` exactly like `egress`.
+    /// Available only with the `wasm` feature.
+    #[cfg(feature = "wasm")]
+    pub fn egress_policy(mut self, policy: Arc<dyn crate::executor::wasm::EgressPolicy>) -> Self {
+        self.egress = Some(policy);
+        self
+    }
+
     /// Add a directory to search for plugin dylibs.
     pub fn search_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.search_paths.push(path.into());

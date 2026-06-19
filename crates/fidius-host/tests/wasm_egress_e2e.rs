@@ -263,3 +263,25 @@ fn load_wasm_without_egress_fails_closed() {
         "must fail closed without an egress policy"
     );
 }
+
+#[test]
+fn egress_via_builder_arc_dyn_policy() {
+    if fetcher_component().is_none() {
+        eprintln!("SKIP egress_via_builder_arc_dyn_policy");
+        return;
+    }
+    let (url, server) = mock_http_once("hello via arc");
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_fetcher_pkg(tmp.path());
+    // An already-erased Arc<dyn EgressPolicy> (weir's case) — `.egress_policy(arc)`.
+    let policy: Arc<dyn EgressPolicy> = Arc::new(AllowAll);
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .egress_policy(policy)
+        .build()
+        .unwrap();
+    let handle = host.load_wasm("fetcher-pkg", &FETCHER).expect("load_wasm");
+    let body: String = handle.call_method(0, &(url,)).expect("fetch");
+    server.join().unwrap();
+    assert_eq!(body, "hello via arc");
+}
