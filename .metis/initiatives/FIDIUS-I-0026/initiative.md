@@ -4,14 +4,14 @@ level: initiative
 title: "Streaming execution primitive — pull-based backpressured Value streams across all backends"
 short_code: "FIDIUS-I-0026"
 created_at: 2026-06-18T17:16:09.044790+00:00
-updated_at: 2026-06-18T18:13:25.982483+00:00
+updated_at: 2026-06-19T21:29:34.922155+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/decompose"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
