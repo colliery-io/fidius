@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-19T22:19:57Z | 138 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-19T23:19:46Z | 138 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -895,28 +895,31 @@
 
 #### crates/fidius-host/src/host.rs
 
-- pub `PluginHost` struct L29-36 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
-- pub `PluginHostBuilder` struct L39-46 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
-- pub `search_path` function L61-64 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
-- pub `load_policy` function L67-70 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
-- pub `require_signature` function L73-76 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
-- pub `trusted_keys` function L79-82 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
-- pub `interface_hash` function L85-88 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
-- pub `buffer_strategy` function L91-94 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
-- pub `build` function L97-106 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
-- pub `builder` function L111-113 — `() -> PluginHostBuilder` — Create a new builder.
-- pub `discover` function L124-149 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
-- pub `load` function L206-250 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
-- pub `find_python_package` function L255-285 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
-- pub `load_python` function L297-324 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
-- pub `find_wasm_package` function L329-355 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
-- pub `load_wasm` function L367-476 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
--  `PluginHostBuilder` type L48-107 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
--  `new` function L49-58 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L109-477 — `= PluginHost` — PluginHost builder and plugin discovery.
--  `discover_cdylib` function L151-171 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
--  `discover_package` function L176-200 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — Discover a directory-based package (`package.toml`) and surface it by
--  `is_dylib` function L480-489 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+- pub `PluginHost` struct L31-43 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Host for loading and managing plugins.
+- pub `PluginHostBuilder` struct L46-55 — `{ search_paths: Vec<PathBuf>, load_policy: LoadPolicy, require_signature: bool, ...` — Builder for configuring a PluginHost.
+- pub `egress` function L77-80 — `(mut self, policy: impl crate::executor::wasm::EgressPolicy) -> Self` — Set a host-wide default `wasi:http` egress policy (FIDIUS-I-0027).
+- pub `search_path` function L83-86 — `(mut self, path: impl Into<PathBuf>) -> Self` — Add a directory to search for plugin dylibs.
+- pub `load_policy` function L89-92 — `(mut self, policy: LoadPolicy) -> Self` — Set the load policy (Strict or Lenient).
+- pub `require_signature` function L95-98 — `(mut self, require: bool) -> Self` — Require plugins to have valid signatures.
+- pub `trusted_keys` function L101-104 — `(mut self, keys: &[VerifyingKey]) -> Self` — Set trusted Ed25519 public keys for signature verification.
+- pub `interface_hash` function L107-110 — `(mut self, hash: u64) -> Self` — Set the expected interface hash for validation.
+- pub `buffer_strategy` function L113-116 — `(mut self, strategy: BufferStrategyKind) -> Self` — Set the expected buffer strategy for validation.
+- pub `build` function L119-130 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
+- pub `builder` function L135-137 — `() -> PluginHostBuilder` — Create a new builder.
+- pub `discover` function L148-173 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
+- pub `load` function L230-274 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+- pub `find_python_package` function L279-309 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
+- pub `load_python` function L321-348 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
+- pub `find_wasm_package` function L353-379 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
+- pub `load_wasm` function L396-402 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
+- pub `load_wasm_with_egress` function L410-417 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
+-  `PluginHostBuilder` type L57-131 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
+-  `new` function L58-69 — `() -> Self` — PluginHost builder and plugin discovery.
+-  `PluginHost` type L133-533 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `discover_cdylib` function L175-195 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
+-  `discover_package` function L200-224 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — Discover a directory-based package (`package.toml`) and surface it by
+-  `load_wasm_impl` function L420-532 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L536-545 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### crates/fidius-host/src/lib.rs
 
@@ -1057,10 +1060,11 @@
 - pub `WasmComponentExecutor` struct L296-315 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
 - pub `from_component_bytes` function L320-328 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
 - pub `from_component_bytes_with_egress` function L333-356 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
-- pub `from_cwasm` function L364-386 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
-- pub `interface_hash` function L507-523 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
-- pub `validate_component` function L874-882 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
-- pub `precompile_component` function L888-896 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+- pub `from_cwasm` function L364-372 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
+- pub `from_cwasm_with_egress` function L380-403 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
+- pub `interface_hash` function L524-540 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
+- pub `validate_component` function L891-899 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L905-913 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
 -  `EgressDenied` type L60-67 — `= EgressDenied` — from the package manifest's allow-list.
 -  `EgressHooks` struct L92-94 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
 -  `EgressHooks` type L96-116 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
@@ -1074,30 +1078,30 @@
 -  `is_blocked_ip` function L251-270 — `(ip: &IpAddr) -> bool` — Baseline SSRF denylist for the raw-socket grant (FIDIUS-T-0143): an address a
 -  `HostState` type L274-281 — `impl WasiView for HostState` — from the package manifest's allow-list.
 -  `ctx` function L275-280 — `(&mut self) -> WasiCtxView<'_>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L317-524 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `build` function L390-432 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
--  `instantiate` function L437-455 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
--  `func` function L458-485 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
--  `method` function L487-503 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L526-563 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `info` function L527-529 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
--  `method_count` function L531-533 — `(&self) -> u32` — from the package manifest's allow-list.
--  `call_raw` function L535-562 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L565-597 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `call` function L566-596 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
--  `STREAM_CHANNEL_CAP` variable L603 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
--  `WasmComponentExecutor` type L607-710 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `call_streaming` function L608-709 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
--  `plugin_error_from_val` function L714-740 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
--  `to_kebab` function L745-760 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
--  `kebab_to_snake` function L763-765 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
--  `kebab_to_pascal` function L768-778 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
--  `value_to_val` function L780-823 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
--  `val_to_value` function L826-864 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
--  `ssrf_tests` module L899-937 — `-` — from the package manifest's allow-list.
--  `ip` function L903-905 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
--  `blocks_internal_and_metadata_targets` function L908-924 — `()` — from the package manifest's allow-list.
--  `allows_public_targets` function L927-936 — `()` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L317-541 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `build` function L407-449 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
+-  `instantiate` function L454-472 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
+-  `func` function L475-502 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
+-  `method` function L504-520 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L543-580 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `info` function L544-546 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
+-  `method_count` function L548-550 — `(&self) -> u32` — from the package manifest's allow-list.
+-  `call_raw` function L552-579 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L582-614 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call` function L583-613 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
+-  `STREAM_CHANNEL_CAP` variable L620 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
+-  `WasmComponentExecutor` type L624-727 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call_streaming` function L625-726 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
+-  `plugin_error_from_val` function L731-757 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
+-  `to_kebab` function L762-777 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
+-  `kebab_to_snake` function L780-782 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
+-  `kebab_to_pascal` function L785-795 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
+-  `value_to_val` function L797-840 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
+-  `val_to_value` function L843-881 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
+-  `ssrf_tests` module L916-954 — `-` — from the package manifest's allow-list.
+-  `ip` function L920-922 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
+-  `blocks_internal_and_metadata_targets` function L925-941 — `()` — from the package manifest's allow-list.
+-  `allows_public_targets` function L944-953 — `()` — from the package manifest's allow-list.
 
 ### crates/fidius-host/tests
 
@@ -1236,20 +1240,26 @@
 
 #### crates/fidius-host/tests/wasm_egress_e2e.rs
 
--  `IFACE` variable L37 — `: &str` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `fetcher_component` function L39-43 — `() -> Option<Vec<u8>>` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `mock_http_once` function L47-65 — `(body: &'static str) -> (String, std::thread::JoinHandle<()>)` — One-shot mock HTTP server on an ephemeral loopback port; serves a single
--  `AllowAll` struct L68 — `-` — Reference embedder policy: allow everything (the test's loopback grant).
--  `AllowAll` type L69-73 — `impl EgressPolicy for AllowAll` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `authorize` function L70-72 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `DenyAll` struct L76 — `-` — Reference embedder policy: deny everything.
--  `DenyAll` type L77-81 — `impl EgressPolicy for DenyAll` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `authorize` function L78-80 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `load` function L83-111 — `( caps: Vec<String>, egress: Option<Arc<dyn EgressPolicy>>, ) -> Result<PluginHa...` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `egress_allowed_fetches_body` function L114-124 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `egress_denied_by_policy` function L127-141 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `no_policy_fails_closed` function L144-156 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
--  `no_capability_fails_closed` function L159-170 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `IFACE` variable L38 — `: &str` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `fetcher_component` function L40-44 — `() -> Option<Vec<u8>>` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `mock_http_once` function L48-66 — `(body: &'static str) -> (String, std::thread::JoinHandle<()>)` — One-shot mock HTTP server on an ephemeral loopback port; serves a single
+-  `AllowAll` struct L69 — `-` — Reference embedder policy: allow everything (the test's loopback grant).
+-  `AllowAll` type L70-74 — `impl EgressPolicy for AllowAll` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `authorize` function L71-73 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `DenyAll` struct L77 — `-` — Reference embedder policy: deny everything.
+-  `DenyAll` type L78-82 — `impl EgressPolicy for DenyAll` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `authorize` function L79-81 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `load` function L84-112 — `( caps: Vec<String>, egress: Option<Arc<dyn EgressPolicy>>, ) -> Result<PluginHa...` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `egress_allowed_fetches_body` function L115-125 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `egress_denied_by_policy` function L128-142 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `no_policy_fails_closed` function L145-157 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `no_capability_fails_closed` function L160-171 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `FETCHER_METHODS` variable L177-181 — `: [WasmMethodDesc; 1]` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `FETCHER` variable L182-187 — `: WasmInterfaceDescriptor` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `stage_fetcher_pkg` function L190-201 — `(root: &std::path::Path)` — Stage the fetcher as a loadable wasm package declaring the `http` capability.
+-  `egress_via_builder_default_policy` function L204-222 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `egress_via_per_plugin_policy` function L225-244 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
+-  `load_wasm_without_egress_fails_closed` function L247-265 — `()` — embedder writes — fidius ships none of this (mechanism, not policy).
 
 #### crates/fidius-host/tests/wasm_executor.rs
 
@@ -2145,9 +2155,10 @@
 #### tests/wasm-fixtures/fetcher/src/lib.rs
 
 -  `Component` struct L19 — `-`
--  `Component` type L21-31 — `impl Guest for Component`
+-  `Component` type L21-37 — `impl Guest for Component`
 -  `fetch` function L25-30 — `(url: String) -> String` — Plain-string return so the host test never has to round-trip a WIT
--  `do_fetch` function L33-84 — `(url: String) -> Result<String, String>`
+-  `fidius_interface_hash` function L34-36 — `() -> u64` — Interface-hash carrier; the host's `load_wasm` checks it against the
+-  `do_fetch` function L39-90 — `(url: String) -> Result<String, String>`
 
 ### tests/wasm-fixtures/greeter/src
 

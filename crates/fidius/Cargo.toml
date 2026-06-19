@@ -1,6 +1,6 @@
 [package]
 name = "fidius"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Fidius — a Rust plugin framework for trait-to-dylib plugin systems"
 license = "Apache-2.0"
@@ -19,6 +19,6 @@ host = ["dep:fidius-host"]
 streaming = ["host", "fidius-host/streaming"]
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.4.0" }
-fidius-macro = { path = "../fidius-macro", version = "0.4.0" }
-fidius-host = { path = "../fidius-host", version = "0.4.0", optional = true }
+fidius-core = { path = "../fidius-core", version = "0.4.1" }
+fidius-macro = { path = "../fidius-macro", version = "0.4.1" }
+fidius-host = { path = "../fidius-host", version = "0.4.1", optional = true }

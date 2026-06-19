@@ -1,6 +1,6 @@
 [package]
 name = "fidius-core"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Shared types for the Fidius plugin framework"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ async = ["tokio"]
 
 [dependencies]
 # Guest-essential types live here (wasm-buildable); re-exported by this crate.
-fidius-guest = { path = "../fidius-guest", version = "0.4.0" }
+fidius-guest = { path = "../fidius-guest", version = "0.4.1" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 bincode = { workspace = true }
