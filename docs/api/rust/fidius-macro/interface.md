@@ -28,6 +28,7 @@ fn strip_optional_attrs(item: &ItemTrait) -> ItemTrait {
         attr.path().is_ident("optional")
             || attr.path().is_ident("method_meta")
             || attr.path().is_ident("trait_meta")
+            || attr.path().is_ident("wire")
     }
 
     let mut cleaned = item.clone();
@@ -380,12 +381,96 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
         .map(|m| m.name.to_string())
         .collect();
 
+    // Python-loader descriptor: per-method name + wire mode in declaration
+    // order, plus the trait name and matching interface hash. Lives in the
+    // companion module so a host can hand it to fidius-python's loader.
+    let crate_path = &ir.attrs.crate_path;
+    let py_method_descs: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .map(|m| {
+            let name = m.name.to_string();
+            let wire_raw = m.wire_raw;
+            quote! {
+                #crate_path::python_descriptor::PythonMethodDesc {
+                    name: #name,
+                    wire_raw: #wire_raw,
+                }
+            }
+        })
+        .collect();
+    let trait_name_str = trait_name.to_string();
+    let py_descriptor_ident = format_ident!("{}_PYTHON_DESCRIPTOR", trait_name);
+    let method_count = ir.methods.len();
+
+    // WASM (Component Model) descriptor: parallels the Python one. Method/
+    // interface names are kebab-case (the WIT convention), and the exported
+    // interface name follows fidius's WIT layout
+    // `fidius:<iface>/<iface>@<version>.0.0`, so the generated `.wit`, the built
+    // component, and the host loader (`load_wasm`) all agree.
+    let iface_kebab = crate::wit::to_kebab_case(&trait_name_str);
+    // WIT package version is a fixed coordinate, decoupled from the interface
+    // version (fidius's real compatibility gate is the interface hash). Keeping
+    // it fixed lets `#[plugin_impl]` emit a matching WIT package name without
+    // needing the interface version at its expansion site.
+    let interface_export = format!("fidius:{iface_kebab}/{iface_kebab}@0.1.0");
+    let wasm_descriptor_ident = format_ident!("{}_WASM_DESCRIPTOR", trait_name);
+    let wasm_method_descs: Vec<TokenStream> = ir
+        .methods
+        .iter()
+        .map(|m| {
+            let name = crate::wit::to_kebab_case(&m.name.to_string());
+            let wire_raw = m.wire_raw;
+            let streaming = m.streaming;
+            quote! {
+                #crate_path::wasm_descriptor::WasmMethodDesc {
+                    name: #name,
+                    wire_raw: #wire_raw,
+                    streaming: #streaming,
+                }
+            }
+        })
+        .collect();
+
     quote! {
         pub const #hash_name: u64 = #hash_value;
         pub const #version_name: u32 = #version_val;
         pub const #strategy_name: u8 = #strategy_val;
         #(#cap_constants)*
         pub const #optional_names_ident: &[&str] = &[#(#optional_names),*];
+
+        /// Static method-name + wire-mode table consumed by the Python loader.
+        ///
+        /// Lives next to the cdylib metadata so a host that wants to load a
+        /// Python plugin implementing this interface can hand a `'static`
+        /// reference to `fidius-python` without further plumbing.
+        pub static #py_descriptor_ident:
+            #crate_path::python_descriptor::PythonInterfaceDescriptor =
+            #crate_path::python_descriptor::PythonInterfaceDescriptor {
+                interface_name: #trait_name_str,
+                interface_hash: #hash_value,
+                methods: &PYTHON_METHODS,
+            };
+
+        const PYTHON_METHODS: [#crate_path::python_descriptor::PythonMethodDesc; #method_count] = [
+            #(#py_method_descs),*
+        ];
+
+        /// Static descriptor consumed by the WASM component loader
+        /// (`fidius-host::PluginHost::load_wasm`). Mirrors the Python descriptor;
+        /// names are kebab-case to match the component's WIT exports.
+        pub static #wasm_descriptor_ident:
+            #crate_path::wasm_descriptor::WasmInterfaceDescriptor =
+            #crate_path::wasm_descriptor::WasmInterfaceDescriptor {
+                interface_name: #trait_name_str,
+                interface_export: #interface_export,
+                interface_hash: #hash_value,
+                methods: &WASM_METHODS,
+            };
+
+        const WASM_METHODS: [#crate_path::wasm_descriptor::WasmMethodDesc; #method_count] = [
+            #(#wasm_method_descs),*
+        ];
     }
 }
 ```
@@ -586,16 +671,55 @@ fn generate_client(ir: &InterfaceIR) -> TokenStream {
                 quote! {}
             };
 
-            // Uniform tuple encoding — matches plugin-side shim deserialization
-            // of `(T1, T2, ..., Tn)`. No arg_names → `&()` (unit). One arg →
-            // `&(arg,)` (1-tuple). N args → `&(a, b, c,)`.
-            quote! {
-                pub fn #method_name(
-                    &self,
-                    #(#arg_names: &#arg_types,)*
-                ) -> ::std::result::Result<#ret_type, #crate_path::CallError> {
-                    #cap_check
-                    self.handle.call_method(#index, &(#(#arg_names,)*))
+            if m.streaming {
+                // Server-streaming methods (FIDIUS-I-0026) are intentionally NOT
+                // given a typed Client method here. Emitting one would reference
+                // `#crate_path::ChunkStream`, which only exists when the consuming
+                // crate enables `fidius`'s `streaming` feature — coupling every
+                // `host` build of a streaming interface to `streaming` and
+                // breaking it otherwise. Instead, callers reach a streaming
+                // method through the handle:
+                //
+                // ```ignore
+                // let stream = client.handle()
+                //     .call_streaming(MyTrait_METHOD_READ, &(arg,))
+                //     .await?;            // -> fidius::ChunkStream
+                // ```
+                //
+                // (Method index constants are still generated.) A typed Client
+                // wrapper can return once a clean cross-crate feature story
+                // exists. The `_ = (method_name, index, arg_types, arg_names)`
+                // keeps these bindings "used" for the non-emitting branch.
+                let _ = (method_name, index, arg_types, arg_names);
+                quote! {}
+            } else if m.wire_raw {
+                // Raw client method: takes &[u8], returns Result<Vec<u8>, CallError>.
+                // The interface IR validation guarantees there's exactly one arg.
+                let arg_name = arg_names
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| format_ident!("input"));
+                quote! {
+                    pub fn #method_name(
+                        &self,
+                        #arg_name: &[u8],
+                    ) -> ::std::result::Result<::std::vec::Vec<u8>, #crate_path::CallError> {
+                        #cap_check
+                        self.handle.call_method_raw(#index, #arg_name)
+                    }
+                }
+            } else {
+                // Uniform tuple encoding — matches plugin-side shim deserialization
+                // of `(T1, T2, ..., Tn)`. No arg_names → `&()` (unit). One arg →
+                // `&(arg,)` (1-tuple). N args → `&(a, b, c,)`.
+                quote! {
+                    pub fn #method_name(
+                        &self,
+                        #(#arg_names: &#arg_types,)*
+                    ) -> ::std::result::Result<#ret_type, #crate_path::CallError> {
+                        #cap_check
+                        self.handle.call_method(#index, &(#(#arg_names,)*))
+                    }
                 }
             }
         })

@@ -34,6 +34,11 @@
 - **`Inspect`** - Inspect a plugin dylib's registry
 - **`Test`** - Smoke-test a plugin: build, load, and invoke each method with a zero-arg input
 - **`Package`** - Package management commands
+- **`PythonStub`** - Generate a Python stub for an interface trait so a Python plugin
+author has type-hinted method signatures plus the matching
+`__interface_hash__` constant.
+- **`Wit`** - Generate the WIT for a WASM plugin crate from its source (the `build.rs`
+`fidius_build::emit_wit()` does this automatically; this is for CI/manual use).
 
 
 
@@ -121,13 +126,21 @@ fn main() {
             PackageCommands::Inspect { dir } => commands::package_inspect(&dir),
             PackageCommands::Sign { key, dir } => commands::package_sign(&key, &dir),
             PackageCommands::Verify { key, dir } => commands::package_verify(&key, &dir),
-            PackageCommands::Pack { dir, output } => {
-                commands::package_pack(&dir, output.as_deref())
-            }
+            PackageCommands::Pack {
+                dir,
+                output,
+                precompile,
+            } => commands::package_pack(&dir, output.as_deref(), precompile),
             PackageCommands::Unpack { archive, dest } => {
                 commands::package_unpack(&archive, dest.as_deref())
             }
         },
+        Commands::PythonStub {
+            interface,
+            out,
+            trait_name,
+        } => commands::python_stub(&interface, &out, trait_name.as_deref()),
+        Commands::Wit { dir } => commands::wit(dir.as_deref()),
     };
 
     if let Err(e) = result {

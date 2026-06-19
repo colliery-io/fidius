@@ -163,8 +163,13 @@ fn unpack_fid (archive : & Path , dest : & Path) -> Result < PathBuf , PackageEr
 
 Extract a `.fid` archive and validate its contents.
 
-Delegates to [`fidius_core::package::unpack_package`] and emits a
-`tracing::warn!` if the unpacked package has no `package.sig`.
+Delegates to [`fidius_core::package::unpack_package`], which applies strict
+safety defaults: entries with `..` components, absolute paths, symlinks, or
+hardlinks are rejected, and the cumulative decompressed size is capped to
+guard against decompression bombs. Emits a `tracing::warn!` if the unpacked
+package has no `package.sig`.
+For archives that legitimately exceed the default caps, call
+[`fidius_core::package::unpack_package_with_options`] directly.
 
 **Examples:**
 

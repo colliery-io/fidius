@@ -56,8 +56,12 @@ fn discover (& self) -> Result < Vec < PluginInfo > , LoadError >
 
 Discover all valid plugins in the configured search paths.
 
-Scans directories for dylib files, loads each, validates,
-and returns metadata for all valid plugins found.
+Scans each path for both:
+- dylib files (cdylib plugins, the existing path), and
+- subdirectories containing a `package.toml` with `runtime = "python"`
+(when the `python` feature is enabled).
+Returns owned `PluginInfo` for every valid plugin found, with
+`PluginInfo::runtime` distinguishing the two kinds.
 
 <details>
 <summary>Source</summary>
@@ -79,38 +83,97 @@ and returns metadata for all valid plugins found.
                 let entry = entry?;
                 let path = entry.path();
 
-                if !is_dylib(&path) {
-                    continue;
-                }
-
-                // Verify signature before dlopen to prevent code execution from untrusted dylibs
-                if self.require_signature
-                    && signing::verify_signature(&path, &self.trusted_keys).is_err()
-                {
-                    continue;
-                }
-
-                match loader::load_library(&path) {
-                    Ok(loaded) => {
-                        for plugin in &loaded.plugins {
-                            if let Ok(()) = loader::validate_against_interface(
-                                plugin,
-                                self.expected_hash,
-                                self.expected_strategy,
-                            ) {
-                                plugins.push(plugin.info.clone());
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        // Skip invalid dylibs during discovery
-                        continue;
-                    }
+                if is_dylib(&path) {
+                    self.discover_cdylib(&path, &mut plugins);
+                } else if path.is_dir() && path.join("package.toml").exists() {
+                    self.discover_package(&path, &mut plugins);
                 }
             }
         }
 
         Ok(plugins)
+    }
+```
+
+</details>
+
+
+
+##### `discover_cdylib` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn discover_cdylib (& self , path : & Path , plugins : & mut Vec < PluginInfo >)
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn discover_cdylib(&self, path: &Path, plugins: &mut Vec<PluginInfo>) {
+        // Verify signature before dlopen to prevent code execution from untrusted dylibs
+        if self.require_signature && signing::verify_signature(path, &self.trusted_keys).is_err() {
+            return;
+        }
+
+        let Ok(loaded) = loader::load_library(path) else {
+            return; // Skip invalid dylibs during discovery
+        };
+        for plugin in &loaded.plugins {
+            if loader::validate_against_interface(
+                plugin,
+                self.expected_hash,
+                self.expected_strategy,
+            )
+            .is_ok()
+            {
+                plugins.push(plugin.info.clone());
+            }
+        }
+    }
+```
+
+</details>
+
+
+
+##### `discover_package` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn discover_package (& self , dir : & Path , plugins : & mut Vec < PluginInfo >)
+```
+
+Discover a directory-based package (`package.toml`) and surface it by runtime. Rust source packages are discovered via their built dylib (the loadable artifact), not here, so they're skipped.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn discover_package(&self, dir: &Path, plugins: &mut Vec<PluginInfo>) {
+        let Ok(manifest) = fidius_core::package::load_manifest_untyped(dir) else {
+            return;
+        };
+        use fidius_core::package::PackageRuntime;
+        let runtime = match manifest.package.runtime() {
+            PackageRuntime::Python => PluginRuntimeKind::Python,
+            PackageRuntime::Wasm => PluginRuntimeKind::Wasm,
+            // The cdylib is the loadable artifact for a Rust package; the
+            // source directory isn't discovered.
+            PackageRuntime::Rust => return,
+        };
+        plugins.push(PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: manifest.package.interface.clone(),
+            // Hash is unknown until load (the host validates against the
+            // descriptor at load time, not discovery). Surface 0 so callers
+            // know discovery alone hasn't validated the package.
+            interface_hash: 0,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: BufferStrategyKind::PluginAllocated,
+            runtime,
+        });
     }
 ```
 
@@ -178,6 +241,289 @@ with the given name. Returns the loaded plugin ready for calling.
         Err(LoadError::PluginNotFound {
             name: name.to_string(),
         })
+    }
+```
+
+</details>
+
+
+
+##### `find_python_package` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn find_python_package (& self , name : & str) -> Result < PathBuf , LoadError >
+```
+
+Find a python plugin package directory by name across the configured search paths. The plugin name is matched against `package.toml`'s `[package].name`. Returns the directory path on success.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn find_python_package(&self, name: &str) -> Result<PathBuf, LoadError> {
+        for search_path in &self.search_paths {
+            if !search_path.is_dir() {
+                continue;
+            }
+            let entries = std::fs::read_dir(search_path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                if !path.join("package.toml").exists() {
+                    continue;
+                }
+                let Ok(manifest) = fidius_core::package::load_manifest_untyped(&path) else {
+                    continue;
+                };
+                if matches!(
+                    manifest.package.runtime(),
+                    fidius_core::package::PackageRuntime::Python
+                ) && manifest.package.name == name
+                {
+                    return Ok(path);
+                }
+            }
+        }
+        Err(LoadError::PluginNotFound {
+            name: name.to_string(),
+        })
+    }
+```
+
+</details>
+
+
+
+##### `load_python` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn load_python (& self , name : & str , descriptor : & 'static fidius_core :: python_descriptor :: PythonInterfaceDescriptor ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a Python plugin package by name and validate it against the supplied interface descriptor.
+
+The caller passes the static `<TraitName>_PYTHON_DESCRIPTOR` emitted
+by the interface crate's `#[plugin_interface]` macro — that's the
+out-of-band hint the loader needs to map method names to vtable
+indices and to check the interface hash.
+Available only when fidius-host is built with the `python` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_python(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let dir = self.find_python_package(name)?;
+        // Signature policy — enforced identically to cdylib/WASM loads.
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let py = fidius_python::load_python_plugin(&dir, descriptor)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        // Build the host-facing metadata from the manifest header + the
+        // interface descriptor. `capabilities`/`buffer_strategy` are cdylib
+        // concepts and take their no-op defaults for Python.
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Python,
+        };
+        Ok(crate::handle::PluginHandle::from_python(py, info))
+    }
+```
+
+</details>
+
+
+
+##### `find_wasm_package` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn find_wasm_package (& self , name : & str) -> Result < PathBuf , LoadError >
+```
+
+Find a WASM package directory by name across the search paths (matches `package.toml` `[package].name` with `runtime = "wasm"`).
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn find_wasm_package(&self, name: &str) -> Result<PathBuf, LoadError> {
+        for search_path in &self.search_paths {
+            if !search_path.is_dir() {
+                continue;
+            }
+            for entry in std::fs::read_dir(search_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() || !path.join("package.toml").exists() {
+                    continue;
+                }
+                let Ok(manifest) = fidius_core::package::load_manifest_untyped(&path) else {
+                    continue;
+                };
+                if matches!(
+                    manifest.package.runtime(),
+                    fidius_core::package::PackageRuntime::Wasm
+                ) && manifest.package.name == name
+                {
+                    return Ok(path);
+                }
+            }
+        }
+        Err(LoadError::PluginNotFound {
+            name: name.to_string(),
+        })
+    }
+```
+
+</details>
+
+
+
+##### `load_wasm` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn load_wasm (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a WASM component plugin package by name and validate it against the supplied interface descriptor (the `<TraitName>_WASM_DESCRIPTOR` the interface crate emits). Returns a unified [`crate::handle::PluginHandle`].
+
+The component is sandboxed: WASI is wired into the `Linker` but the guest
+gets a zero-grant `WasiCtx` (no FS preopens, no env, no sockets). The
+capability allow-list in `[wasm].capabilities` is applied in T-0104.
+Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
+
+        let dir = self.find_wasm_package(name)?;
+        // Signature policy — enforced identically to cdylib/Python loads.
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        let wasm_meta = manifest
+            .wasm
+            .as_ref()
+            .ok_or_else(|| LoadError::WasmLoad("manifest is missing the [wasm] section".into()))?;
+
+        let methods: Vec<WasmMethod> = descriptor
+            .methods
+            .iter()
+            .map(|m| WasmMethod {
+                name: m.name.to_string(),
+                wire_raw: m.wire_raw,
+                streaming: m.streaming,
+            })
+            .collect();
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Wasm,
+        };
+        let interface = descriptor.interface_export.to_string();
+        let capabilities = wasm_meta.capabilities.clone();
+
+        // Resolve a precompiled .cwasm: explicit `[wasm].precompiled`, or an
+        // auto-detected sibling `<component-stem>.cwasm`. The AOT path is purely
+        // a load-latency optimization, so a stale/mismatched .cwasm (built by a
+        // different wasmtime) is non-fatal — we log and JIT-compile the
+        // component instead (FIDIUS-T-0107).
+        let cwasm_path = wasm_meta
+            .precompiled
+            .as_ref()
+            .map(|p| dir.join(p))
+            .or_else(|| {
+                let sibling = dir.join(&wasm_meta.component).with_extension("cwasm");
+                sibling.exists().then_some(sibling)
+            });
+
+        let jit = |interface: String, methods, capabilities, info| -> Result<_, LoadError> {
+            let bytes = std::fs::read(dir.join(&wasm_meta.component))?;
+            WasmComponentExecutor::from_component_bytes(
+                &bytes,
+                interface,
+                methods,
+                capabilities,
+                info,
+            )
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))
+        };
+
+        let executor = match cwasm_path {
+            Some(cwasm) if cwasm.exists() => {
+                let bytes = std::fs::read(&cwasm)?;
+                // SAFETY: .cwasm is produced by `fidius pack`
+                // (Engine::precompile_component); wasmtime validates the header
+                // and refuses a mismatched engine/version (→ Err → JIT fallback).
+                let aot = unsafe {
+                    WasmComponentExecutor::from_cwasm(
+                        &bytes,
+                        interface.clone(),
+                        methods.clone(),
+                        capabilities.clone(),
+                        info.clone(),
+                    )
+                };
+                match aot {
+                    Ok(e) => e,
+                    Err(_err) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!(
+                            cwasm = %cwasm.display(),
+                            error = %_err,
+                            "precompiled .cwasm rejected (likely engine/version mismatch); falling back to JIT"
+                        );
+                        jit(interface, methods, capabilities, info)?
+                    }
+                }
+            }
+            _ => jit(interface, methods, capabilities, info)?,
+        };
+
+        // Interface-hash integrity check (parity with cdylib/Python).
+        let got = executor
+            .interface_hash()
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        if got != descriptor.interface_hash {
+            return Err(LoadError::InterfaceHashMismatch {
+                got,
+                expected: descriptor.interface_hash,
+            });
+        }
+
+        Ok(crate::handle::PluginHandle::from_wasm(executor))
     }
 ```
 

@@ -29,6 +29,12 @@ this is how schema validation works.
 |------|------|-------------|
 | `package` | `PackageHeader` | Fixed header fields required by fidius. |
 | `metadata` | `M` | Host-defined metadata. Must deserialize from the `[metadata]` section. |
+| `python` | `Option < PythonPackageMeta >` | Python-runtime fields. Required when `package.runtime == "python"`,
+rejected otherwise. Validated by [`PackageManifest::validate_runtime`]
+after deserialization, since serde alone can't enforce cross-section
+invariants. |
+| `wasm` | `Option < WasmPackageMeta >` | WASM-component fields. Required when `package.runtime == "wasm"`,
+rejected otherwise. Validated by [`PackageManifest::validate_runtime`]. |
 
 
 
@@ -51,6 +57,9 @@ Fixed header fields that every package manifest must have.
 | `interface_version` | `u32` | Expected interface version. |
 | `extension` | `Option < String >` | Custom file extension for `.fid` archives (e.g., `"cloacina"`).
 Defaults to `"fid"` when absent. |
+| `runtime` | `Option < String >` | Plugin runtime. `"rust"` (default) → cdylib; `"python"` → Python package
+loaded by `fidius-python`. Unknown values are rejected at validation
+time (see [`PackageManifest::validate_runtime`]). |
 
 #### Methods
 
@@ -76,6 +85,161 @@ Returns the package extension, defaulting to `"fid"`.
 
 
 
+##### `runtime` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn runtime (& self) -> PackageRuntime
+```
+
+Returns the runtime kind, defaulting to `Rust` when absent. Returns `PackageRuntime::Rust` for unknown values; callers that need to reject unknown runtimes should use [`Self::runtime_strict`].
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn runtime(&self) -> PackageRuntime {
+        match self.runtime.as_deref() {
+            None | Some("rust") => PackageRuntime::Rust,
+            Some("python") => PackageRuntime::Python,
+            Some("wasm") => PackageRuntime::Wasm,
+            // Unknown values fall back to Rust for `runtime()`, but the
+            // strict validator rejects them. Keep the lenient form so display
+            // code never panics on an unfamiliar manifest.
+            _ => PackageRuntime::Rust,
+        }
+    }
+```
+
+</details>
+
+
+
+##### `runtime_strict` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn runtime_strict (& self) -> Result < PackageRuntime , PackageError >
+```
+
+Returns the runtime kind, erroring on unknown values.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn runtime_strict(&self) -> Result<PackageRuntime, PackageError> {
+        match self.runtime.as_deref() {
+            None | Some("rust") => Ok(PackageRuntime::Rust),
+            Some("python") => Ok(PackageRuntime::Python),
+            Some("wasm") => Ok(PackageRuntime::Wasm),
+            Some(other) => Err(PackageError::InvalidManifest(format!(
+                "unknown runtime '{other}': allowed values are \"rust\", \"python\", \"wasm\""
+            ))),
+        }
+    }
+```
+
+</details>
+
+
+
+
+
+### `fidius-core::package::PythonPackageMeta`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+**Derives:** `Debug`, `Clone`, `Serialize`, `Deserialize`
+
+Fields under the `[python]` section of `package.toml`. Required when `package.runtime == "python"`, rejected otherwise.
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `entry_module` | `String` | Python module the loader imports first. Dotted-path form (e.g.
+`"my_plugin.entry"`) corresponding to a file inside the package
+directory or its `vendor/` tree. |
+| `requirements` | `Option < String >` | Path to the requirements file consumed by `fidius pack` to vendor
+dependencies into `vendor/`. Defaults to `"requirements.txt"`. |
+
+#### Methods
+
+##### `requirements_path` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn requirements_path (& self) -> & str
+```
+
+Returns the requirements file path, defaulting to `"requirements.txt"`.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn requirements_path(&self) -> &str {
+        self.requirements.as_deref().unwrap_or("requirements.txt")
+    }
+```
+
+</details>
+
+
+
+
+
+### `fidius-core::package::WasmPackageMeta`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+**Derives:** `Debug`, `Clone`, `Serialize`, `Deserialize`
+
+Fields under the `[wasm]` section of `package.toml`. Required when `package.runtime == "wasm"`, rejected otherwise.
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `component` | `String` | Component filename inside the package directory (e.g. `"plugin.wasm"`).
+A WIT component, not a core module. |
+| `precompiled` | `Option < String >` | Optional precompiled `.cwasm` (produced at pack time by the wasmtime
+engine; engine/version-specific). When present and valid, the loader
+uses the AOT fast path instead of JIT-compiling `component`. |
+| `capabilities` | `Vec < String >` | WASI capability allow-list (e.g. `["clocks", "random", "sockets"]`).
+Empty = deny-all sandbox. Consumed by the capability policy (T-0104);
+filesystem is never granted in v1. |
+
+
+
+### `fidius-core::package::UnpackOptions`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+**Derives:** `Debug`, `Clone`
+
+Options controlling archive extraction safety limits.
+
+Construct with `UnpackOptions::default()` for strict defaults suitable for
+untrusted input. Override individual fields for known-trusted archives that
+legitimately exceed the default caps (e.g. packages that vendor large
+native dependencies).
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `max_decompressed` | `u64` | Maximum total declared uncompressed size of all entries, in bytes.
+Archives exceeding this are rejected as potential decompression bombs. |
+| `max_ratio` | `u64` | Maximum ratio of total declared uncompressed size to compressed
+archive size. Archives exceeding this are rejected. |
+| `max_entries` | `u32` | Maximum number of entries in the archive. Guards against archives
+that exhaust inodes or directory-entry limits via tiny-file spam. |
+
 
 
 ### `fidius-core::package::PackResult`
@@ -98,6 +262,25 @@ Result of packing a package, including any warnings.
 
 ## Enums
 
+### `fidius-core::package::PackageRuntime` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+Plugin runtime kind. Determines which loader the host's `PluginHost` dispatches to.
+
+#### Variants
+
+- **`Rust`** - Default. Plugin is a cdylib + `PluginRegistry`. Loaded by the existing
+dylib loader in `fidius-host`.
+- **`Python`** - Plugin is a directory of `.py` files (+ optional `vendor/`) loaded by
+`fidius-python` via an embedded interpreter. Requires the host crate
+to enable the `python` feature.
+- **`Wasm`** - Plugin is a signed `.wasm` **component** (Component Model + WIT),
+loaded by the `WasmComponentExecutor`. Reserved by FIDIUS-I-0021 Phase 1;
+the loader lands in Phase 2 (until then, loading a wasm package errors
+clearly rather than silently falling back to rust).
+
+
+
 ### `fidius-core::package::PackageError` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
@@ -114,6 +297,16 @@ schema validation (the `[metadata]` section didn't match `M`).
 - **`SignatureInvalid`** - Package signature is invalid (no trusted key verified it).
 - **`ArchiveError`** - An error occurred creating or reading an archive.
 - **`InvalidArchive`** - The archive does not contain a valid package.
+- **`InvalidManifest`** - Manifest passed serde parsing but failed cross-section validation
+(e.g. `runtime = "python"` without a `[python]` section, or unknown
+runtime value).
+- **`PathTraversal`** - Archive entry contains a `..` component that would escape `dest`.
+- **`AbsolutePath`** - Archive entry has an absolute path (root or drive prefix).
+- **`SymlinkRejected`** - Archive contains a symlink entry, which could be used to overwrite
+arbitrary files outside `dest` on a follow-up write.
+- **`HardlinkRejected`** - Archive contains a hardlink entry, same threat model as symlinks.
+- **`SizeLimitExceeded`** - Cumulative decompressed size exceeded the configured cap.
+- **`TooManyEntries`** - Archive contains more entries than the configured cap allows.
 
 
 
@@ -162,6 +355,11 @@ pub fn load_manifest<M: DeserializeOwned>(dir: &Path) -> Result<PackageManifest<
 
     let content = std::fs::read_to_string(&manifest_path)?;
     let manifest: PackageManifest<M> = toml::from_str(&content)?;
+    // Reject unknown runtime values + cross-section invariants. We do this
+    // here (not in serde) because the python-section presence depends on
+    // the runtime field, which serde can't express in a single derive.
+    manifest.package.runtime_strict()?;
+    manifest.validate_runtime()?;
     Ok(manifest)
 }
 ```
@@ -349,6 +547,90 @@ fn collect_archive_files(
 
 
 
+### `fidius-core::package::vendor_python_deps`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn vendor_python_deps (dir : & Path , py : & PythonPackageMeta) -> Result < () , PackageError >
+```
+
+Vendor Python dependencies into `<dir>/vendor/` by invoking `python3 -m pip install -r <requirements> --target ./vendor/`.
+
+- If `vendor/` already exists, leave it alone — the plugin author may have
+pre-vendored deliberately for reproducibility.
+- If the declared requirements file is missing AND `vendor/` is missing,
+emit a tracing warning and proceed (zero-dep python plugin).
+- If pip fails, surface its stderr as `PackageError::ArchiveError` so the
+user sees the resolver/build error directly.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn vendor_python_deps(dir: &Path, py: &PythonPackageMeta) -> Result<(), PackageError> {
+    let vendor_dir = dir.join("vendor");
+    if vendor_dir.exists() {
+        tracing::debug!(
+            vendor = %vendor_dir.display(),
+            "pre-existing vendor/ directory — using as-is, skipping pip"
+        );
+        return Ok(());
+    }
+
+    let req_path = dir.join(py.requirements_path());
+    if !req_path.exists() {
+        tracing::warn!(
+            package = %dir.display(),
+            requirements = %req_path.display(),
+            "python package has no requirements file and no vendor/ — packaging without deps"
+        );
+        return Ok(());
+    }
+
+    tracing::info!(
+        requirements = %req_path.display(),
+        vendor = %vendor_dir.display(),
+        "vendoring python deps via pip"
+    );
+
+    // `python3 -m pip` rather than bare `pip` so we use whichever interpreter
+    // happens to be on PATH and avoid relying on a separately-installed pip
+    // shim. `Command` invokes the binary directly, bypassing shell aliases.
+    let output = std::process::Command::new("python3")
+        .arg("-m")
+        .arg("pip")
+        .arg("install")
+        .arg("-r")
+        .arg(&req_path)
+        .arg("--target")
+        .arg(&vendor_dir)
+        .arg("--quiet")
+        .output()
+        .map_err(|e| {
+            PackageError::ArchiveError(format!(
+                "failed to invoke `python3 -m pip` (is python3 on PATH?): {e}"
+            ))
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(PackageError::ArchiveError(format!(
+            "pip install failed (exit {}):\n{}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        )));
+    }
+
+    Ok(())
+}
+```
+
+</details>
+
+
+
 ### `fidius-core::package::pack_package`
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
@@ -363,6 +645,10 @@ Create a `.fid` archive (tar + bzip2) from a package directory.
 The archive contains a single top-level directory `{name}-{version}/`
 with all source files. Excludes `target/` and `.git/` directories.
 Includes `package.sig` if present.
+For Python packages (`runtime = "python"`), if a `requirements.txt` is
+declared and a `vendor/` directory does not yet exist, `pip install -r
+<requirements> --target ./vendor/` runs first and the result is included
+in the archive. Pre-existing `vendor/` is respected and used as-is.
 If `output` is `None`, the archive is written to the current directory
 as `{name}-{version}.fid`.
 
@@ -378,6 +664,16 @@ pub fn pack_package(dir: &Path, output: Option<&Path>) -> Result<PackResult, Pac
     let pkg = &manifest.package;
     let prefix = format!("{}-{}", pkg.name, pkg.version);
     let ext = pkg.extension();
+
+    // For Python packages: vendor declared deps into vendor/ before archiving.
+    // Pre-existing vendor/ is respected (plugin author may pre-vendor for
+    // reproducibility), missing requirements + missing vendor/ produces a
+    // tracing warning but is not fatal (a Python plugin with no deps is fine).
+    if matches!(pkg.runtime(), PackageRuntime::Python) {
+        if let Some(py_meta) = manifest.python.as_ref() {
+            vendor_python_deps(dir, py_meta)?;
+        }
+    }
 
     let unsigned = !dir.join("package.sig").exists();
 
@@ -429,46 +725,188 @@ pub fn pack_package(dir: &Path, output: Option<&Path>) -> Result<PackResult, Pac
 fn unpack_package (archive : & Path , dest : & Path) -> Result < PathBuf , PackageError >
 ```
 
-Extract a `.fid` archive (tar + bzip2) to a destination directory.
+Extract a `.fid` archive (tar + bzip2) to a destination directory using strict safety defaults.
 
-Returns the path to the extracted top-level package directory.
-Validates that a `package.toml` exists in the extracted contents.
+Returns the path to the extracted top-level package directory, which is
+guaranteed to exist inside `dest` and contain a `package.toml`.
+This function validates every archive entry before extracting and rejects
+archives containing: path-traversal components (`..`), absolute paths,
+symlinks, hardlinks, more than 10,000 entries, or a cumulative declared
+decompressed size exceeding 500 MB or 10× the compressed archive size.
+Extraction is staged inside a temporary directory under `dest` and the
+package directory is moved into place atomically on success. If validation
+fails mid-archive, no files are left in `dest`.
+For archives that legitimately exceed the default caps, use
+[`unpack_package_with_options`].
 
 <details>
 <summary>Source</summary>
 
 ```rust
 pub fn unpack_package(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError> {
+    unpack_package_with_options(archive, dest, &UnpackOptions::default())
+}
+```
+
+</details>
+
+
+
+### `fidius-core::package::unpack_package_with_options`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn unpack_package_with_options (archive : & Path , dest : & Path , options : & UnpackOptions ,) -> Result < PathBuf , PackageError >
+```
+
+Extract a `.fid` archive with caller-provided safety limits.
+
+See [`unpack_package`] for the default-strict variant. Use this when the
+archive's size or entry count legitimately exceeds the defaults.
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn unpack_package_with_options(
+    archive: &Path,
+    dest: &Path,
+    options: &UnpackOptions,
+) -> Result<PathBuf, PackageError> {
     use bzip2::read::BzDecoder;
+    use std::path::Component;
 
     let file = std::fs::File::open(archive).map_err(|e| {
         PackageError::ArchiveError(format!("failed to open {}: {e}", archive.display()))
     })?;
+    let compressed_size = file.metadata().map(|m| m.len()).unwrap_or(0);
 
     let decoder = BzDecoder::new(file);
     let mut tar = tar::Archive::new(decoder);
 
-    tar.unpack(dest).map_err(|e| {
-        PackageError::ArchiveError(format!("failed to extract {}: {e}", archive.display()))
+    // Stage extraction inside `dest` so a failed or rejected archive leaves
+    // nothing behind. `dest` must already exist.
+    std::fs::create_dir_all(dest).map_err(PackageError::Io)?;
+    let staging = tempfile::TempDir::new_in(dest).map_err(PackageError::Io)?;
+    let staging_path = staging.path();
+
+    let ratio_cap = compressed_size.saturating_mul(options.max_ratio);
+    let mut total: u64 = 0;
+    let mut count: u32 = 0;
+
+    let entries = tar.entries().map_err(|e| {
+        PackageError::ArchiveError(format!("failed to read {}: {e}", archive.display()))
     })?;
 
-    // Find the top-level directory that was extracted
-    let entries = std::fs::read_dir(dest).map_err(PackageError::Io)?;
-    let mut pkg_dir: Option<PathBuf> = None;
     for entry in entries {
+        let mut entry = entry.map_err(|e| {
+            PackageError::ArchiveError(format!("failed to read archive entry: {e}"))
+        })?;
+
+        count = count.saturating_add(1);
+        if count > options.max_entries {
+            return Err(PackageError::TooManyEntries {
+                limit: options.max_entries,
+            });
+        }
+
+        let path = entry
+            .path()
+            .map_err(|e| PackageError::ArchiveError(format!("invalid entry path: {e}")))?
+            .into_owned();
+        let entry_display = path.display().to_string();
+
+        // 1. Reject link entries. A symlink or hardlink followed by a regular
+        // file at the same path can overwrite files outside `dest`.
+        let entry_type = entry.header().entry_type();
+        if entry_type.is_symlink() {
+            return Err(PackageError::SymlinkRejected {
+                entry: entry_display,
+            });
+        }
+        if entry_type.is_hard_link() {
+            return Err(PackageError::HardlinkRejected {
+                entry: entry_display,
+            });
+        }
+
+        // 2. Reject `..` components and absolute paths. The `tar` crate has
+        // best-effort guards but they are platform-dependent; check explicitly.
+        for component in path.components() {
+            match component {
+                Component::ParentDir => {
+                    return Err(PackageError::PathTraversal {
+                        entry: entry_display,
+                    });
+                }
+                Component::RootDir | Component::Prefix(_) => {
+                    return Err(PackageError::AbsolutePath {
+                        entry: entry_display,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        // 3. Enforce cumulative declared-size budget. Tar's own parsing
+        // enforces that actual entry bytes match the declared header size,
+        // so trusting the header here is safe against bomb archives.
+        let declared = entry.header().size().unwrap_or(0);
+        total = total.saturating_add(declared);
+        if total > options.max_decompressed {
+            return Err(PackageError::SizeLimitExceeded {
+                limit: options.max_decompressed,
+                actual: total,
+            });
+        }
+        if compressed_size > 0 && options.max_ratio > 0 && total > ratio_cap {
+            return Err(PackageError::SizeLimitExceeded {
+                limit: ratio_cap,
+                actual: total,
+            });
+        }
+
+        // 4. Extract into the staging area. `unpack_in` itself rejects paths
+        // that escape the base directory, but our explicit checks above mean
+        // we never get here with a dangerous path.
+        entry.unpack_in(staging_path).map_err(|e| {
+            PackageError::ArchiveError(format!("failed to extract entry '{}': {e}", path.display()))
+        })?;
+    }
+
+    // Find the top-level package directory inside staging.
+    let mut pkg_dir_staging: Option<PathBuf> = None;
+    for entry in std::fs::read_dir(staging_path).map_err(PackageError::Io)? {
         let entry = entry.map_err(PackageError::Io)?;
         let path = entry.path();
         if path.is_dir() && path.join("package.toml").exists() {
-            pkg_dir = Some(path);
+            pkg_dir_staging = Some(path);
             break;
         }
     }
-
-    let pkg_dir = pkg_dir.ok_or_else(|| {
+    let pkg_dir_staging = pkg_dir_staging.ok_or_else(|| {
         PackageError::InvalidArchive("archive does not contain a package.toml".to_string())
     })?;
 
-    Ok(pkg_dir)
+    // Atomically move the validated package directory to its final location
+    // inside `dest`. If a directory with the same name already exists it is
+    // removed first, matching the prior `tar::Archive::unpack` behaviour.
+    let pkg_name = pkg_dir_staging
+        .file_name()
+        .ok_or_else(|| {
+            PackageError::InvalidArchive("extracted package has no directory name".to_string())
+        })?
+        .to_os_string();
+    let final_path = dest.join(&pkg_name);
+    if final_path.exists() {
+        std::fs::remove_dir_all(&final_path).map_err(PackageError::Io)?;
+    }
+    std::fs::rename(&pkg_dir_staging, &final_path).map_err(PackageError::Io)?;
+
+    // `staging` TempDir drops here; any residual files are cleaned up.
+    Ok(final_path)
 }
 ```
 

@@ -86,8 +86,23 @@ IR for a single trait method.
 | `is_async` | `bool` | Whether the method is `async fn`. |
 | `optional_since` | `Option < u32 >` | If `#[optional(since = N)]`, the version it was added. |
 | `signature_string` | `String` | Canonical signature string for interface hashing.
-Format: `"name:arg_type_1,arg_type_2->return_type"` |
+Format: `"name:arg_type_1,arg_type_2->return_type"`, with a trailing
+`!raw` marker for methods opted into raw wire mode so the interface
+hash diverges between raw and bincode-typed versions. |
 | `method_metas` | `Vec < MetaKvAttr >` | Metadata from `#[method_meta("k", "v")]` attributes. Preserves declaration order. |
+| `wire_raw` | `bool` | Whether this method is opted into raw (byte-passthrough) wire mode
+via `#[wire(raw)]`. When true, the macro skips bincode on the
+success path — the single `Vec<u8>` argument crosses the FFI
+boundary as raw bytes, and the `Vec<u8>` return value is handed to
+the host unchanged. Error-path payloads (for `Result<Vec<u8>, E>`
+returns) continue to go through bincode. |
+| `streaming` | `bool` | Whether this is a server-streaming method — its return type is
+`fidius::Stream<T>` (FIDIUS-I-0026, D4). When true, [`Self::stream_item_type`]
+holds the per-item type `T`, the signature string carries a `!stream`
+marker (so it hashes distinctly from a unary `-> T`), and the host-side
+client (ST.3) returns a `ChunkStream` instead of a `Result<T, _>`. |
+| `stream_item_type` | `Option < Type >` | The per-item type `T` for a `streaming` method (the `T` in
+`fidius::Stream<T>`). `None` for non-streaming methods. |
 
 #### Methods
 
@@ -237,22 +252,259 @@ fn parse_optional_attr(attrs: &[Attribute]) -> syn::Result<Option<u32>> {
 
 
 
+### `fidius-macro::ir::parse_wire_attr`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn parse_wire_attr (attrs : & [Attribute]) -> syn :: Result < bool >
+```
+
+Parse a `#[wire(raw)]` attribute, if present. Returns `true` when raw wire mode is opted in, `false` otherwise. Any other `wire(...)` form is a compile-time error.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn parse_wire_attr(attrs: &[Attribute]) -> syn::Result<bool> {
+    for attr in attrs {
+        if !attr.path().is_ident("wire") {
+            continue;
+        }
+        let mut raw = false;
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("raw") {
+                raw = true;
+                Ok(())
+            } else {
+                Err(meta.error("expected `raw` — only `#[wire(raw)]` is supported"))
+            }
+        })?;
+        return Ok(raw);
+    }
+    Ok(false)
+}
+```
+
+</details>
+
+
+
+### `fidius-macro::ir::is_vec_u8`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn is_vec_u8 (ty : & Type) -> bool
+```
+
+Return `true` if the given type is `Vec<u8>`.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn is_vec_u8(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    let Some(last) = type_path.path.segments.last() else {
+        return false;
+    };
+    if last.ident != "Vec" {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return false;
+    };
+    if args.args.len() != 1 {
+        return false;
+    }
+    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
+        return false;
+    };
+    let Type::Path(inner_path) = inner else {
+        return false;
+    };
+    inner_path
+        .path
+        .get_ident()
+        .map(|id| id == "u8")
+        .unwrap_or(false)
+}
+```
+
+</details>
+
+
+
+### `fidius-macro::ir::result_ok_type`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn result_ok_type (ty : & Type) -> Option < & Type >
+```
+
+Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn result_ok_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+    let last = type_path.path.segments.last()?;
+    if last.ident != "Result" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    let first = args.args.first()?;
+    match first {
+        syn::GenericArgument::Type(t) => Some(t),
+        _ => None,
+    }
+}
+```
+
+</details>
+
+
+
+### `fidius-macro::ir::validate_raw_method_signature`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn validate_raw_method_signature (method : & TraitItemFn , arg_types : & [Type] , return_type : Option < & Type > ,) -> syn :: Result < () >
+```
+
+Validate that a method flagged `#[wire(raw)]` has a supported signature: exactly one `Vec<u8>` argument, and returns either `Vec<u8>` or `Result<Vec<u8>, _>`. Returns a helpful error otherwise.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn validate_raw_method_signature(
+    method: &TraitItemFn,
+    arg_types: &[Type],
+    return_type: Option<&Type>,
+) -> syn::Result<()> {
+    let span = method.sig.ident.span();
+    if arg_types.len() != 1 {
+        return Err(syn::Error::new(
+            span,
+            "#[wire(raw)] methods must take exactly one argument of type `Vec<u8>` (excluding `&self`)",
+        ));
+    }
+    if !is_vec_u8(&arg_types[0]) {
+        return Err(syn::Error::new(
+            arg_types[0].span(),
+            "#[wire(raw)] argument must be `Vec<u8>`",
+        ));
+    }
+    let Some(ret) = return_type else {
+        return Err(syn::Error::new(
+            span,
+            "#[wire(raw)] methods must return `Vec<u8>` or `Result<Vec<u8>, E>`",
+        ));
+    };
+    // Return is either Vec<u8> directly, or Result<Vec<u8>, _>.
+    if is_vec_u8(ret) {
+        return Ok(());
+    }
+    if let Some(ok) = result_ok_type(ret) {
+        if is_vec_u8(ok) {
+            return Ok(());
+        }
+    }
+    Err(syn::Error::new(
+        ret.span(),
+        "#[wire(raw)] methods must return `Vec<u8>` or `Result<Vec<u8>, E>`",
+    ))
+}
+```
+
+</details>
+
+
+
+### `fidius-macro::ir::stream_item_type`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn stream_item_type (ty : & Type) -> Option < Type >
+```
+
+Return the per-item type `T` if `ty` is a `Stream<T>` (i.e. its final path segment is `Stream` with exactly one angle-bracketed type argument). Matches `fidius::Stream<T>`, `crate::fidius::Stream<T>`, or a bare `Stream<T>` — the detection keys on the segment name, since the marker is written explicitly (FIDIUS-I-0026, D4). Returns `None` for any other type.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn stream_item_type(ty: &Type) -> Option<Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+    let last = type_path.path.segments.last()?;
+    if last.ident != "Stream" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    if args.args.len() != 1 {
+        return None;
+    }
+    match args.args.first()? {
+        syn::GenericArgument::Type(t) => Some(t.clone()),
+        _ => None,
+    }
+}
+```
+
+</details>
+
+
+
 ### `fidius-macro::ir::build_signature_string`
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
 
 
 ```rust
-fn build_signature_string (method : & TraitItemFn) -> String
+fn build_signature_string (method : & TraitItemFn , wire_raw : bool , stream_item : Option < & Type > ,) -> String
 ```
 
 Build the canonical signature string for a method.
+
+Delegates the format to `fidius_core::hash::signature_string` so the
+proc macro and any other tooling (e.g. `fidius python-stub`) share one
+source of truth. The `!raw` (raw-wire) and `!stream` (server-streaming)
+markers are part of that shared format.
+For a streaming method (`-> fidius::Stream<T>`) the canonical return type is
+the per-item type `T` (passed in `stream_item`), plus the `!stream` marker —
+so `read:->Row!stream` hashes distinctly from a unary `read:->Row`.
 
 <details>
 <summary>Source</summary>
 
 ```rust
-fn build_signature_string(method: &TraitItemFn) -> String {
+fn build_signature_string(
+    method: &TraitItemFn,
+    wire_raw: bool,
+    stream_item: Option<&Type>,
+) -> String {
     let name = method.sig.ident.to_string();
 
     let arg_types: Vec<String> = method
@@ -265,12 +517,16 @@ fn build_signature_string(method: &TraitItemFn) -> String {
         })
         .collect();
 
-    let ret = match &method.sig.output {
-        ReturnType::Default => String::new(),
-        ReturnType::Type(_, ty) => ty.to_token_stream().to_string(),
+    let ret = match stream_item {
+        // Streaming: the canonical return is the per-item type `T`.
+        Some(item) => item.to_token_stream().to_string(),
+        None => match &method.sig.output {
+            ReturnType::Default => String::new(),
+            ReturnType::Type(_, ty) => ty.to_token_stream().to_string(),
+        },
     };
 
-    format!("{}:{}->{}", name, arg_types.join(","), ret)
+    fidius_core::hash::signature_string(&name, &arg_types, &ret, wire_raw, stream_item.is_some())
 }
 ```
 
@@ -423,11 +679,42 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
         }
 
         let is_async = method.sig.asyncness.is_some();
-        let signature_string = build_signature_string(method);
+        let wire_raw = parse_wire_attr(&method.attrs)?;
         let arg_types = extract_arg_types(method);
         let arg_names = extract_arg_names(method);
         let return_type = extract_return_type(method);
         let method_metas = parse_meta_attrs(&method.attrs, "method_meta")?;
+
+        // Server-streaming detection (FIDIUS-I-0026, D4): a method whose return
+        // type is `fidius::Stream<T>`. Argument-position `Stream<T>`
+        // (client-streaming / bidirectional) is rejected — v1 is server-streaming
+        // only.
+        for at in &arg_types {
+            if stream_item_type(at).is_some() {
+                return Err(syn::Error::new(
+                    at.span(),
+                    "fidius v1 supports server-streaming only: `Stream<T>` is not allowed in \
+                     argument position (client-streaming and bidirectional are deferred)",
+                ));
+            }
+        }
+        let stream_item = return_type.as_ref().and_then(stream_item_type);
+        let streaming = stream_item.is_some();
+
+        if wire_raw {
+            if is_async {
+                return Err(syn::Error::new(
+                    method.sig.ident.span(),
+                    "#[wire(raw)] is not supported on async methods in this release",
+                ));
+            }
+            // A `#[wire(raw)]` method must return `Vec<u8>`/`Result<Vec<u8>,_>`,
+            // which is never a `Stream<T>`; validate_raw_method_signature
+            // enforces that, so raw + streaming can't co-occur.
+            validate_raw_method_signature(method, &arg_types, return_type.as_ref())?;
+        }
+
+        let signature_string = build_signature_string(method, wire_raw, stream_item.as_ref());
 
         methods.push(MethodIR {
             name: method.sig.ident.clone(),
@@ -438,6 +725,9 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             optional_since,
             signature_string,
             method_metas,
+            wire_raw,
+            streaming,
+            stream_item_type: stream_item,
         });
     }
 
