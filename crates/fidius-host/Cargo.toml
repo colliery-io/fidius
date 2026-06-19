@@ -16,7 +16,7 @@ python = ["dep:fidius-python"]
 # Enable the sandboxed WASM component backend (FIDIUS-I-0021 Phase 2). Pulls in
 # wasmtime and the `WasmComponentExecutor` / `host.load_wasm(...)` API. Default-off
 # so cdylib/Python-only consumers don't link wasmtime.
-wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:wasmtime-wasi-http", "dep:http"]
 # Server-streaming plugin calls (FIDIUS-I-0026): the async `StreamExecutor`
 # seam + `ChunkStream` pull handle. Default-off and purely additive — unary
 # cdylib/Python/WASM dispatch is unchanged whether or not this is enabled, so
@@ -42,6 +42,15 @@ wasmtime = { version = "45", optional = true }
 # even when unused, so the sandbox provides WASI with a zero-grant WasiCtx rather
 # than an empty Linker (FIDIUS-T-0102 finding; capability allow-list in T-0104).
 wasmtime-wasi = { version = "45", optional = true }
+# Host-brokered outbound HTTP for sandboxed guests (FIDIUS-I-0027). Lockstep with
+# wasmtime/wasmtime-wasi 45. Egress is enabled ONLY when the package declares the
+# `http` capability AND the embedder supplies an `EgressPolicy` hook (fidius ships
+# the mechanism, not the policy).
+wasmtime-wasi-http = { version = "45", optional = true }
+# The `http` crate types (Request/Parts/HeaderMap) in which the `EgressPolicy`
+# seam is expressed, so no wasmtime types leak into fidius's public API. Must be
+# the same major as wasmtime-wasi-http's.
+http = { version = "1", optional = true }
 
 [build-dependencies]
 # `resolve-config` gates `use_pyo3_cfgs`/`get`, which build.rs calls. Without

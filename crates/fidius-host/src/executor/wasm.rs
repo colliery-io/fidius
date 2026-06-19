@@ -26,21 +26,110 @@
 //! env, no inherited stdio, no sockets). T-0104 opens specific capabilities
 //! from the package manifest's allow-list.
 
+use std::sync::Arc;
+
 use fidius_core::Value;
 use wasmtime::component::{Component, InstancePre, Linker, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::add_to_linker_sync;
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi_http::p2::bindings::http::types::ErrorCode;
+use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
+use wasmtime_wasi_http::p2::types::{HostFutureIncomingResponse, OutgoingRequestConfig};
+use wasmtime_wasi_http::p2::{
+    add_only_http_to_linker_sync, default_send_request, HttpResult, WasiHttpCtxView, WasiHttpHooks,
+    WasiHttpView,
+};
+use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::error::CallError;
 use crate::executor::{PluginExecutor, ValueExecutor};
 use crate::types::PluginInfo;
 
+/// Denial returned by an [`EgressPolicy`] to refuse an outbound request.
+#[derive(Debug, Clone)]
+pub struct EgressDenied {
+    /// Human-readable reason (for the embedder's logs; not shown to the guest,
+    /// which only sees a generic HTTP "request denied").
+    pub reason: String,
+}
+
+impl EgressDenied {
+    /// A denial with a reason.
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    }
+}
+
+/// Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP**
+/// (FIDIUS-I-0027). This is the *only* egress seam fidius ships — it contains
+/// **no** allow-list, SSRF, or credential logic; those are deployment-specific
+/// policy the embedder implements here.
+///
+/// `wasi:http` is enabled for a guest only when its package declares the `http`
+/// capability **and** a `PluginHost`/executor was given one of these (two-key,
+/// fail-closed). [`authorize`](EgressPolicy::authorize) is then called for
+/// **every** outbound request the guest makes — every request is a host call
+/// across the sandbox boundary, so this is a true per-request checkpoint, not a
+/// one-time gate. Inspect `parts.uri` / `parts.method`, mutate `parts.headers`
+/// to inject credentials, or return `Err(EgressDenied)` to refuse (the guest
+/// then sees an HTTP error and the request is never dispatched).
+pub trait EgressPolicy: Send + Sync + 'static {
+    /// Authorize (and optionally decorate) one outbound request before dispatch.
+    fn authorize(&self, parts: &mut http::request::Parts) -> Result<(), EgressDenied>;
+}
+
+/// fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
+/// embedder's [`EgressPolicy`] before handing off to wasi-http's
+/// `default_send_request`. `policy: None` denies everything (defensive — the
+/// http imports are never linked without a policy, so this is unreachable in
+/// practice).
+struct EgressHooks {
+    policy: Option<Arc<dyn EgressPolicy>>,
+}
+
+impl WasiHttpHooks for EgressHooks {
+    fn send_request(
+        &mut self,
+        request: http::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> HttpResult<HostFutureIncomingResponse> {
+        let Some(policy) = self.policy.as_ref() else {
+            return Err(ErrorCode::HttpRequestDenied.into());
+        };
+        // Split off the body so the policy works in pure `http`-crate types,
+        // then reassemble for dispatch.
+        let (mut parts, body) = request.into_parts();
+        if policy.authorize(&mut parts).is_err() {
+            return Err(ErrorCode::HttpRequestDenied.into());
+        }
+        Ok(default_send_request(
+            http::Request::from_parts(parts, body),
+            config,
+        ))
+    }
+}
+
 /// Per-store host state. The `WasiCtx` is built from the capability allow-list
-/// (deny-all baseline) by `build_wasi_ctx`.
+/// (deny-all baseline) by `build_wasi_ctx`. `http_ctx`/`hooks` back the optional
+/// `wasi:http` egress (FIDIUS-I-0027); they're inert unless egress was enabled.
 struct HostState {
     ctx: WasiCtx,
     table: ResourceTable,
+    http_ctx: WasiHttpCtx,
+    hooks: EgressHooks,
+}
+
+impl WasiHttpView for HostState {
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.http_ctx,
+            table: &mut self.table,
+            hooks: &mut self.hooks,
+        }
+    }
 }
 
 /// Capabilities the host knows how to grant. **Filesystem is intentionally
@@ -49,6 +138,10 @@ struct HostState {
 /// declare intent without error.
 const KNOWN_CAPABILITIES: &[&str] = &[
     "env", "args", "stdout", "stderr", "stdin", "network", "sockets", "clocks", "random",
+    // FIDIUS-I-0027: declares the guest *wants* brokered outbound HTTP. Actual
+    // egress also requires the embedder to supply an `EgressPolicy` (two-key);
+    // handled in `build`, not `build_wasi_ctx`.
+    "http",
 ];
 
 /// Reject unknown capability names early (at load) so a typo fails closed and
@@ -98,6 +191,9 @@ fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
             }
             // Always available in WASI; accepted as a no-op (intent marker).
             "clocks" | "random" => {}
+            // Egress is wired at the linker level (two-key with the embedder's
+            // EgressPolicy), not via the WasiCtx — no-op here.
+            "http" => {}
             _ => {}
         }
     }
@@ -143,6 +239,9 @@ pub struct WasmComponentExecutor {
     /// WASI capability allow-list from `[wasm].capabilities`. Empty = deny-all.
     /// Filesystem is never granted regardless.
     capabilities: Vec<String>,
+    /// Embedder egress policy (FIDIUS-I-0027). `Some` + the `http` capability is
+    /// the two-key that links `wasi:http`; otherwise egress is impossible.
+    egress: Option<Arc<dyn EgressPolicy>>,
     info: PluginInfo,
 }
 
@@ -156,13 +255,35 @@ impl WasmComponentExecutor {
         capabilities: Vec<String>,
         info: PluginInfo,
     ) -> Result<Self, CallError> {
+        Self::from_component_bytes_with_egress(bytes, interface, methods, capabilities, None, info)
+    }
+
+    /// Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
+    /// (FIDIUS-I-0027). `wasi:http` outbound egress is linked only when the
+    /// package declares the `http` capability **and** `egress` is `Some`.
+    pub fn from_component_bytes_with_egress(
+        bytes: &[u8],
+        interface: String,
+        methods: Vec<WasmMethod>,
+        capabilities: Vec<String>,
+        egress: Option<Arc<dyn EgressPolicy>>,
+        info: PluginInfo,
+    ) -> Result<Self, CallError> {
         validate_capabilities(&capabilities)?;
         let engine = Engine::default();
         let component = Component::new(&engine, bytes).map_err(|e| CallError::Backend {
             runtime: "wasm".into(),
             message: e.to_string(),
         })?;
-        Self::build(engine, &component, interface, methods, capabilities, info)
+        Self::build(
+            engine,
+            &component,
+            interface,
+            methods,
+            capabilities,
+            egress,
+            info,
+        )
     }
 
     /// Build from a precompiled `.cwasm` (engine/version-specific). ~83 µs load
@@ -184,7 +305,15 @@ impl WasmComponentExecutor {
             runtime: "wasm".into(),
             message: e.to_string(),
         })?;
-        Self::build(engine, &component, interface, methods, capabilities, info)
+        Self::build(
+            engine,
+            &component,
+            interface,
+            methods,
+            capabilities,
+            None,
+            info,
+        )
     }
 
     /// Shared constructor: wire WASI into a `Linker` and pre-instantiate the
@@ -195,6 +324,7 @@ impl WasmComponentExecutor {
         interface: String,
         methods: Vec<WasmMethod>,
         capabilities: Vec<String>,
+        egress: Option<Arc<dyn EgressPolicy>>,
         info: PluginInfo,
     ) -> Result<Self, CallError> {
         let mut linker: Linker<HostState> = Linker::new(&engine);
@@ -204,6 +334,17 @@ impl WasmComponentExecutor {
             runtime: "wasm".into(),
             message: e.to_string(),
         })?;
+        // FIDIUS-I-0027 two-key gating: link `wasi:http` ONLY when the package
+        // declares the `http` capability AND the embedder supplied an
+        // `EgressPolicy`. Missing either → the http imports are absent, so a guest
+        // that imports `wasi:http/outgoing-handler` fails closed at instantiate.
+        let http_enabled = capabilities.iter().any(|c| c == "http") && egress.is_some();
+        if http_enabled {
+            add_only_http_to_linker_sync(&mut linker).map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+        }
         let instance_pre = linker
             .instantiate_pre(component)
             .map_err(|e| CallError::Backend {
@@ -216,6 +357,7 @@ impl WasmComponentExecutor {
             interface,
             methods,
             capabilities,
+            egress,
             info,
         })
     }
@@ -227,6 +369,10 @@ impl WasmComponentExecutor {
         let host = HostState {
             ctx: build_wasi_ctx(&self.capabilities),
             table: ResourceTable::new(),
+            http_ctx: WasiHttpCtx::new(),
+            hooks: EgressHooks {
+                policy: self.egress.clone(),
+            },
         };
         let mut store = Store::new(&self.engine, host);
         let instance =
