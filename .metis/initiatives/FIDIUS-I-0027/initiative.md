@@ -4,14 +4,14 @@ level: initiative
 title: "Capability-gated wasi:http egress for sandboxed WASM connectors"
 short_code: "FIDIUS-I-0027"
 created_at: 2026-06-19T18:34:53.812845+00:00
-updated_at: 2026-06-19T19:27:47.823020+00:00
+updated_at: 2026-06-19T21:00:51.364816+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
