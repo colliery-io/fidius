@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-19T18:06:20Z | 137 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-19T18:36:40Z | 136 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -216,8 +216,7 @@
 │       ├── ticker-js/
 │       │   └── ticker.js
 │       └── ticker-py/
-│           ├── app.py
-│           └── componentize_py_runtime.pyi
+│           └── app.py
 └── wasm-spike/
     ├── guest/
     │   └── src/
@@ -780,7 +779,7 @@
 - pub `serialize` function L35-37 — `(val: &T) -> Result<Vec<u8>, WireError>` — Serialize a value as bincode for transport across the FFI boundary.
 - pub `deserialize` function L40-42 — `(bytes: &[u8]) -> Result<T, WireError>` — Deserialize a value from bincode bytes received across the FFI boundary.
 - pub `serialized_size` function L47-49 — `(val: &T) -> Result<u64, WireError>` — The exact serialized size of `val` in bytes, without allocating.
-- pub `serialize_into` function L54-56 — `(mut buf: &mut [u8], val: &T) -> Result<(), WireError>` — Serialize `val` directly into a caller-provided buffer — no intermediate
+- pub `serialize_into` function L54-56 — `(buf: &mut [u8], val: &T) -> Result<(), WireError>` — Serialize `val` directly into a caller-provided buffer — no intermediate
 
 ### crates/fidius-host/benches
 
@@ -813,12 +812,12 @@
 -  `find_subslice` function L289-291 — `(hay: &[u8], needle: &[u8]) -> Option<usize>` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
 -  `content_length` function L293-301 — `(head: &str) -> usize` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
 -  `cdylib_handle` function L303-305 — `(host: &PluginHost, name: &str) -> PluginHandle` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
--  `ticker_component` function L309-318 — `() -> Vec<u8>` — Build the (hand-authored) ticker streaming component for the per-item bench.
--  `stage_load_wasm_ticker` function L325-344 — `( host: &PluginHost, root: &std::path::Path, pkg: &str, bytes: &[u8], ) -> Plugi...` — Stage + load a ticker streaming **wasm** component (Rust or JS guest) as a
--  `ticker_component_file` function L349-351 — `(rel: &str) -> Option<Vec<u8>>` — A committed polyglot ticker component (JS/Python/C), if built.
--  `stage_load_python_ticker` function L357-376 — `(host: &PluginHost, root: &std::path::Path) -> PluginHandle` — Stage the py-ticker package (copy fixture + vendor the SDK + inject the macro
--  `copy_dir` function L379-391 — `(src: &std::path::Path, dst: &std::path::Path)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
--  `benches` function L393-560 — `(c: &mut Criterion)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `ticker_component` function L309-319 — `() -> Vec<u8>` — Build the (hand-authored) ticker streaming component for the per-item bench.
+-  `stage_load_wasm_ticker` function L326-345 — `( host: &PluginHost, root: &std::path::Path, pkg: &str, bytes: &[u8], ) -> Plugi...` — Stage + load a ticker streaming **wasm** component (Rust or JS guest) as a
+-  `ticker_component_file` function L350-352 — `(rel: &str) -> Option<Vec<u8>>` — A committed polyglot ticker component (JS/Python/C), if built.
+-  `stage_load_python_ticker` function L358-381 — `(host: &PluginHost, root: &std::path::Path) -> PluginHandle` — Stage the py-ticker package (copy fixture + vendor the SDK + inject the macro
+-  `copy_dir` function L384-396 — `(src: &std::path::Path, dst: &std::path::Path)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `benches` function L398-580 — `(c: &mut Criterion)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
 
 ### crates/fidius-host
 
@@ -973,16 +972,16 @@
 -  `ChunkStream` type L145-151 — `impl Stream for ChunkStream` — turns that byte sequence into the item stream every backend bridge feeds.
 -  `Item` type L146 — `= Result<Value, CallError>` — turns that byte sequence into the item stream every backend bridge feeds.
 -  `poll_next` function L148-150 — `(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>>` — turns that byte sequence into the item stream every backend bridge feeds.
--  `tests` module L169-273 — `-` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `tests` module L169-267 — `-` — turns that byte sequence into the item stream every backend bridge feeds.
 -  `item` function L176-178 — `(v: i64) -> Frame` — An ITEM frame carrying a concrete `i64` (bincode of a concrete type
 -  `decode_i64` function L181-185 — `(b: &[u8]) -> Result<Value, CallError>` — The matching item decoder: concrete-bincode `i64` → `Value`.
 -  `collect` function L187-193 — `(mut s: ChunkStream) -> Vec<Result<Value, CallError>>` — turns that byte sequence into the item stream every backend bridge feeds.
--  `items_then_clean_end` function L196-207 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `native_value_stream_via_new` function L210-224 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `error_frame_terminates_after_one_err` function L227-240 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `missing_terminal_is_abort` function L243-250 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `malformed_frame_surfaces_then_stops` function L253-266 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `empty_stream_just_ends` function L269-272 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `items_then_clean_end` function L196-204 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `native_value_stream_via_new` function L207-218 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `error_frame_terminates_after_one_err` function L221-234 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `missing_terminal_is_abort` function L237-244 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `malformed_frame_surfaces_then_stops` function L247-260 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `empty_stream_just_ends` function L263-266 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
 
 #### crates/fidius-host/src/types.rs
 
@@ -1042,8 +1041,8 @@
 -  `Pyo3Executor` type L66-79 — `impl ValueExecutor for Pyo3Executor` — routed through the neutral `Value` currency.
 -  `call` function L67-78 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — routed through the neutral `Value` currency.
 -  `STREAM_CHANNEL_CAP` variable L86 — `: usize` — Bounded channel depth between the GIL-holding pump thread and the host's
--  `Pyo3Executor` type L90-151 — `= Pyo3Executor` — routed through the neutral `Value` currency.
--  `call_streaming` function L91-150 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — routed through the neutral `Value` currency.
+-  `Pyo3Executor` type L90-150 — `= Pyo3Executor` — routed through the neutral `Value` currency.
+-  `call_streaming` function L91-149 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — routed through the neutral `Value` currency.
 
 #### crates/fidius-host/src/executor/wasm.rs
 
@@ -1052,8 +1051,8 @@
 - pub `from_component_bytes` function L152-166 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
 - pub `from_cwasm` function L174-188 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
 - pub `interface_hash` function L292-308 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
-- pub `validate_component` function L657-665 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
-- pub `precompile_component` function L671-679 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+- pub `validate_component` function L659-667 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L673-681 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
 -  `HostState` struct L41-44 — `{ ctx: WasiCtx, table: ResourceTable }` — Per-store host state.
 -  `KNOWN_CAPABILITIES` variable L50-52 — `: &[&str]` — Capabilities the host knows how to grant.
 -  `validate_capabilities` function L56-69 — `(caps: &[String]) -> Result<(), CallError>` — Reject unknown capability names early (at load) so a typo fails closed and
@@ -1072,14 +1071,14 @@
 -  `WasmComponentExecutor` type L350-382 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
 -  `call` function L351-381 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
 -  `STREAM_CHANNEL_CAP` variable L388 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
--  `WasmComponentExecutor` type L392-493 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `call_streaming` function L393-492 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
--  `plugin_error_from_val` function L497-523 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
--  `to_kebab` function L528-543 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
--  `kebab_to_snake` function L546-548 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
--  `kebab_to_pascal` function L551-561 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
--  `value_to_val` function L563-606 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
--  `val_to_value` function L609-647 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
+-  `WasmComponentExecutor` type L392-495 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call_streaming` function L393-494 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
+-  `plugin_error_from_val` function L499-525 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
+-  `to_kebab` function L530-545 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
+-  `kebab_to_snake` function L548-550 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
+-  `kebab_to_pascal` function L553-563 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
+-  `value_to_val` function L565-608 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
+-  `val_to_value` function L611-649 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
 
 ### crates/fidius-host/tests
 
@@ -1088,9 +1087,9 @@
 #### crates/fidius-host/tests/cdylib_streaming_e2e.rs
 
 -  `ticker_handle` function L31-43 — `() -> PluginHandle` — streaming peer alongside Python and WASM.
--  `cdylib_stream_yields_all_items` function L46-54 — `()` — streaming peer alongside Python and WASM.
--  `cdylib_empty_stream` function L57-61 — `()` — streaming peer alongside Python and WASM.
--  `cdylib_huge_stream_is_bounded_and_cancellable` function L64-78 — `()` — streaming peer alongside Python and WASM.
+-  `cdylib_stream_yields_all_items` function L46-57 — `()` — streaming peer alongside Python and WASM.
+-  `cdylib_empty_stream` function L60-67 — `()` — streaming peer alongside Python and WASM.
+-  `cdylib_huge_stream_is_bounded_and_cancellable` function L70-84 — `()` — streaming peer alongside Python and WASM.
 
 #### crates/fidius-host/tests/e2e.rs
 
@@ -1264,22 +1263,22 @@
 -  `ticker_component` function L37-51 — `() -> &'static [u8]` — under the sandbox.
 -  `BYTES` variable L38 — `: OnceLock<Vec<u8>>` — under the sandbox.
 -  `handle` function L53-77 — `() -> PluginHandle` — under the sandbox.
--  `wasm_stream_yields_all_items` function L80-88 — `()` — under the sandbox.
--  `wasm_huge_stream_is_bounded_and_cancellable` function L91-104 — `()` — under the sandbox.
--  `wasm_empty_stream` function L107-111 — `()` — under the sandbox.
--  `wasm_composition_pump_into_sink` function L118-131 — `()` — under the sandbox.
--  `ticker_js_component` function L139-143 — `() -> Option<Vec<u8>>` — under the sandbox.
--  `js_handle` function L145-164 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
--  `polyglot_js_guest_streams` function L167-183 — `()` — under the sandbox.
--  `polyglot_js_guest_bounded_and_cancellable` function L186-202 — `()` — under the sandbox.
--  `ticker_py_component` function L209-213 — `() -> Option<Vec<u8>>` — under the sandbox.
--  `py_wasm_handle` function L215-234 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
--  `polyglot_py_wasm_guest_streams` function L237-252 — `()` — under the sandbox.
--  `polyglot_py_wasm_guest_bounded_and_cancellable` function L255-271 — `()` — under the sandbox.
--  `ticker_c_component` function L278-282 — `() -> Option<Vec<u8>>` — under the sandbox.
--  `c_wasm_handle` function L284-303 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
--  `polyglot_c_wasm_guest_streams` function L306-321 — `()` — under the sandbox.
--  `polyglot_c_wasm_guest_bounded_and_cancellable` function L324-340 — `()` — under the sandbox.
+-  `wasm_stream_yields_all_items` function L80-91 — `()` — under the sandbox.
+-  `wasm_huge_stream_is_bounded_and_cancellable` function L94-107 — `()` — under the sandbox.
+-  `wasm_empty_stream` function L110-117 — `()` — under the sandbox.
+-  `wasm_composition_pump_into_sink` function L124-140 — `()` — under the sandbox.
+-  `ticker_js_component` function L148-152 — `() -> Option<Vec<u8>>` — under the sandbox.
+-  `js_handle` function L154-178 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
+-  `polyglot_js_guest_streams` function L181-200 — `()` — under the sandbox.
+-  `polyglot_js_guest_bounded_and_cancellable` function L203-219 — `()` — under the sandbox.
+-  `ticker_py_component` function L226-230 — `() -> Option<Vec<u8>>` — under the sandbox.
+-  `py_wasm_handle` function L232-256 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
+-  `polyglot_py_wasm_guest_streams` function L259-277 — `()` — under the sandbox.
+-  `polyglot_py_wasm_guest_bounded_and_cancellable` function L280-296 — `()` — under the sandbox.
+-  `ticker_c_component` function L303-307 — `() -> Option<Vec<u8>>` — under the sandbox.
+-  `c_wasm_handle` function L309-333 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
+-  `polyglot_c_wasm_guest_streams` function L336-354 — `()` — under the sandbox.
+-  `polyglot_c_wasm_guest_bounded_and_cancellable` function L357-373 — `()` — under the sandbox.
 
 ### crates/fidius-macro/src
 
@@ -1295,15 +1294,15 @@
 -  `is_result_type` function L91-102 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
 -  `PluginImplAttrs` type L117-167 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
 -  `parse` function L118-166 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `generate_wasm_adapter` function L316-583 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], ) -> TokenS...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
--  `collect_user_idents` function L587-632 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
--  `gen_type` function L637-663 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
--  `wasm_first_generic` function L665-674 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `wasm_unsupported` function L680-690 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
--  `generate_shims` function L694-1004 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L1010-1032 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L1035-1115 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L1118-1129 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+-  `generate_wasm_adapter` function L316-584 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], ) -> TokenS...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
+-  `collect_user_idents` function L588-633 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
+-  `gen_type` function L638-664 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
+-  `wasm_first_generic` function L666-675 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `wasm_unsupported` function L681-691 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
+-  `generate_shims` function L695-1005 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
+-  `generate_vtable_static` function L1011-1033 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L1036-1116 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L1119-1130 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### crates/fidius-macro/src/interface.rs
 
@@ -1340,7 +1339,7 @@
 -  `extract_arg_names` function L438-455 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
 -  `extract_arg_types` function L458-468 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
 -  `extract_return_type` function L471-476 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
--  `tests` module L575-761 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `tests` module L575-763 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `parse_test_trait` function L579-587 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `basic_trait_parsing` function L590-607 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `optional_method_parsing` function L610-623 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
@@ -1349,10 +1348,10 @@
 -  `signature_string_format` function L658-668 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `interface_attrs_parsing` function L671-677 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `interface_attrs_with_crate_path` function L680-693 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `detects_server_streaming_return` function L696-713 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `streaming_and_unary_hash_differently` function L716-730 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `bare_stream_marker_is_detected` function L733-740 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `rejects_stream_in_argument_position` function L743-760 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `detects_server_streaming_return` function L696-715 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `streaming_and_unary_hash_differently` function L718-732 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `bare_stream_marker_is_detected` function L735-742 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `rejects_stream_in_argument_position` function L745-762 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 
 #### crates/fidius-macro/src/lib.rs
 
@@ -1595,18 +1594,18 @@
 
 - pub `PyStreamStep` enum L39-46 — `Item | End | Error` — One step of advancing a Python plugin's server-streaming iterator.
 - pub `PythonStream` struct L53-55 — `{ iter: Py<PyAny> }` — A handle to an in-flight Python server-stream — the iterator obtained by
-- pub `next` function L64-80 — `(&self) -> PyStreamStep` — Advance one item.
-- pub `cancel` function L86-93 — `(&self)` — Cancel the stream: run the generator's cleanup by calling `close()`,
--  `PythonStream` type L57-94 — `= PythonStream` — split (`fidius-python` has no async runtime).
+- pub `next` function L64-78 — `(&self) -> PyStreamStep` — Advance one item.
+- pub `cancel` function L84-91 — `(&self)` — Cancel the stream: run the generator's cleanup by calling `close()`,
+-  `PythonStream` type L57-92 — `= PythonStream` — split (`fidius-python` has no async runtime).
 -  `new` function L58-60 — `(iter: Py<PyAny>) -> Self` — split (`fidius-python` has no async runtime).
--  `tests` module L97-207 — `-` — split (`fidius-python` has no async runtime).
--  `stream_from` function L102-111 — `(code: &str) -> PythonStream` — Build a `PythonStream` from a snippet that evaluates to an iterator.
--  `item_i64` function L113-118 — `(step: PyStreamStep) -> i64` — split (`fidius-python` has no async runtime).
--  `step_name` function L120-126 — `(s: &PyStreamStep) -> &'static str` — split (`fidius-python` has no async runtime).
--  `yields_items_then_end` function L129-137 — `()` — split (`fidius-python` has no async runtime).
--  `generator_exception_becomes_error` function L140-152 — `()` — split (`fidius-python` has no async runtime).
--  `gen_from_def` function L155-164 — `(code: &str) -> PythonStream` — Run a snippet that binds `it` to an iterator/generator in fresh globals.
--  `cancel_runs_generator_finally` function L167-206 — `()` — split (`fidius-python` has no async runtime).
+-  `tests` module L95-201 — `-` — split (`fidius-python` has no async runtime).
+-  `stream_from` function L100-109 — `(code: &str) -> PythonStream` — Build a `PythonStream` from a snippet that evaluates to an iterator.
+-  `item_i64` function L111-116 — `(step: PyStreamStep) -> i64` — split (`fidius-python` has no async runtime).
+-  `step_name` function L118-124 — `(s: &PyStreamStep) -> &'static str` — split (`fidius-python` has no async runtime).
+-  `yields_items_then_end` function L127-135 — `()` — split (`fidius-python` has no async runtime).
+-  `generator_exception_becomes_error` function L138-150 — `()` — split (`fidius-python` has no async runtime).
+-  `gen_from_def` function L153-162 — `(code: &str) -> PythonStream` — Run a snippet that binds `it` to an iterator/generator in fresh globals.
+-  `cancel_runs_generator_finally` function L165-200 — `()` — split (`fidius-python` has no async runtime).
 
 #### crates/fidius-python/src/value_bridge.rs
 
@@ -1693,14 +1692,14 @@
 -  `CollectSink` type L93-103 — `= CollectSink` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `CollectSink` type L106-111 — `impl StreamSink for CollectSink` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `accept` function L107-110 — `(&self, item: Value) -> Result<(), CallError>` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
--  `tests` module L114-173 — `-` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `tests` module L114-175 — `-` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `vals` function L118-120 — `(xs: &[i64]) -> Vec<Value>` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `ints` function L122-124 — `(vs: Vec<Value>) -> Vec<i64>` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `stream_of_then_collect_round_trips` function L127-130 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `collect_surfaces_first_error` function L133-141 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `pump_delivers_all_items_to_sink` function L144-148 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 -  `pump_stops_on_producer_error` function L151-161 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
--  `compose_single_plugin_idiom` function L164-172 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `compose_single_plugin_idiom` function L164-174 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 
 ### crates/fidius-test/tests
 
@@ -2227,25 +2226,6 @@
 - pub `Ticker` class L34-42 — `{ tick, fidius_interface_hash }` — Implements the exported `ticker` interface (the free functions).
 - pub `tick` method L37-38 — `def tick(self, count: int) -> TickStream`
 - pub `fidius_interface_hash` method L40-42 — `def fidius_interface_hash(self) -> int`
-
-#### tests/wasm-fixtures/ticker-py/componentize_py_runtime.pyi
-
-- pub `call_task_return` function L10 — `def call_task_return(index: int, borrows: int, result: Any) -> None`
-- pub `waitable_set_drop` function L12 — `def waitable_set_drop(set: int) -> None`
-- pub `context_set` function L14 — `def context_set(value: Any) -> None`
-- pub `context_get` function L16 — `def context_get() -> Any`
-- pub `waitable_join` function L18 — `def waitable_join(waitable: int, set: int) -> None`
-- pub `subtask_drop` function L20 — `def subtask_drop(task: int) -> None`
-- pub `waitable_set_new` function L22 — `def waitable_set_new() -> int`
-- pub `promise_get_result` function L24 — `def promise_get_result(event: int, promise: int) -> Any`
-- pub `future_read` function L26 — `def future_read(ty: int, future: int) -> Result[Any, tuple[int, int]]`
-- pub `future_write` function L28 — `def future_write(ty: int, future: int, value: Any) -> Result[tuple[int, int], tu...`
-- pub `future_drop_readable` function L30 — `def future_drop_readable(ty: int, future: int) -> None`
-- pub `future_drop_writable` function L32 — `def future_drop_writable(ty: int, future: int) -> None`
-- pub `stream_read` function L34 — `def stream_read(ty: int, stream: int, max_count: int) -> Result[tuple[int, bytes...`
-- pub `stream_write` function L36 — `def stream_write(ty: int, stream: int, values: bytes | list[Any]) -> Result[tupl...`
-- pub `stream_drop_readable` function L38 — `def stream_drop_readable(ty: int, stream: int) -> None`
-- pub `stream_drop_writable` function L40 — `def stream_drop_writable(ty: int, stream: int) -> None`
 
 ### wasm-spike/guest/src
 

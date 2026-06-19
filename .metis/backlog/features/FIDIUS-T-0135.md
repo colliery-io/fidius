@@ -75,3 +75,6 @@ The same host-import surface is the natural place for **credential injection** (
 
 ### 2026-06-19 — filed (backlog)
 Raised by the weir team against fidius. Captured as a feature backlog item. Anticipated by FIDIUS-A-0004 (brokered I/O fenced as a separate track) and FIDIUS-I-0026 (flagged as a dependency). Not yet scheduled — needs a human call on whether it becomes its own initiative (likely, given the capability-scoping + credential-injection scope) and prioritization against the remaining Phase-2 streaming work (WS.5/WS.6).
+
+### 2026-06-19 — promoted to an initiative
+Dylan's call: this becomes its own initiative — **[[FIDIUS-I-0027]]** (Capability-gated wasi:http egress) — with v1 shipping **per-host allow-list + SSRF guard** (not coarse on/off). This ticket is the origin record; planning + decomposition live in I-0027.
