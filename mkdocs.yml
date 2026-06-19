@@ -116,6 +116,7 @@ nav:
     - Architecture: explanation/architecture.md
     - Interface Evolution: explanation/interface-evolution.md
     - Buffer Strategies: explanation/buffer-strategies.md
+    - Server-Streaming: explanation/streaming.md
     - Wire Format: explanation/wire-format.md
     - WASM Component ABI: explanation/wasm-component-abi.md
     - Capabilities & the WASM Sandbox: explanation/wasm-capabilities.md
