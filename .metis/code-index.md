@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-19T20:34:01Z | 138 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-19T22:19:57Z | 138 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -1820,15 +1820,15 @@
 
 #### pluggable-poc/crates/emit-console/src/lib.rs
 
-- pub `ConsoleEmitPlugin` struct L5-9 — `{ max_rows: Option<usize>, total_rows: usize, batch_count: usize }` — Pretty-prints Arrow RecordBatches to stdout.
-- pub `new` function L12-18 — `() -> Self`
--  `ConsoleEmitPlugin` type L11-19 — `= ConsoleEmitPlugin`
--  `ConsoleEmitPlugin` type L21-25 — `impl Default for ConsoleEmitPlugin`
--  `default` function L22-24 — `() -> Self`
--  `ConsoleEmitPlugin` type L27-69 — `impl EmitPlugin for ConsoleEmitPlugin`
--  `init` function L28-31 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `write_batch` function L33-59 — `(&mut self, input: &DataBatch) -> Result<(), PluginError>`
--  `finalize` function L61-68 — `(&mut self) -> Result<(), PluginError>`
+- pub `ConsoleEmitPlugin` struct L19-23 — `{ max_rows: Option<usize>, total_rows: usize, batch_count: usize }` — Pretty-prints Arrow RecordBatches to stdout.
+- pub `new` function L26-32 — `() -> Self`
+-  `ConsoleEmitPlugin` type L25-33 — `= ConsoleEmitPlugin`
+-  `ConsoleEmitPlugin` type L35-39 — `impl Default for ConsoleEmitPlugin`
+-  `default` function L36-38 — `() -> Self`
+-  `ConsoleEmitPlugin` type L41-83 — `impl EmitPlugin for ConsoleEmitPlugin`
+-  `init` function L42-45 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `write_batch` function L47-73 — `(&mut self, input: &DataBatch) -> Result<(), PluginError>`
+-  `finalize` function L75-82 — `(&mut self) -> Result<(), PluginError>`
 
 ### pluggable-poc/crates/ingest-csv/src
 
@@ -1836,15 +1836,15 @@
 
 #### pluggable-poc/crates/ingest-csv/src/lib.rs
 
-- pub `CsvIngestPlugin` struct L11-15 — `{ reader: Option<arrow::csv::Reader<File>>, file_path: String, has_header: bool ...` — Reads a CSV file and produces Arrow RecordBatches.
-- pub `new` function L18-24 — `() -> Self`
--  `CsvIngestPlugin` type L17-25 — `= CsvIngestPlugin`
--  `CsvIngestPlugin` type L27-31 — `impl Default for CsvIngestPlugin`
--  `default` function L28-30 — `() -> Self`
--  `CsvIngestPlugin` type L33-123 — `impl IngestPlugin for CsvIngestPlugin`
--  `init` function L34-76 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `next_batch` function L78-117 — `(&mut self, max_rows: usize) -> Result<Option<DataBatch>, PluginError>`
--  `close` function L119-122 — `(&mut self) -> Result<(), PluginError>`
+- pub `CsvIngestPlugin` struct L25-29 — `{ reader: Option<arrow::csv::Reader<File>>, file_path: String, has_header: bool ...` — Reads a CSV file and produces Arrow RecordBatches.
+- pub `new` function L32-38 — `() -> Self`
+-  `CsvIngestPlugin` type L31-39 — `= CsvIngestPlugin`
+-  `CsvIngestPlugin` type L41-45 — `impl Default for CsvIngestPlugin`
+-  `default` function L42-44 — `() -> Self`
+-  `CsvIngestPlugin` type L47-137 — `impl IngestPlugin for CsvIngestPlugin`
+-  `init` function L48-90 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `next_batch` function L92-131 — `(&mut self, max_rows: usize) -> Result<Option<DataBatch>, PluginError>`
+-  `close` function L133-136 — `(&mut self) -> Result<(), PluginError>`
 
 ### pluggable-poc/crates/pipeline-host/src
 
@@ -1852,36 +1852,36 @@
 
 #### pluggable-poc/crates/pipeline-host/src/config.rs
 
-- pub `PipelineFile` struct L9-15 — `{ pipeline: PipelineMeta, ingest: StageConfig, transform: Vec<StageConfig>, emit...` — Top-level pipeline configuration parsed from TOML.
-- pub `PipelineMeta` struct L18-24 — `{ name: String, mode: PipelineMode, batch_size: usize }`
-- pub `StageConfig` struct L32-58 — `{ kind: String, plugin: Option<String>, script: Option<String>, entrypoint: Opti...` — Configuration for a single pipeline stage.
-- pub `plugin_config` function L65-69 — `(&self) -> PluginConfig`
-- pub `isolation_tier` function L71-73 — `(&self) -> IsolationTier`
-- pub `timeout` function L75-77 — `(&self) -> u64`
-- pub `load_pipeline` function L81-85 — `(path: &Path) -> anyhow::Result<PipelineFile>` — Load and parse a pipeline TOML file.
--  `default_batch_size` function L26-28 — `() -> usize`
--  `default_kind` function L60-62 — `() -> String`
--  `StageConfig` type L64-78 — `= StageConfig`
+- pub `PipelineFile` struct L23-29 — `{ pipeline: PipelineMeta, ingest: StageConfig, transform: Vec<StageConfig>, emit...` — Top-level pipeline configuration parsed from TOML.
+- pub `PipelineMeta` struct L32-38 — `{ name: String, mode: PipelineMode, batch_size: usize }`
+- pub `StageConfig` struct L46-72 — `{ kind: String, plugin: Option<String>, script: Option<String>, entrypoint: Opti...` — Configuration for a single pipeline stage.
+- pub `plugin_config` function L79-83 — `(&self) -> PluginConfig`
+- pub `isolation_tier` function L85-87 — `(&self) -> IsolationTier`
+- pub `timeout` function L89-91 — `(&self) -> u64`
+- pub `load_pipeline` function L95-99 — `(path: &Path) -> anyhow::Result<PipelineFile>` — Load and parse a pipeline TOML file.
+-  `default_batch_size` function L40-42 — `() -> usize`
+-  `default_kind` function L74-76 — `() -> String`
+-  `StageConfig` type L78-92 — `= StageConfig`
 
 #### pluggable-poc/crates/pipeline-host/src/main.rs
 
--  `arrow_bridge` module L1 — `-`
--  `config` module L2 — `-`
--  `orchestrator` module L3 — `-`
--  `Cli` struct L17-25 — `{ pipeline: PathBuf, bench: bool }`
--  `main` function L27-87 — `() -> Result<()>`
--  `build_ingest` function L90-108 — `( stage: &StageConfig, _project_root: &Path, ) -> Result<Box<dyn IngestPlugin>>` — Build an ingest plugin from config.
--  `build_transform` function L111-190 — `( stage: &StageConfig, project_root: &Path, ) -> Result<Box<dyn TransformPlugin>...` — Build a transform plugin from config.
--  `build_emit` function L193-211 — `( stage: &StageConfig, _project_root: &Path, ) -> Result<Box<dyn EmitPlugin>>` — Build an emit plugin from config.
+-  `arrow_bridge` module L15 — `-`
+-  `config` module L16 — `-`
+-  `orchestrator` module L17 — `-`
+-  `Cli` struct L31-39 — `{ pipeline: PathBuf, bench: bool }`
+-  `main` function L41-101 — `() -> Result<()>`
+-  `build_ingest` function L104-122 — `( stage: &StageConfig, _project_root: &Path, ) -> Result<Box<dyn IngestPlugin>>` — Build an ingest plugin from config.
+-  `build_transform` function L125-204 — `( stage: &StageConfig, project_root: &Path, ) -> Result<Box<dyn TransformPlugin>...` — Build a transform plugin from config.
+-  `build_emit` function L207-225 — `( stage: &StageConfig, _project_root: &Path, ) -> Result<Box<dyn EmitPlugin>>` — Build an emit plugin from config.
 
 #### pluggable-poc/crates/pipeline-host/src/orchestrator.rs
 
-- pub `Pipeline` struct L7-13 — `{ name: String, batch_size: usize, ingest: Box<dyn IngestPlugin>, transforms: Ve...` — Assembled pipeline ready to execute.
-- pub `run` function L16-97 — `(pipeline: &mut Pipeline) -> Result<PipelineStats, PluginError>` — Run the pipeline: pull batches from ingest, push through transforms, emit.
-- pub `PipelineStats` struct L100-109 — `{ batches: usize, rows_ingested: usize, rows_emitted: usize, total_time: Duratio...`
-- pub `print_summary` function L112-155 — `(&self)`
--  `PipelineStats` type L111-156 — `= PipelineStats`
--  `pct` function L158-164 — `(part: Duration, total: Duration) -> f64`
+- pub `Pipeline` struct L21-27 — `{ name: String, batch_size: usize, ingest: Box<dyn IngestPlugin>, transforms: Ve...` — Assembled pipeline ready to execute.
+- pub `run` function L30-111 — `(pipeline: &mut Pipeline) -> Result<PipelineStats, PluginError>` — Run the pipeline: pull batches from ingest, push through transforms, emit.
+- pub `PipelineStats` struct L114-123 — `{ batches: usize, rows_ingested: usize, rows_emitted: usize, total_time: Duratio...`
+- pub `print_summary` function L126-169 — `(&self)`
+-  `PipelineStats` type L125-170 — `= PipelineStats`
+-  `pct` function L172-178 — `(part: Duration, total: Duration) -> f64`
 
 ### pluggable-poc/crates/pipeline-types/src
 
@@ -1889,22 +1889,22 @@
 
 #### pluggable-poc/crates/pipeline-types/src/lib.rs
 
-- pub `IsolationTier` enum L12-18 — `Native | Thread | ZeroCopy | Process` — Isolation tier for plugin execution.
-- pub `PipelineMode` enum L23-27 — `Batch | Streaming` — Pipeline execution mode.
-- pub `DataBatch` struct L31-34 — `{ batch: RecordBatch, metadata: HashMap<String, String> }` — Data flowing between pipeline stages.
-- pub `new` function L37-42 — `(batch: RecordBatch) -> Self`
-- pub `with_metadata` function L44-46 — `(batch: RecordBatch, metadata: HashMap<String, String>) -> Self`
-- pub `num_rows` function L48-50 — `(&self) -> usize`
-- pub `PluginConfig` struct L55-57 — `{ params: HashMap<String, String> }` — Configuration passed to a plugin at init time.
-- pub `PluginError` enum L61-76 — `InvalidConfig | Processing | Fatal | Timeout | Arrow` — Plugin error types with severity.
-- pub `IngestPlugin` interface L81-87 — `{ fn init(), fn next_batch(), fn close() }` — Ingest plugin trait — pulls data into the pipeline.
-- pub `TransformPlugin` interface L90-99 — `{ fn init(), fn process_batch(), fn flush(), fn close() }` — Transform plugin trait — processes data batches in the pipeline.
-- pub `EmitPlugin` interface L102-108 — `{ fn init(), fn write_batch(), fn finalize() }` — Emit plugin trait — writes data out of the pipeline.
--  `DataBatch` type L36-51 — `= DataBatch`
--  `close` function L84-86 — `(&mut self) -> Result<(), PluginError>`
--  `flush` function L93-95 — `(&mut self) -> Result<Option<DataBatch>, PluginError>`
--  `close` function L96-98 — `(&mut self) -> Result<(), PluginError>`
--  `finalize` function L105-107 — `(&mut self) -> Result<(), PluginError>`
+- pub `IsolationTier` enum L26-32 — `Native | Thread | ZeroCopy | Process` — Isolation tier for plugin execution.
+- pub `PipelineMode` enum L37-41 — `Batch | Streaming` — Pipeline execution mode.
+- pub `DataBatch` struct L45-48 — `{ batch: RecordBatch, metadata: HashMap<String, String> }` — Data flowing between pipeline stages.
+- pub `new` function L51-56 — `(batch: RecordBatch) -> Self`
+- pub `with_metadata` function L58-60 — `(batch: RecordBatch, metadata: HashMap<String, String>) -> Self`
+- pub `num_rows` function L62-64 — `(&self) -> usize`
+- pub `PluginConfig` struct L69-71 — `{ params: HashMap<String, String> }` — Configuration passed to a plugin at init time.
+- pub `PluginError` enum L75-90 — `InvalidConfig | Processing | Fatal | Timeout | Arrow` — Plugin error types with severity.
+- pub `IngestPlugin` interface L95-101 — `{ fn init(), fn next_batch(), fn close() }` — Ingest plugin trait — pulls data into the pipeline.
+- pub `TransformPlugin` interface L104-113 — `{ fn init(), fn process_batch(), fn flush(), fn close() }` — Transform plugin trait — processes data batches in the pipeline.
+- pub `EmitPlugin` interface L116-122 — `{ fn init(), fn write_batch(), fn finalize() }` — Emit plugin trait — writes data out of the pipeline.
+-  `DataBatch` type L50-65 — `= DataBatch`
+-  `close` function L98-100 — `(&mut self) -> Result<(), PluginError>`
+-  `flush` function L107-109 — `(&mut self) -> Result<Option<DataBatch>, PluginError>`
+-  `close` function L110-112 — `(&mut self) -> Result<(), PluginError>`
+-  `finalize` function L119-121 — `(&mut self) -> Result<(), PluginError>`
 
 ### pluggable-poc/crates/plugin-runtime/src
 
@@ -1912,73 +1912,73 @@
 
 #### pluggable-poc/crates/plugin-runtime/src/ffi_plugin.rs
 
-- pub `FfiTransformPlugin` struct L21-24 — `{ dylib_path: PathBuf, library: Option<libloading::Library> }` — A transform plugin loaded from a compiled shared library (.dylib/.so) via FFI.
-- pub `new` function L27-32 — `(dylib_path: PathBuf) -> Self`
--  `PluginInitFn` type L9 — `= unsafe extern "C" fn(*const u8, usize) -> i32` — Type aliases for the FFI function signatures exported by the plugin dylib.
--  `PluginProcessBatchFn` type L10-15 — `= unsafe extern "C" fn( *mut FFI_ArrowArray, *mut FFI_ArrowSchema, *mut FFI_Arro...`
--  `PluginCloseFn` type L16 — `= unsafe extern "C" fn()`
--  `FfiTransformPlugin` type L26-33 — `= FfiTransformPlugin`
--  `FfiTransformPlugin` type L35-127 — `impl TransformPlugin for FfiTransformPlugin`
--  `init` function L36-66 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `process_batch` function L68-116 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
--  `close` function L118-126 — `(&mut self) -> Result<(), PluginError>`
--  `FfiTransformPlugin` type L129-133 — `impl Drop for FfiTransformPlugin`
--  `drop` function L130-132 — `(&mut self)`
+- pub `FfiTransformPlugin` struct L35-38 — `{ dylib_path: PathBuf, library: Option<libloading::Library> }` — A transform plugin loaded from a compiled shared library (.dylib/.so) via FFI.
+- pub `new` function L41-46 — `(dylib_path: PathBuf) -> Self`
+-  `PluginInitFn` type L23 — `= unsafe extern "C" fn(*const u8, usize) -> i32` — Type aliases for the FFI function signatures exported by the plugin dylib.
+-  `PluginProcessBatchFn` type L24-29 — `= unsafe extern "C" fn( *mut FFI_ArrowArray, *mut FFI_ArrowSchema, *mut FFI_Arro...`
+-  `PluginCloseFn` type L30 — `= unsafe extern "C" fn()`
+-  `FfiTransformPlugin` type L40-47 — `= FfiTransformPlugin`
+-  `FfiTransformPlugin` type L49-141 — `impl TransformPlugin for FfiTransformPlugin`
+-  `init` function L50-80 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L82-130 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `close` function L132-140 — `(&mut self) -> Result<(), PluginError>`
+-  `FfiTransformPlugin` type L143-147 — `impl Drop for FfiTransformPlugin`
+-  `drop` function L144-146 — `(&mut self)`
 
 #### pluggable-poc/crates/plugin-runtime/src/lib.rs
 
-- pub `ffi_plugin` module L1 — `-`
-- pub `native` module L2 — `-`
-- pub `pyo3_process` module L3 — `-`
-- pub `pyo3_thread` module L4 — `-`
-- pub `pyo3_zerocopy` module L5 — `-`
-- pub `serialize_ipc` function L13-19 — `(batch: &RecordBatch) -> anyhow::Result<Vec<u8>>` — Serialize a RecordBatch to Arrow IPC stream bytes.
-- pub `deserialize_ipc` function L22-30 — `(bytes: &[u8]) -> anyhow::Result<RecordBatch>` — Deserialize Arrow IPC stream bytes to a RecordBatch.
+- pub `ffi_plugin` module L15 — `-`
+- pub `native` module L16 — `-`
+- pub `pyo3_process` module L17 — `-`
+- pub `pyo3_thread` module L18 — `-`
+- pub `pyo3_zerocopy` module L19 — `-`
+- pub `serialize_ipc` function L27-33 — `(batch: &RecordBatch) -> anyhow::Result<Vec<u8>>` — Serialize a RecordBatch to Arrow IPC stream bytes.
+- pub `deserialize_ipc` function L36-44 — `(bytes: &[u8]) -> anyhow::Result<RecordBatch>` — Deserialize Arrow IPC stream bytes to a RecordBatch.
 
 #### pluggable-poc/crates/plugin-runtime/src/pyo3_process.rs
 
-- pub `PyO3ProcessTransform` struct L30-37 — `{ script_path: PathBuf, entrypoint: String, harness_path: PathBuf, config: Plugi...` — PyO3 process-isolated transform executor (Tier 3).
-- pub `new` function L40-54 — `( script: impl Into<PathBuf>, entrypoint: &str, harness: impl Into<PathBuf>, tim...`
--  `MSG_INIT` variable L10 — `: u32`
--  `MSG_PROCESS_BATCH` variable L11 — `: u32`
--  `MSG_FLUSH` variable L12 — `: u32`
--  `MSG_CLOSE` variable L13 — `: u32`
--  `RESP_OK` variable L16 — `: u32`
--  `RESP_BATCH` variable L17 — `: u32`
--  `RESP_NONE` variable L18 — `: u32`
--  `RESP_ERROR` variable L19 — `: u32`
--  `PyO3ProcessTransform` type L39-55 — `= PyO3ProcessTransform`
--  `PyO3ProcessTransform` type L57-154 — `impl TransformPlugin for PyO3ProcessTransform`
--  `init` function L58-93 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `process_batch` function L95-117 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
--  `flush` function L119-136 — `(&mut self) -> Result<Option<DataBatch>, PluginError>`
--  `close` function L138-153 — `(&mut self) -> Result<(), PluginError>`
--  `PyO3ProcessTransform` type L156-160 — `impl Drop for PyO3ProcessTransform`
--  `drop` function L157-159 — `(&mut self)`
--  `send_message` function L162-188 — `(child: &mut Option<Child>, msg_type: u32, payload: &[u8]) -> Result<(), PluginE...`
--  `recv_message` function L190-216 — `(child: &mut Option<Child>) -> Result<(u32, Vec<u8>), PluginError>`
+- pub `PyO3ProcessTransform` struct L44-51 — `{ script_path: PathBuf, entrypoint: String, harness_path: PathBuf, config: Plugi...` — PyO3 process-isolated transform executor (Tier 3).
+- pub `new` function L54-68 — `( script: impl Into<PathBuf>, entrypoint: &str, harness: impl Into<PathBuf>, tim...`
+-  `MSG_INIT` variable L24 — `: u32`
+-  `MSG_PROCESS_BATCH` variable L25 — `: u32`
+-  `MSG_FLUSH` variable L26 — `: u32`
+-  `MSG_CLOSE` variable L27 — `: u32`
+-  `RESP_OK` variable L30 — `: u32`
+-  `RESP_BATCH` variable L31 — `: u32`
+-  `RESP_NONE` variable L32 — `: u32`
+-  `RESP_ERROR` variable L33 — `: u32`
+-  `PyO3ProcessTransform` type L53-69 — `= PyO3ProcessTransform`
+-  `PyO3ProcessTransform` type L71-168 — `impl TransformPlugin for PyO3ProcessTransform`
+-  `init` function L72-107 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L109-131 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `flush` function L133-150 — `(&mut self) -> Result<Option<DataBatch>, PluginError>`
+-  `close` function L152-167 — `(&mut self) -> Result<(), PluginError>`
+-  `PyO3ProcessTransform` type L170-174 — `impl Drop for PyO3ProcessTransform`
+-  `drop` function L171-173 — `(&mut self)`
+-  `send_message` function L176-202 — `(child: &mut Option<Child>, msg_type: u32, payload: &[u8]) -> Result<(), PluginE...`
+-  `recv_message` function L204-230 — `(child: &mut Option<Child>) -> Result<(u32, Vec<u8>), PluginError>`
 
 #### pluggable-poc/crates/plugin-runtime/src/pyo3_thread.rs
 
-- pub `PyO3ThreadTransform` struct L18-25 — `{ script_path: PathBuf, entrypoint: String, config: PluginConfig, timeout_ms: u6...` — PyO3 thread-isolated transform executor (Tier 2).
-- pub `new` function L28-36 — `(script: impl Into<PathBuf>, entrypoint: &str, timeout_ms: u64) -> Self`
--  `PyO3ThreadTransform` type L27-37 — `= PyO3ThreadTransform`
--  `PyO3ThreadTransform` type L39-125 — `impl TransformPlugin for PyO3ThreadTransform`
--  `init` function L40-81 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `process_batch` function L83-119 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
--  `close` function L121-124 — `(&mut self) -> Result<(), PluginError>`
--  `pyerr` function L127-129 — `(e: impl std::fmt::Display) -> PluginError`
+- pub `PyO3ThreadTransform` struct L32-39 — `{ script_path: PathBuf, entrypoint: String, config: PluginConfig, timeout_ms: u6...` — PyO3 thread-isolated transform executor (Tier 2).
+- pub `new` function L42-50 — `(script: impl Into<PathBuf>, entrypoint: &str, timeout_ms: u64) -> Self`
+-  `PyO3ThreadTransform` type L41-51 — `= PyO3ThreadTransform`
+-  `PyO3ThreadTransform` type L53-139 — `impl TransformPlugin for PyO3ThreadTransform`
+-  `init` function L54-95 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L97-133 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `close` function L135-138 — `(&mut self) -> Result<(), PluginError>`
+-  `pyerr` function L141-143 — `(e: impl std::fmt::Display) -> PluginError`
 
 #### pluggable-poc/crates/plugin-runtime/src/pyo3_zerocopy.rs
 
-- pub `PyO3ZeroCopyTransform` struct L20-26 — `{ script_path: PathBuf, entrypoint: String, config: PluginConfig, timeout_ms: u6...` — PyO3 zero-copy transform executor (Tier 2+).
-- pub `new` function L29-37 — `(script: impl Into<PathBuf>, entrypoint: &str, timeout_ms: u64) -> Self`
--  `PyO3ZeroCopyTransform` type L28-38 — `= PyO3ZeroCopyTransform`
--  `PyO3ZeroCopyTransform` type L40-146 — `impl TransformPlugin for PyO3ZeroCopyTransform`
--  `init` function L41-79 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `process_batch` function L81-140 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
--  `close` function L142-145 — `(&mut self) -> Result<(), PluginError>`
--  `pyerr` function L148-150 — `(e: impl std::fmt::Display) -> PluginError`
+- pub `PyO3ZeroCopyTransform` struct L34-40 — `{ script_path: PathBuf, entrypoint: String, config: PluginConfig, timeout_ms: u6...` — PyO3 zero-copy transform executor (Tier 2+).
+- pub `new` function L43-51 — `(script: impl Into<PathBuf>, entrypoint: &str, timeout_ms: u64) -> Self`
+-  `PyO3ZeroCopyTransform` type L42-52 — `= PyO3ZeroCopyTransform`
+-  `PyO3ZeroCopyTransform` type L54-160 — `impl TransformPlugin for PyO3ZeroCopyTransform`
+-  `init` function L55-93 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L95-154 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `close` function L156-159 — `(&mut self) -> Result<(), PluginError>`
+-  `pyerr` function L162-164 — `(e: impl std::fmt::Display) -> PluginError`
 
 ### pluggable-poc/crates/transform-double/src
 
@@ -1986,14 +1986,14 @@
 
 #### pluggable-poc/crates/transform-double/src/lib.rs
 
-- pub `DoubleTransformPlugin` struct L12-14 — `{ columns: Option<Vec<String>> }` — Native Rust column doubler — uses Arrow's vectorized compute
-- pub `new` function L17-19 — `() -> Self`
--  `DoubleTransformPlugin` type L16-20 — `= DoubleTransformPlugin`
--  `DoubleTransformPlugin` type L22-26 — `impl Default for DoubleTransformPlugin`
--  `default` function L23-25 — `() -> Self`
--  `DoubleTransformPlugin` type L28-73 — `impl TransformPlugin for DoubleTransformPlugin`
--  `init` function L29-36 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `process_batch` function L38-72 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+- pub `DoubleTransformPlugin` struct L26-28 — `{ columns: Option<Vec<String>> }` — Native Rust column doubler — uses Arrow's vectorized compute
+- pub `new` function L31-33 — `() -> Self`
+-  `DoubleTransformPlugin` type L30-34 — `= DoubleTransformPlugin`
+-  `DoubleTransformPlugin` type L36-40 — `impl Default for DoubleTransformPlugin`
+-  `default` function L37-39 — `() -> Self`
+-  `DoubleTransformPlugin` type L42-87 — `impl TransformPlugin for DoubleTransformPlugin`
+-  `init` function L43-50 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L52-86 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
 
 ### pluggable-poc/crates/transform-normalize/src
 
@@ -2001,17 +2001,17 @@
 
 #### pluggable-poc/crates/transform-normalize/src/lib.rs
 
-- pub `NormalizeTransformPlugin` struct L16-19 — `{ columns: Vec<String>, method: Method }` — Min-max or z-score normalization on specified columns.
-- pub `new` function L22-27 — `() -> Self`
--  `Method` enum L10-13 — `MinMax | ZScore` — Normalization method.
--  `NormalizeTransformPlugin` type L21-28 — `= NormalizeTransformPlugin`
--  `NormalizeTransformPlugin` type L30-34 — `impl Default for NormalizeTransformPlugin`
--  `default` function L31-33 — `() -> Self`
--  `NormalizeTransformPlugin` type L36-98 — `impl TransformPlugin for NormalizeTransformPlugin`
--  `init` function L37-51 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `process_batch` function L53-97 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
--  `min_max_normalize` function L100-125 — `(array: &Float64Array) -> Result<Float64Array, PluginError>`
--  `z_score_normalize` function L127-149 — `(array: &Float64Array) -> Result<Float64Array, PluginError>`
+- pub `NormalizeTransformPlugin` struct L30-33 — `{ columns: Vec<String>, method: Method }` — Min-max or z-score normalization on specified columns.
+- pub `new` function L36-41 — `() -> Self`
+-  `Method` enum L24-27 — `MinMax | ZScore` — Normalization method.
+-  `NormalizeTransformPlugin` type L35-42 — `= NormalizeTransformPlugin`
+-  `NormalizeTransformPlugin` type L44-48 — `impl Default for NormalizeTransformPlugin`
+-  `default` function L45-47 — `() -> Self`
+-  `NormalizeTransformPlugin` type L50-112 — `impl TransformPlugin for NormalizeTransformPlugin`
+-  `init` function L51-65 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L67-111 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+-  `min_max_normalize` function L114-139 — `(array: &Float64Array) -> Result<Float64Array, PluginError>`
+-  `z_score_normalize` function L141-163 — `(array: &Float64Array) -> Result<Float64Array, PluginError>`
 
 ### pluggable-poc/crates/transform-onnx/src
 
@@ -2019,15 +2019,15 @@
 
 #### pluggable-poc/crates/transform-onnx/src/lib.rs
 
-- pub `OnnxTransformPlugin` struct L14-19 — `{ model: Option<TractModel>, input_columns: Vec<String>, output_column: String, ...` — ONNX model inference via tract — runs a model on input columns and
-- pub `new` function L22-29 — `() -> Self`
--  `TractModel` type L10 — `= SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>`
--  `OnnxTransformPlugin` type L21-30 — `= OnnxTransformPlugin`
--  `OnnxTransformPlugin` type L32-36 — `impl Default for OnnxTransformPlugin`
--  `default` function L33-35 — `() -> Self`
--  `OnnxTransformPlugin` type L38-141 — `impl TransformPlugin for OnnxTransformPlugin`
--  `init` function L39-71 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
--  `process_batch` function L73-140 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
+- pub `OnnxTransformPlugin` struct L28-33 — `{ model: Option<TractModel>, input_columns: Vec<String>, output_column: String, ...` — ONNX model inference via tract — runs a model on input columns and
+- pub `new` function L36-43 — `() -> Self`
+-  `TractModel` type L24 — `= SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>`
+-  `OnnxTransformPlugin` type L35-44 — `= OnnxTransformPlugin`
+-  `OnnxTransformPlugin` type L46-50 — `impl Default for OnnxTransformPlugin`
+-  `default` function L47-49 — `() -> Self`
+-  `OnnxTransformPlugin` type L52-155 — `impl TransformPlugin for OnnxTransformPlugin`
+-  `init` function L53-85 — `(&mut self, config: &PluginConfig) -> Result<(), PluginError>`
+-  `process_batch` function L87-154 — `(&mut self, input: DataBatch) -> Result<DataBatch, PluginError>`
 
 ### pluggable-poc/data
 
@@ -2051,12 +2051,12 @@
 
 #### pluggable-poc/plugins/ffi/transform-double-ffi/src/lib.rs
 
-- pub `plugin_init` function L15-44 — `(config_json: *const u8, config_len: usize) -> i32` — Initialize the plugin with a JSON config string.
-- pub `plugin_process_batch` function L52-92 — `( in_array: *mut FFI_ArrowArray, in_schema: *mut FFI_ArrowSchema, out_array: *mu...` — Process a single batch.
-- pub `plugin_close` function L96-98 — `()` — Close the plugin and free resources.
--  `COLUMNS` variable L8 — `: Mutex<Option<Vec<String>>>` — Columns to double (None = all numeric columns).
--  `Config` struct L28-31 — `{ columns: Option<String> }`
--  `process_batch_inner` function L101-132 — `(batch: &RecordBatch) -> Result<RecordBatch, arrow::error::ArrowError>` — Inner processing logic — uses Arrow's vectorized compute kernels.
+- pub `plugin_init` function L29-58 — `(config_json: *const u8, config_len: usize) -> i32` — Initialize the plugin with a JSON config string.
+- pub `plugin_process_batch` function L66-106 — `( in_array: *mut FFI_ArrowArray, in_schema: *mut FFI_ArrowSchema, out_array: *mu...` — Process a single batch.
+- pub `plugin_close` function L110-112 — `()` — Close the plugin and free resources.
+-  `COLUMNS` variable L22 — `: Mutex<Option<Vec<String>>>` — Columns to double (None = all numeric columns).
+-  `Config` struct L42-45 — `{ columns: Option<String> }`
+-  `process_batch_inner` function L115-146 — `(batch: &RecordBatch) -> Result<RecordBatch, arrow::error::ArrowError>` — Inner processing logic — uses Arrow's vectorized compute kernels.
 
 ### pluggable-poc/plugins
 
@@ -2282,9 +2282,9 @@
 
 #### wasm-spike/guest/src/lib.rs
 
-- pub `fd_alloc` function L20-27 — `(len: usize) -> *mut u8` — Allocate `len` bytes in the guest's linear memory and return the pointer.
-- pub `fd_dealloc` function L31-37 — `(ptr: *mut u8, len: usize)` — Free a buffer previously returned by `fd_alloc` (or by `fd_call_raw`).
-- pub `fd_call_raw` function L47-59 — `(ptr: *mut u8, len: usize) -> u64` — The raw-wire round trip.
+- pub `fd_alloc` function L34-41 — `(len: usize) -> *mut u8` — Allocate `len` bytes in the guest's linear memory and return the pointer.
+- pub `fd_dealloc` function L45-51 — `(ptr: *mut u8, len: usize)` — Free a buffer previously returned by `fd_alloc` (or by `fd_call_raw`).
+- pub `fd_call_raw` function L61-73 — `(ptr: *mut u8, len: usize) -> u64` — The raw-wire round trip.
 
 ### wasm-spike/host/src
 
@@ -2292,9 +2292,9 @@
 
 #### wasm-spike/host/src/main.rs
 
--  `WARMUP` variable L16 — `: u32` — Run: cargo run --release -- <path-to-guest.wasm>
--  `ITERS` variable L17 — `: u32` — Run: cargo run --release -- <path-to-guest.wasm>
--  `bench` function L19-28 — `(iters: u32, mut f: F) -> f64` — Run: cargo run --release -- <path-to-guest.wasm>
--  `round_trip` function L32-54 — `( store: &mut Store<()>, memory: &wasmtime::Memory, alloc: &TypedFunc<u32, u32>,...` — One raw-wire round trip on a warm instance: write `input` into guest memory
--  `main` function L56-150 — `()` — Run: cargo run --release -- <path-to-guest.wasm>
+-  `WARMUP` variable L30 — `: u32` — Run: cargo run --release -- <path-to-guest.wasm>
+-  `ITERS` variable L31 — `: u32` — Run: cargo run --release -- <path-to-guest.wasm>
+-  `bench` function L33-42 — `(iters: u32, mut f: F) -> f64` — Run: cargo run --release -- <path-to-guest.wasm>
+-  `round_trip` function L46-68 — `( store: &mut Store<()>, memory: &wasmtime::Memory, alloc: &TypedFunc<u32, u32>,...` — One raw-wire round trip on a warm instance: write `input` into guest memory
+-  `main` function L70-164 — `()` — Run: cargo run --release -- <path-to-guest.wasm>
 
