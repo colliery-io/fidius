@@ -298,7 +298,8 @@ fn env_capability_denied_by_default() {
 fn env_capability_granted_via_allowlist() {
     std::env::set_var("FIDIUS_TEST_CAP", "1");
     let tmp = tempfile::TempDir::new().unwrap();
-    stage_wasm_package(tmp.path(), &["env"]);
+    // Scoped grant (FIDIUS-T-0142): exactly the one variable the guest probes.
+    stage_wasm_package(tmp.path(), &["env:FIDIUS_TEST_CAP"]);
     let host = PluginHost::builder()
         .search_path(tmp.path())
         .build()
@@ -307,7 +308,46 @@ fn env_capability_granted_via_allowlist() {
     let visible: bool = handle.call_method(PROBE_ENV, &()).unwrap();
     assert!(
         visible,
-        "env must be visible once the `env` capability is granted"
+        "env must be visible once `env:FIDIUS_TEST_CAP` is granted"
+    );
+}
+
+#[test]
+fn bare_env_capability_rejected() {
+    // FIDIUS-T-0142: bare `env` (inherit ALL host env vars) is no longer
+    // grantable — it must fail loud at load.
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &["env"]);
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let err = match host.load_wasm("greeter-pkg", &GREETER_DESC) {
+        Ok(_) => panic!("bare `env` must be rejected at load"),
+        Err(e) => e,
+    };
+    assert!(
+        format!("{err}").contains("env"),
+        "bare `env` must be rejected with a helpful message, got: {err}"
+    );
+}
+
+#[test]
+fn scoped_env_does_not_leak_other_vars() {
+    // FIDIUS-T-0142: granting `env:OTHER` must NOT expose FIDIUS_TEST_CAP — the
+    // grant is per-variable, not inherit-all.
+    std::env::set_var("FIDIUS_TEST_CAP", "1");
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_wasm_package(tmp.path(), &["env:SOME_UNRELATED_VAR"]);
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host.load_wasm("greeter-pkg", &GREETER_DESC).unwrap();
+    let visible: bool = handle.call_method(PROBE_ENV, &()).unwrap();
+    assert!(
+        !visible,
+        "FIDIUS_TEST_CAP must stay hidden when only `env:SOME_UNRELATED_VAR` is granted"
     );
 }
 
@@ -354,7 +394,7 @@ category = "test"
 
 [wasm]
 component = "greeter_py.wasm"
-capabilities = ["env"]
+capabilities = ["env:FIDIUS_TEST_CAP"]
 "#,
     )
     .unwrap();

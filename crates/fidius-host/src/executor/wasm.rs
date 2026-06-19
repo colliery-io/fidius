@@ -26,6 +26,9 @@
 //! env, no inherited stdio, no sockets). T-0104 opens specific capabilities
 //! from the package manifest's allow-list.
 
+use std::future::Future;
+use std::net::IpAddr;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use fidius_core::Value;
@@ -137,22 +140,48 @@ impl WasiHttpView for HostState {
 /// are always available in WASI and are accepted as no-ops so manifests can
 /// declare intent without error.
 const KNOWN_CAPABILITIES: &[&str] = &[
-    "env", "args", "stdout", "stderr", "stdin", "network", "sockets", "clocks", "random",
+    "args", "stdout", "stderr", "stdin", "network", "sockets", "clocks", "random",
     // FIDIUS-I-0027: declares the guest *wants* brokered outbound HTTP. Actual
     // egress also requires the embedder to supply an `EgressPolicy` (two-key);
     // handled in `build`, not `build_wasi_ctx`.
     "http",
+    // NOTE: `env` is intentionally absent — it is grantable ONLY in the scoped
+    // form `env:VAR_NAME` (FIDIUS-T-0142). Bare `env` (inherit ALL host env vars,
+    // i.e. all secrets) is rejected by `validate_capabilities`.
 ];
 
 /// Reject unknown capability names early (at load) so a typo fails closed and
 /// loud rather than silently granting nothing.
 fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
     for c in caps {
+        // Bare `env` (inherit ALL host env vars — i.e. every secret) is no longer
+        // grantable (FIDIUS-T-0142). Point the author at the scoped form.
+        if c == "env" {
+            return Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: "wasm capability 'env' grants ALL host environment variables (every \
+                          secret) and is not allowed; grant specific variables with \
+                          'env:VAR_NAME' instead"
+                    .into(),
+            });
+        }
+        // Scoped env grant: `env:VAR_NAME` exposes exactly that one variable.
+        if let Some(name) = c.strip_prefix("env:") {
+            if name.is_empty() {
+                return Err(CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: "wasm capability 'env:' requires a variable name (e.g. \
+                              'env:STRIPE_API_BASE')"
+                        .into(),
+                });
+            }
+            continue;
+        }
         if !KNOWN_CAPABILITIES.contains(&c.as_str()) {
             return Err(CallError::Backend {
                 runtime: "wasm".into(),
                 message: format!(
-                    "unknown wasm capability '{c}'; allowed: {}",
+                    "unknown wasm capability '{c}'; allowed: {}, env:VAR_NAME",
                     KNOWN_CAPABILITIES.join(", ")
                 ),
             });
@@ -167,10 +196,8 @@ fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
 fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
     let mut b = WasiCtxBuilder::new();
     for c in caps {
-        match c.as_str() {
-            "env" => {
-                b.inherit_env();
-            }
+        let c = c.as_str();
+        match c {
             "args" => {
                 b.inherit_args();
             }
@@ -183,21 +210,63 @@ fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
             "stdin" => {
                 b.inherit_stdin();
             }
-            // Network egress. Coarse in v1 (per-host:port filtering is a
-            // documented follow-on); still opt-in and off by default.
+            // Raw outbound sockets (coarse — no per-host policy). FIDIUS-T-0143:
+            // a baseline SSRF floor rejects loopback/link-local/private/metadata
+            // targets. The check runs on the *resolved* `SocketAddr`, so it also
+            // catches a hostname that resolves (or rebinds) to an internal IP.
+            // For host-brokered, per-host-policied egress prefer `http`.
             "network" | "sockets" => {
                 b.inherit_network();
                 b.allow_ip_name_lookup(true);
+                b.socket_addr_check(|addr, _use| {
+                    let ok = !is_blocked_ip(&addr.ip());
+                    Box::pin(async move { ok }) as Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+                });
             }
             // Always available in WASI; accepted as a no-op (intent marker).
             "clocks" | "random" => {}
             // Egress is wired at the linker level (two-key with the embedder's
             // EgressPolicy), not via the WasiCtx — no-op here.
             "http" => {}
+            // Scoped env (FIDIUS-T-0142): `env:VAR_NAME` exposes exactly that one
+            // host variable (skipped silently if unset on the host) — never the
+            // whole environment. Bare `env` is rejected in `validate_capabilities`.
+            _ if c.starts_with("env:") => {
+                let name = &c["env:".len()..];
+                if let Ok(val) = std::env::var(name) {
+                    b.env(name, val);
+                }
+            }
             _ => {}
         }
     }
     b.build()
+}
+
+/// Baseline SSRF denylist for the raw-socket grant (FIDIUS-T-0143): an address a
+/// sandboxed guest must never reach — loopback, link-local (incl. the cloud
+/// metadata IP `169.254.169.254`), private (RFC-1918), unique-local, unspecified,
+/// or broadcast. This is a safety *floor* (like deny-all), not a full egress
+/// policy; per-host policy is the embedder's job via the `http` capability.
+fn is_blocked_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_private()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (v6.segments()[0] & 0xffc0) == 0xfe80 // link-local fe80::/10
+                || (v6.segments()[0] & 0xfe00) == 0xfc00 // unique-local fc00::/7
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|m| is_blocked_ip(&IpAddr::V4(m)))
+        }
+    }
 }
 
 // wasmtime-wasi 45: `IoView` was merged into `WasiView`, whose `ctx` returns a
@@ -824,4 +893,45 @@ pub fn precompile_component(bytes: &[u8]) -> Result<Vec<u8>, CallError> {
             runtime: "wasm".into(),
             message: format!("failed to precompile component: {e}"),
         })
+}
+
+#[cfg(test)]
+mod ssrf_tests {
+    use super::is_blocked_ip;
+    use std::net::IpAddr;
+
+    fn ip(s: &str) -> IpAddr {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn blocks_internal_and_metadata_targets() {
+        // Cloud metadata, loopback, link-local, RFC-1918, ULA, unspecified.
+        for s in [
+            "169.254.169.254", // AWS/GCP/Azure metadata (link-local)
+            "127.0.0.1",
+            "::1",
+            "10.1.2.3",
+            "172.16.5.5",
+            "192.168.1.1",
+            "0.0.0.0",
+            "fe80::1",          // link-local v6
+            "fc00::1",          // unique-local v6
+            "::ffff:127.0.0.1", // v4-mapped loopback
+        ] {
+            assert!(is_blocked_ip(&ip(s)), "{s} must be blocked");
+        }
+    }
+
+    #[test]
+    fn allows_public_targets() {
+        for s in [
+            "1.1.1.1",
+            "93.184.216.34",
+            "8.8.8.8",
+            "2606:4700:4700::1111",
+        ] {
+            assert!(!is_blocked_ip(&ip(s)), "{s} must be allowed");
+        }
+    }
 }

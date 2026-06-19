@@ -61,14 +61,28 @@ plugin.
 
 | Capability          | Grants                                                        |
 | ------------------- | ------------------------------------------------------------- |
-| `env`               | Read the host's environment variables                         |
+| `env:VAR_NAME`      | Read **one** named host env var (e.g. `env:LOG_LEVEL`). Bare `env` is **rejected** — see below |
 | `args`              | Read process arguments                                        |
 | `stdout` / `stderr` | Write to the host's standard out / error                      |
 | `stdin`             | Read the host's standard input                                |
-| `network` / `sockets` | Raw outbound sockets + DNS name lookup (coarse; see below)   |
+| `network` / `sockets` | Raw outbound sockets + DNS (coarse; SSRF floor applied — see below) |
 | `http`              | Brokered outbound HTTP via `wasi:http` — **only** with a host `EgressPolicy` (see below) |
 | `clocks`            | Wall/monotonic clocks (always available; accepted as a no-op) |
 | `random`            | Secure randomness (always available; accepted as a no-op)     |
+
+### `env` is per-variable, never inherit-all
+
+Bare `env` (which would grant the guest **every** host environment variable — i.e.
+all your secrets: `AWS_SECRET_ACCESS_KEY`, `DATABASE_URL`, tokens) is **rejected at
+load** with a clear error. Grant exactly the variables a connector needs, by name:
+
+```toml
+capabilities = ["env:STRIPE_API_BASE", "env:LOG_LEVEL"]
+```
+
+Each `env:NAME` exposes that one variable's value (skipped if it isn't set on the
+host). This keeps host secrets out of an untrusted guest's reach and is what makes
+host-side credential injection (below) meaningful.
 
 Unknown names **fail closed**: a manifest listing a capability fidius doesn't
 recognize (a typo, or an unsupported one) is rejected at load with a clear error,
@@ -86,12 +100,20 @@ current posture is "no filesystem, full stop."
 
 ### Raw sockets (`network`/`sockets`) are coarse — prefer `http`
 
-`network`/`sockets` grant **raw** `wasi:sockets`: outbound TCP/UDP to *anywhere*
-plus DNS, with no per-host filtering and no place for the host to inspect or
-decorate a connection. There is no broker seam, so it cannot be scoped the way
-HTTP can. Treat it as "this plugin may talk to the entire network" and reserve it
-for trusted plugins. For the common case — a connector that fetches from a REST
-API — use **`http`** instead: it is host-brokered and policy-gated (next section).
+`network`/`sockets` grant **raw** `wasi:sockets`: outbound TCP/UDP plus DNS, with
+no per-host filtering and no place for the host to inspect or decorate a
+connection. There is no broker seam, so it cannot be scoped the way HTTP can.
+
+A **baseline SSRF floor** is always applied to this grant: connections to
+loopback, link-local (including the cloud metadata IP `169.254.169.254`),
+RFC-1918 private ranges, and unique-local addresses are **rejected** — checked on
+the *resolved* address, so a hostname that resolves (or rebinds) to an internal IP
+is caught too. This floor is a safety net, *not* a policy: it stops the worst
+SSRF targets but still lets the plugin reach any *public* host. So treat
+`network`/`sockets` as "this plugin may talk to the public internet" and reserve
+it for trusted plugins. For the common case — a connector that fetches from a
+specific REST API — use **`http`** instead: it is host-brokered and policy-gated
+(next section).
 
 ## Brokered outbound HTTP (`wasi:http`)
 
@@ -211,11 +233,11 @@ against a real `wasi:http` guest with policies like this.)
 ### A note on `env` vs credential injection
 
 Injecting a secret in the hook only keeps it from the guest **if that guest can't
-read it another way**. The coarse `env` capability grants the guest **every** host
-environment variable via `inherit_env()` — which is exactly where secrets usually
-live. Do **not** grant `env` to an untrusted connector you're brokering HTTP for;
-it would defeat the point of host-side credential injection. (A scoped `env` —
-specific variable names rather than inherit-all — is tracked as a follow-up.)
+read it another way**. This is why `env` is **per-variable** (`env:VAR_NAME`) and
+bare `env` (inherit-all) is rejected: a connector you broker HTTP for can't reach
+your other secrets through the environment. The one rule that remains yours: don't
+grant a connector `env:THE_SECRET_VAR` for the very token you're injecting on its
+behalf — broker it in the hook *or* expose it via `env`, not both.
 
 ## How a deployer reasons about it
 
