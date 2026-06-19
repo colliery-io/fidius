@@ -31,8 +31,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use fidius_core::descriptor::BufferStrategyKind;
+use fidius_core::wasm_descriptor::{WasmInterfaceDescriptor, WasmMethodDesc};
 use fidius_host::executor::{EgressDenied, EgressPolicy, WasmComponentExecutor, WasmMethod};
-use fidius_host::{CallError, PluginHandle, PluginInfo, PluginRuntimeKind};
+use fidius_host::{CallError, LoadError, PluginHandle, PluginHost, PluginInfo, PluginRuntimeKind};
 
 const IFACE: &str = "fidius:fetcher/fetcher@1.0.0";
 
@@ -166,5 +167,99 @@ fn no_capability_fails_closed() {
     assert!(
         matches!(res, Err(CallError::Backend { .. })),
         "must fail closed with a Backend error"
+    );
+}
+
+// ── Ergonomic path: egress through `PluginHost::load_wasm` (not the low-level
+// executor constructor). The fetcher fixture carries `fidius-interface-hash`, so
+// it loads as a real package.
+
+static FETCHER_METHODS: [WasmMethodDesc; 1] = [WasmMethodDesc {
+    name: "fetch",
+    wire_raw: false,
+    streaming: false,
+}];
+static FETCHER: WasmInterfaceDescriptor = WasmInterfaceDescriptor {
+    interface_name: "fetcher",
+    interface_export: IFACE,
+    interface_hash: 0xFE7C_4E20_0000_0001,
+    methods: &FETCHER_METHODS,
+};
+
+/// Stage the fetcher as a loadable wasm package declaring the `http` capability.
+fn stage_fetcher_pkg(root: &std::path::Path) {
+    let dir = root.join("fetcher-pkg");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("fetcher_guest.wasm"), fetcher_component().unwrap()).unwrap();
+    std::fs::write(
+        dir.join("package.toml"),
+        "[package]\nname = \"fetcher-pkg\"\nversion = \"0.1.0\"\ninterface = \"fetcher\"\n\
+         interface_version = 1\nruntime = \"wasm\"\n\n[metadata]\ncategory = \"test\"\n\n\
+         [wasm]\ncomponent = \"fetcher_guest.wasm\"\ncapabilities = [\"http\"]\n",
+    )
+    .unwrap();
+}
+
+#[test]
+fn egress_via_builder_default_policy() {
+    if fetcher_component().is_none() {
+        eprintln!("SKIP egress_via_builder_default_policy");
+        return;
+    }
+    let (url, server) = mock_http_once("hello via builder");
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_fetcher_pkg(tmp.path());
+    // Host-wide egress policy via the builder — no dropping to the executor.
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .egress(AllowAll)
+        .build()
+        .unwrap();
+    let handle = host.load_wasm("fetcher-pkg", &FETCHER).expect("load_wasm");
+    let body: String = handle.call_method(0, &(url,)).expect("fetch");
+    server.join().unwrap();
+    assert_eq!(body, "hello via builder");
+}
+
+#[test]
+fn egress_via_per_plugin_policy() {
+    if fetcher_component().is_none() {
+        eprintln!("SKIP egress_via_per_plugin_policy");
+        return;
+    }
+    let (url, server) = mock_http_once("hello per-plugin");
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_fetcher_pkg(tmp.path());
+    // No host-wide policy; supplied per-load (the connector-isolation primitive).
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm_with_egress("fetcher-pkg", &FETCHER, AllowAll)
+        .expect("load_wasm_with_egress");
+    let body: String = handle.call_method(0, &(url,)).expect("fetch");
+    server.join().unwrap();
+    assert_eq!(body, "hello per-plugin");
+}
+
+#[test]
+fn load_wasm_without_egress_fails_closed() {
+    if fetcher_component().is_none() {
+        eprintln!("SKIP load_wasm_without_egress_fails_closed");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_fetcher_pkg(tmp.path());
+    // Package declares `http` but the host supplies NO policy → wasi:http unlinked
+    // → the component (which imports it) fails to load.
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let res = host.load_wasm("fetcher-pkg", &FETCHER);
+    assert!(
+        matches!(res, Err(LoadError::WasmLoad(_))),
+        "must fail closed without an egress policy"
     );
 }

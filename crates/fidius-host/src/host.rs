@@ -15,6 +15,8 @@
 //! PluginHost builder and plugin discovery.
 
 use std::path::{Path, PathBuf};
+#[cfg(feature = "wasm")]
+use std::sync::Arc;
 
 use ed25519_dalek::VerifyingKey;
 use fidius_core::descriptor::BufferStrategyKind;
@@ -33,6 +35,11 @@ pub struct PluginHost {
     trusted_keys: Vec<VerifyingKey>,
     expected_hash: Option<u64>,
     expected_strategy: Option<BufferStrategyKind>,
+    /// Host-wide default `wasi:http` egress policy (FIDIUS-I-0027). Applied to
+    /// every `load_wasm`; `load_wasm_with_egress` overrides it per plugin. `None`
+    /// → no egress (a guest importing `wasi:http` fails closed at load).
+    #[cfg(feature = "wasm")]
+    egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
 }
 
 /// Builder for configuring a PluginHost.
@@ -43,6 +50,8 @@ pub struct PluginHostBuilder {
     trusted_keys: Vec<VerifyingKey>,
     expected_hash: Option<u64>,
     expected_strategy: Option<BufferStrategyKind>,
+    #[cfg(feature = "wasm")]
+    egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
 }
 
 impl PluginHostBuilder {
@@ -54,7 +63,20 @@ impl PluginHostBuilder {
             trusted_keys: Vec::new(),
             expected_hash: None,
             expected_strategy: None,
+            #[cfg(feature = "wasm")]
+            egress: None,
         }
+    }
+
+    /// Set a host-wide default `wasi:http` egress policy (FIDIUS-I-0027). Every
+    /// `load_wasm` then enables outbound HTTP for a guest that declares the
+    /// `http` capability, routing each request through `policy`. Without this (and
+    /// without a per-load policy), `wasi:http` is never linked and a guest that
+    /// imports it fails closed. Available only with the `wasm` feature.
+    #[cfg(feature = "wasm")]
+    pub fn egress(mut self, policy: impl crate::executor::wasm::EgressPolicy) -> Self {
+        self.egress = Some(Arc::new(policy));
+        self
     }
 
     /// Add a directory to search for plugin dylibs.
@@ -102,6 +124,8 @@ impl PluginHostBuilder {
             trusted_keys: self.trusted_keys,
             expected_hash: self.expected_hash,
             expected_strategy: self.expected_strategy,
+            #[cfg(feature = "wasm")]
+            egress: self.egress,
         })
     }
 }
@@ -362,12 +386,42 @@ impl PluginHost {
     /// gets a zero-grant `WasiCtx` (no FS preopens, no env, no sockets). The
     /// capability allow-list in `[wasm].capabilities` is applied in T-0104.
     ///
+    /// Outbound HTTP is governed by the host's egress policy: a guest that
+    /// declares the `http` capability gets `wasi:http` only when the host was
+    /// given a policy (via [`PluginHostBuilder::egress`] or
+    /// [`Self::load_wasm_with_egress`]) — otherwise it fails closed.
+    ///
     /// Available only with the `wasm` feature.
     #[cfg(feature = "wasm")]
     pub fn load_wasm(
         &self,
         name: &str,
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        self.load_wasm_impl(name, descriptor, self.egress.clone())
+    }
+
+    /// Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
+    /// policy that overrides any host-wide default (FIDIUS-I-0027). This is the
+    /// right primitive for isolating connectors: a host-wide policy only sees the
+    /// outbound *request*, not which plugin issued it, so per-plugin policies are
+    /// how you bound connector A to one set of hosts and connector B to another.
+    #[cfg(feature = "wasm")]
+    pub fn load_wasm_with_egress(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        egress: impl crate::executor::wasm::EgressPolicy,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        self.load_wasm_impl(name, descriptor, Some(Arc::new(egress)))
+    }
+
+    #[cfg(feature = "wasm")]
+    fn load_wasm_impl(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
         use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
 
@@ -420,11 +474,12 @@ impl PluginHost {
 
         let jit = |interface: String, methods, capabilities, info| -> Result<_, LoadError> {
             let bytes = std::fs::read(dir.join(&wasm_meta.component))?;
-            WasmComponentExecutor::from_component_bytes(
+            WasmComponentExecutor::from_component_bytes_with_egress(
                 &bytes,
                 interface,
                 methods,
                 capabilities,
+                egress.clone(),
                 info,
             )
             .map_err(|e| LoadError::WasmLoad(e.to_string()))
@@ -437,11 +492,12 @@ impl PluginHost {
                 // (Engine::precompile_component); wasmtime validates the header
                 // and refuses a mismatched engine/version (→ Err → JIT fallback).
                 let aot = unsafe {
-                    WasmComponentExecutor::from_cwasm(
+                    WasmComponentExecutor::from_cwasm_with_egress(
                         &bytes,
                         interface.clone(),
                         methods.clone(),
                         capabilities.clone(),
+                        egress.clone(),
                         info.clone(),
                     )
                 };

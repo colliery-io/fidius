@@ -28,6 +28,12 @@ impl Guest for Component {
             Err(e) => format!("ERROR: {e}"),
         }
     }
+
+    /// Interface-hash carrier; the host's `load_wasm` checks it against the
+    /// descriptor. Arbitrary fixed value for this hand-built fixture.
+    fn fidius_interface_hash() -> u64 {
+        0xFE7C_4E20_0000_0001
+    }
 }
 
 fn do_fetch(url: String) -> Result<String, String> {

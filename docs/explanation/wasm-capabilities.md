@@ -140,8 +140,17 @@ Outbound HTTP is enabled only when **both** keys are present:
 
 1. **The package declares it** — `capabilities = ["http", …]` in `package.toml`.
    This is *intent*, visible to whoever reviews/signs the connector.
-2. **The host supplies an `EgressPolicy`** — the embedder hands one to the
-   executor/host.
+2. **The host supplies an `EgressPolicy`** — give one to `PluginHost`:
+
+   ```rust
+   // Host-wide default: every load_wasm'd plugin uses this policy.
+   let host = PluginHost::builder().search_path(dir).egress(my_policy).build()?;
+   let p = host.load_wasm("rest-connector", &Connector_WASM_DESCRIPTOR)?;
+
+   // Or per-plugin (isolate connectors — a host-wide policy can't tell which
+   // plugin is calling, only what the request is):
+   let p = host.load_wasm_with_egress("rest-connector", &desc, stripe_only_policy)?;
+   ```
 
 Miss either key and the `wasi:http` imports are simply **not linked**: a component
 that imports `wasi:http/outgoing-handler` then fails to instantiate (fails closed

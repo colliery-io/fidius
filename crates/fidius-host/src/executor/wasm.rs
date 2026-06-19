@@ -368,6 +368,23 @@ impl WasmComponentExecutor {
         capabilities: Vec<String>,
         info: PluginInfo,
     ) -> Result<Self, CallError> {
+        Self::from_cwasm_with_egress(cwasm, interface, methods, capabilities, None, info)
+    }
+
+    /// Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
+    /// (FIDIUS-I-0027) — the AOT counterpart of
+    /// [`Self::from_component_bytes_with_egress`].
+    ///
+    /// # Safety
+    /// Same as [`Self::from_cwasm`].
+    pub unsafe fn from_cwasm_with_egress(
+        cwasm: &[u8],
+        interface: String,
+        methods: Vec<WasmMethod>,
+        capabilities: Vec<String>,
+        egress: Option<Arc<dyn EgressPolicy>>,
+        info: PluginInfo,
+    ) -> Result<Self, CallError> {
         validate_capabilities(&capabilities)?;
         let engine = Engine::default();
         let component = Component::deserialize(&engine, cwasm).map_err(|e| CallError::Backend {
@@ -380,7 +397,7 @@ impl WasmComponentExecutor {
             interface,
             methods,
             capabilities,
-            None,
+            egress,
             info,
         )
     }

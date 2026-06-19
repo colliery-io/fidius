@@ -7,6 +7,9 @@ package fidius:fetcher@1.0.0;
 
 interface fetcher {
     fetch: func(url: string) -> string;
+    /// Interface-hash carrier (parity with fidius plugins) — lets the high-level
+    /// `PluginHost::load_wasm` path load this fixture as a package.
+    fidius-interface-hash: func() -> u64;
 }
 
 world fetcher-plugin {
