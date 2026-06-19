@@ -4,15 +4,15 @@ level: task
 title: "Scoped `env` capability for WASM guests (replace inherit-all-secrets)"
 short_code: "FIDIUS-T-0142"
 created_at: 2026-06-19T20:04:46.054380+00:00
-updated_at: 2026-06-19T20:04:46.054380+00:00
+updated_at: 2026-06-19T20:33:30.174536+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/backlog"
   - "#tech-debt"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -56,6 +56,12 @@ Replace the coarse `env` capability (currently `WasiCtxBuilder::inherit_env()` �
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -126,4 +132,9 @@ Replace the coarse `env` capability (currently `WasiCtxBuilder::inherit_env()` �
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+### 2026-06-19 — fixed ✅
+- `build_wasi_ctx`: bare `env` arm removed; `env:VAR_NAME` (guard arm) → `WasiCtxBuilder::env(name, std::env::var(name))` (skipped if unset). Per-variable, never inherit-all.
+- `validate_capabilities`: bare `env` rejected at load with a helpful message ("…grant specific variables with 'env:VAR_NAME'"); empty `env:` rejected; `env` removed from `KNOWN_CAPABILITIES`.
+- Tests (`wasm_executor.rs`): `env_capability_granted_via_allowlist` (now scoped), `bare_env_capability_rejected`, `scoped_env_does_not_leak_other_vars`. Polyglot test manifest → `env:FIDIUS_TEST_CAP`.
+- Docs: `wasm-capabilities.md` (`env:VAR_NAME` row + "`env` is per-variable" section + credential-injection note updated).
+- **Verified**: wasm_executor 23/23; lint clean. Committed `947d391`.

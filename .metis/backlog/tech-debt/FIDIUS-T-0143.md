@@ -4,15 +4,15 @@ level: task
 title: "Harden the coarse `network`/`sockets` grant for untrusted WASM guests"
 short_code: "FIDIUS-T-0143"
 created_at: 2026-06-19T20:04:46.875508+00:00
-updated_at: 2026-06-19T20:04:46.875508+00:00
+updated_at: 2026-06-19T20:33:31.212216+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/backlog"
   - "#tech-debt"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -56,6 +56,12 @@ Constrain (or clearly fence) the coarse `network`/`sockets` capability, which to
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -126,4 +132,10 @@ Constrain (or clearly fence) the coarse `network`/`sockets` capability, which to
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+### 2026-06-19 — fixed ✅ (baseline SSRF floor; full per-host policy deferred)
+Chose the proportionate fix: a **safety floor**, not a new policy mechanism (keeps the "mechanism not policy" line — per-host egress policy is `http`'s job).
+- `build_wasi_ctx` `network`/`sockets` arm now installs `WasiCtxBuilder::socket_addr_check(...)` rejecting `is_blocked_ip(addr.ip())` — loopback / link-local (incl. metadata `169.254.169.254`) / RFC-1918 / unique-local / unspecified / broadcast. Checked on the **resolved** `SocketAddr`, so DNS-rebind-to-internal is caught.
+- `is_blocked_ip` helper (v4 + v6, incl. v4-mapped) + `ssrf_tests` unit tests (blocks internal/metadata, allows public).
+- Docs: `wasm-capabilities.md` raw-sockets section documents the floor + steers REST connectors to `http`.
+- **Verified**: ssrf_tests 2/2; wasm_executor 23/23; lint clean. Committed `947d391`.
+- **NOT done (deferred):** a full per-host allow-list / `SocketPolicy` embedder hook for raw sockets, and a "trusted-tier-only" formalization. The floor blocks the worst SSRF targets but still allows any public host; revisit if untrusted raw-socket connectors need tighter control. Most connectors should use `http` instead.
