@@ -4,14 +4,14 @@ level: task
 title: "E2 — wasi:http egress: fetcher wasm fixture + mock-server integration tests"
 short_code: "FIDIUS-T-0140"
 created_at: 2026-06-19T19:26:09.537722+00:00
-updated_at: 2026-06-19T19:42:08.697272+00:00
+updated_at: 2026-06-19T19:59:54.137193+00:00
 parent: FIDIUS-I-0027
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -68,6 +68,8 @@ End-to-end proof of the [[FIDIUS-T-0139]] mechanism: a real WASM guest that impo
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -143,4 +145,15 @@ End-to-end proof of the [[FIDIUS-T-0139]] mechanism: a real WASM guest that impo
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+### 2026-06-19 — complete ✅ — live egress proven, all 4 scenarios green
+- **Fixture** `tests/wasm-fixtures/fetcher`: a `wasm32-wasip2` Rust component (wit-bindgen, not cargo-component) that imports `wasi:http/outgoing-handler@0.2.6` and does an outbound GET. `fetch(url) -> string` (plain string — errors as `"ERROR: …"` — to dodge WIT `result<>` round-tripping). `build.sh`; `.wasm` gitignored like the others.
+  - **Toolchain notes (for whoever rebuilds):** cargo-component's target resolver ignores vendored `wit/deps/` — used `cargo build --target wasm32-wasip2` + `wit_bindgen::generate!({ generate_all })` instead. **Pinned the WIT to 0.2.6** by vendoring it from the `wasmtime-wasi-http` crate (the `wasi`/`wasip2` crates emit 0.2.12 imports → version skew vs the host → instantiation fails). Stripped the `world` blocks from the vendored `http/io/clocks` WIT (they `import` deps we don't vendor, e.g. `wasi:clocks/timezone`, `wasi:random`).
+- **Tests** `crates/fidius-host/tests/wasm_egress_e2e.rs` (`http` added as a dev-dep for the policy impls): loopback mock server + reference Allow/Deny `EgressPolicy`s (exactly what an embedder writes; fidius ships none):
+  1. **allowed** → guest fetches the mock body through the sandbox ✅
+  2. **denied** → policy refuses pre-dispatch; guest gets `ERROR:` ✅
+  3. **no policy** (cap declared) → `wasi:http` unlinked → fail closed at load ✅
+  4. **no capability** (policy supplied) → fail closed at load ✅
+- **The flagged sync-wasi-http runtime risk did NOT materialize** — wasmtime-wasi's sync adapter drove the async dispatch fine; a plain `#[test]` works (0.36s total).
+- **Verified**: 4/4 green; `wasm_executor` still 21/21; `angreal lint` clean. Committed `9c46f60`.
+
+All AC met. **Phase 1 (the egress mechanism) is functionally complete.** Remaining initiative work is Phase 2 (docs + the worked reference policy writeup).
