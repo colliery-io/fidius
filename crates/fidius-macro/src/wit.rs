@@ -20,5 +20,5 @@
 
 pub(crate) use fidius_wit::{
     contains_user_type, conv_expr, render_wit, result_ok_type, return_to_wit, return_to_wit_with,
-    rust_type_to_wit, to_kebab_case, wit_type_with, WitMethod,
+    rust_type_to_wit, stream_item_type, to_kebab_case, wit_type_with, WitMethod,
 };

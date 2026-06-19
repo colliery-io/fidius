@@ -127,6 +127,19 @@ pub enum CallError {
     /// `code`/`message`/`details` (including tracebacks) round-trip.
     #[error("{runtime} backend error: {message}")]
     Backend { runtime: String, message: String },
+
+    /// A streaming backend produced bytes that did not decode as a valid
+    /// [`fidius_core::frame::Frame`] (bad tag, truncated, malformed payload).
+    /// Distinct from [`CallError::Deserialization`], which is about an item's
+    /// *contents*; this is about the framing around items. (FIDIUS-I-0026.)
+    #[error("malformed stream frame: {0}")]
+    MalformedFrame(String),
+
+    /// A stream ended without a terminal `END`/`ERROR` frame — the producer
+    /// went away mid-stream (e.g. a dropped backend task, a crashed
+    /// interpreter, a closed channel). (FIDIUS-I-0026.)
+    #[error("stream aborted before end-of-stream")]
+    StreamAborted,
 }
 
 /// Fold the Python backend's call error into the unified [`CallError`].

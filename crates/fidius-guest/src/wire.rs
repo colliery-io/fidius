@@ -40,3 +40,17 @@ pub fn serialize<T: Serialize>(val: &T) -> Result<Vec<u8>, WireError> {
 pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, WireError> {
     bincode::deserialize(bytes).map_err(WireError::Bincode)
 }
+
+/// The exact serialized size of `val` in bytes, without allocating. Matches
+/// [`serialize`]'s output length. Used to size/validate a buffer before
+/// [`serialize_into`] (e.g. the cdylib streaming arena path, FIDIUS-T-0138).
+pub fn serialized_size<T: Serialize>(val: &T) -> Result<u64, WireError> {
+    bincode::serialized_size(val).map_err(WireError::Bincode)
+}
+
+/// Serialize `val` directly into a caller-provided buffer — no intermediate
+/// `Vec` allocation. `buf` must be at least [`serialized_size`] bytes (bincode
+/// errors otherwise). Byte-identical to [`serialize`].
+pub fn serialize_into<T: Serialize>(buf: &mut [u8], val: &T) -> Result<(), WireError> {
+    bincode::serialize_into(buf, val).map_err(WireError::Bincode)
+}

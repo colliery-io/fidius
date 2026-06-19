@@ -1,0 +1,30 @@
+# Standalone — kept out of the parent fidius workspace.
+# Spike/fixture: a WASM component exporting a server-streaming *resource*
+# (FIDIUS-I-0026 Phase 2). Built with `cargo component build`.
+[workspace]
+
+[package]
+name = "ticker-guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "fidius:ticker-guest"
+
+[package.metadata.component.target]
+path = "wit"
+world = "ticker-plugin"
+
+[package.metadata.component.dependencies]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

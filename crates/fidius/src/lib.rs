@@ -104,6 +104,7 @@ pub use fidius_core::error;
 pub use fidius_core::hash;
 pub use fidius_core::python_descriptor;
 pub use fidius_core::status;
+pub use fidius_core::stream_ffi;
 pub use fidius_core::wasm_descriptor;
 pub use fidius_core::wire;
 
@@ -115,6 +116,11 @@ pub use fidius_core::descriptor::{
 pub use fidius_core::error::PluginError;
 pub use fidius_core::hash::{fnv1a, interface_hash};
 
+/// The `fidius::Stream<T>` server-streaming return marker — write it as a
+/// method's return type in a `#[plugin_interface]` trait to declare a
+/// server-streaming method. See [`fidius_core::stream_marker::Stream`].
+pub use fidius_core::stream_marker::Stream;
+
 #[cfg(feature = "async")]
 pub use fidius_core::async_runtime;
 
@@ -123,6 +129,11 @@ pub use fidius_core::async_runtime;
 // pull libloading or other host-only dependencies.
 #[cfg(feature = "host")]
 pub use fidius_host::{CallError, LoadError, LoadPolicy, PluginHandle, PluginHost, PluginInfo};
+
+// Server-streaming host handle (FIDIUS-I-0026). The generated Client's streaming
+// methods return this; consumers pull items with `.next().await`.
+#[cfg(feature = "streaming")]
+pub use fidius_host::{ChunkStream, StreamExecutor};
 
 // Re-export inventory so fidius_plugin_registry!() works via fidius_core
 pub use fidius_core::inventory;

@@ -66,15 +66,34 @@ pub fn interface_hash(signatures: &[&str]) -> u64 {
 ///   the same Rust signature. This is the protection that makes a
 ///   wire-mode mismatch surface as a load-time hash mismatch instead of
 ///   silent data corruption.
+/// - `streaming = true` appends a trailing `!stream` marker (after any
+///   `!raw`) so a server-streaming method (`-> fidius::Stream<T>`, where
+///   `ret` is the per-item type `T`) hashes differently from a unary
+///   `-> T` method of the same name/args. Same protection as `!raw`, for
+///   the streaming/unary split (FIDIUS-I-0026, D4).
 ///
 /// This function lives in `fidius-core` (not `fidius-macro`) so the proc
 /// macro and downstream tooling like `fidius python-stub` share a single
 /// source of truth for the format. Drift between them = silent hash
 /// mismatch, which is exactly what the load-time check is meant to catch
 /// — but better to never have the drift in the first place.
-pub fn signature_string(name: &str, arg_types: &[String], ret: &str, wire_raw: bool) -> String {
+pub fn signature_string(
+    name: &str,
+    arg_types: &[String],
+    ret: &str,
+    wire_raw: bool,
+    streaming: bool,
+) -> String {
     let raw_marker = if wire_raw { "!raw" } else { "" };
-    format!("{}:{}->{}{}", name, arg_types.join(","), ret, raw_marker)
+    let stream_marker = if streaming { "!stream" } else { "" };
+    format!(
+        "{}:{}->{}{}{}",
+        name,
+        arg_types.join(","),
+        ret,
+        raw_marker,
+        stream_marker
+    )
 }
 
 #[cfg(test)]

@@ -158,6 +158,37 @@ impl PythonPluginHandle {
         serde_json::to_vec(&result_value).map_err(|e| PythonCallError::OutputEncode(e.to_string()))
     }
 
+    /// Start a server-streaming call (FIDIUS-I-0026). Calls the method to obtain
+    /// its iterator/generator and wraps it in a [`crate::stream::PythonStream`]
+    /// the host then pumps. Input is JSON like [`Self::call_typed_json`];
+    /// streaming methods use the typed (non-raw) path.
+    pub fn call_streaming_start(
+        &self,
+        method_index: usize,
+        input_json: &[u8],
+    ) -> Result<crate::stream::PythonStream, PythonCallError> {
+        let method = self.lookup_method(method_index, false)?;
+        let input_value: serde_json::Value = serde_json::from_slice(input_json)
+            .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+
+        Python::with_gil(|py| {
+            let callable = method.callable.bind(py);
+            let py_args = build_call_args(py, &input_value)
+                .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+            let result = callable
+                .call(py_args, None::<&Bound<'_, PyDict>>)
+                .map_err(|e| PythonCallError::Plugin(pyerr_to_plugin_error(e)))?;
+            // A generator is its own iterator (so `close()` still reaches it);
+            // any other iterable yields a plain iterator (cancel is then a no-op).
+            let iter = result.try_iter().map_err(|e| {
+                PythonCallError::OutputEncode(format!(
+                    "streaming method must return an iterable/generator, got: {e}"
+                ))
+            })?;
+            Ok(crate::stream::PythonStream::new(iter.into_any().unbind()))
+        })
+    }
+
     /// Raw dispatch — pass bytes in, get bytes out, no encoding.
     pub fn call_raw(&self, method_index: usize, input: &[u8]) -> Result<Vec<u8>, PythonCallError> {
         let method = self.lookup_method(method_index, true)?;

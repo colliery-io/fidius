@@ -48,18 +48,22 @@ static METHODS: [WasmMethodDesc; 4] = [
     WasmMethodDesc {
         name: "greet",
         wire_raw: false,
+        streaming: false,
     },
     WasmMethodDesc {
         name: "add",
         wire_raw: false,
+        streaming: false,
     },
     WasmMethodDesc {
         name: "echo-bytes",
         wire_raw: true,
+        streaming: false,
     },
     WasmMethodDesc {
         name: "probe-env",
         wire_raw: false,
+        streaming: false,
     },
 ];
 static GREETER: WasmInterfaceDescriptor = WasmInterfaceDescriptor {
@@ -71,6 +75,29 @@ static GREETER: WasmInterfaceDescriptor = WasmInterfaceDescriptor {
 // greeter method indices: greet=0, add=1, echo-bytes=2 (raw), probe-env=3.
 const W_ADD: usize = 1;
 const W_ECHO: usize = 2;
+
+// ── ticker (wasm) streaming descriptor — mirrors tests/wasm-fixtures/ticker ──
+// Used by the streaming per-item bench (FIDIUS-I-0026 WS.6). The streaming path
+// does ONE `instantiate()` per stream (in `call_streaming`); each pulled item is
+// then just a `next()` call on the live resource — so `Throughput::Elements`
+// reports the marginal per-item cost with instantiation amortized away.
+#[cfg(feature = "streaming")]
+const T_IFACE: &str = "fidius:ticker/ticker@1.0.0";
+#[cfg(feature = "streaming")]
+const T_HASH: u64 = 0xFD15_2C8A_A111_2FC3;
+#[cfg(feature = "streaming")]
+static T_METHODS: [WasmMethodDesc; 1] = [WasmMethodDesc {
+    name: "tick",
+    wire_raw: false,
+    streaming: true,
+}];
+#[cfg(feature = "streaming")]
+static TICKER: WasmInterfaceDescriptor = WasmInterfaceDescriptor {
+    interface_name: "ticker",
+    interface_export: T_IFACE,
+    interface_hash: T_HASH,
+    methods: &T_METHODS,
+};
 // test-plugin-smoke: BasicCalculator.add_direct=1; ReverseBytes.reverse=0 (raw).
 const C_ADD: usize = 1;
 const C_ECHO: usize = 0;
@@ -277,6 +304,97 @@ fn cdylib_handle(host: &PluginHost, name: &str) -> PluginHandle {
     PluginHandle::from_loaded(host.load(name).unwrap())
 }
 
+/// Build the (hand-authored) ticker streaming component for the per-item bench.
+#[cfg(feature = "streaming")]
+fn ticker_component() -> Vec<u8> {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/wasm-fixtures/ticker");
+    let status = Command::new("cargo")
+        .args(["component", "build", "--release"])
+        .current_dir(&fixture)
+        .status()
+        .expect("cargo component build (ticker)");
+    assert!(status.success(), "ticker build failed");
+    std::fs::read(fixture.join("target/wasm32-wasip1/release/ticker_guest.wasm")).unwrap()
+}
+
+/// Stage + load a ticker streaming **wasm** component (Rust or JS guest) as a
+/// package named `pkg`, then `load_wasm` it against the shared `TICKER` descriptor
+/// (both guests are built from the same `ticker` WIT, so the same descriptor +
+/// hash applies).
+#[cfg(feature = "streaming")]
+fn stage_load_wasm_ticker(
+    host: &PluginHost,
+    root: &std::path::Path,
+    pkg: &str,
+    bytes: &[u8],
+) -> PluginHandle {
+    let dir = root.join(pkg);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("ticker.wasm"), bytes).unwrap();
+    std::fs::write(
+        dir.join("package.toml"),
+        format!(
+            "[package]\nname = \"{pkg}\"\nversion = \"0.1.0\"\ninterface = \"ticker\"\n\
+             interface_version = 1\nruntime = \"wasm\"\n\n[metadata]\ncategory = \"bench\"\n\n\
+             [wasm]\ncomponent = \"ticker.wasm\"\n"
+        ),
+    )
+    .unwrap();
+    host.load_wasm(pkg, &TICKER).expect("load_wasm ticker")
+}
+
+/// A committed polyglot ticker component (JS/Python/C), if built. `None` → that
+/// comparison series is skipped (e.g. an env without that toolchain).
+#[cfg(feature = "streaming")]
+fn ticker_component_file(rel: &str) -> Option<Vec<u8>> {
+    std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel)).ok()
+}
+
+/// Stage the py-ticker package (copy fixture + vendor the SDK + inject the macro
+/// hash) and `load_python` it against the `Ticker` Python descriptor — the same
+/// shape as the ST.5 E2E. Only built with the `python` feature.
+#[cfg(all(feature = "streaming", feature = "python"))]
+fn stage_load_python_ticker(host: &PluginHost, root: &std::path::Path) -> PluginHandle {
+    let desc = &test_plugin_smoke::__fidius_Ticker::Ticker_PYTHON_DESCRIPTOR;
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let dir = root.join("py-ticker");
+    copy_dir(&repo.join("tests/test-plugin-py-ticker"), &dir);
+    copy_dir(
+        &repo.join("python/fidius"),
+        &dir.join("vendor").join("fidius"),
+    );
+    let py = dir.join("ticker.py");
+    let src = std::fs::read_to_string(&py).unwrap();
+    let injected = src.replace(
+        "__HASH_PLACEHOLDER__",
+        &format!("0x{:016X}", desc.interface_hash),
+    );
+    std::fs::write(&py, injected).unwrap();
+    host.load_python("py-ticker", desc)
+        .expect("load_python ticker")
+}
+
+#[cfg(all(feature = "streaming", feature = "python"))]
+fn copy_dir(src: &std::path::Path, dst: &std::path::Path) {
+    std::fs::create_dir_all(dst).unwrap();
+    for entry in std::fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if from.is_dir() {
+            copy_dir(&from, &to);
+        } else {
+            std::fs::copy(&from, &to).unwrap();
+        }
+    }
+}
+
 fn benches(c: &mut Criterion) {
     // ── set up every backend ────────────────────────────────────────────────
     let tmp = tempfile::TempDir::new().unwrap();
@@ -376,6 +494,89 @@ fn benches(c: &mut Criterion) {
         });
     }
     g.finish();
+
+    // ── stream drain — marginal per-item cost ACROSS BACKENDS (WS.6) ──────────
+    // One `instantiate()` per stream; each item is a `next()` on the live
+    // resource/generator. `Throughput::Elements(n)` → criterion reports per-item
+    // time, and the series share an x-axis so backends/languages compare directly:
+    //   - wasm_rust — Rust guest (`#[plugin_impl]` → component resource)
+    //   - wasm_js   — JavaScript guest (jco), same WIT (skipped if not built)
+    //   - python    — CPython generator via PyO3 (only with `--features python`)
+    #[cfg(feature = "streaming")]
+    {
+        use futures::StreamExt;
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        // (label, handle) for every available streaming backend.
+        let mut series: Vec<(&str, PluginHandle)> = Vec::new();
+
+        // cdylib (native Rust, in-process FFI) — the iterator-handle streaming
+        // path (CS.1). `TickerImpl` lives in the same smoke dylib as the unary
+        // calculator/reverse plugins loaded above.
+        series.push(("cdylib", cdylib_handle(&chost, "TickerImpl")));
+
+        let rust_bytes = ticker_component();
+        series.push((
+            "wasm_rust",
+            stage_load_wasm_ticker(&host, tmp.path(), "tk-rust", &rust_bytes),
+        ));
+
+        // Polyglot wasm guests (same WIT, different source language). Each is a
+        // committed component, skipped if not built.
+        for (label, pkg, rel) in [
+            (
+                "wasm_js",
+                "tk-js",
+                "../../tests/wasm-fixtures/ticker-js/ticker_js.wasm",
+            ),
+            (
+                "wasm_py",
+                "tk-py",
+                "../../tests/wasm-fixtures/ticker-py/ticker_py.wasm",
+            ),
+            (
+                "wasm_c",
+                "tk-c",
+                "../../tests/wasm-fixtures/ticker-c/ticker_c.wasm",
+            ),
+        ] {
+            if let Some(bytes) = ticker_component_file(rel) {
+                series.push((
+                    label,
+                    stage_load_wasm_ticker(&host, tmp.path(), pkg, &bytes),
+                ));
+            } else {
+                eprintln!("note: skipping {label} series ({rel} not built)");
+            }
+        }
+
+        #[cfg(feature = "python")]
+        series.push(("python", stage_load_python_ticker(&host, tmp.path())));
+
+        let drain = |h: &PluginHandle, n: u32| {
+            rt.block_on(async {
+                let mut s = h.call_streaming::<_, u64>(0, &(n,)).await.unwrap();
+                let mut count = 0u64;
+                while let Some(item) = s.next().await {
+                    let _ = item.unwrap();
+                    count += 1;
+                }
+                assert_eq!(count, n as u64);
+                count
+            })
+        };
+
+        let mut g = c.benchmark_group("stream_drain");
+        for &n in &[100u32, 1_000, 10_000] {
+            g.throughput(Throughput::Elements(n as u64));
+            for (label, handle) in &series {
+                g.bench_with_input(BenchmarkId::new(*label, n), &n, |b, &n| {
+                    b.iter(|| drain(handle, n))
+                });
+            }
+        }
+        g.finish();
+    }
 }
 
 criterion_group!(b, benches);

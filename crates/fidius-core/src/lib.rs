@@ -23,12 +23,14 @@ pub mod async_runtime;
 // re-exported here so every existing `fidius_core::*` path (and the `fidius`
 // facade re-exports) resolves unchanged — the split (FIDIUS-I-0022) is internal.
 pub use fidius_guest::{
-    descriptor, error, hash, python_descriptor, status, value, wasm_descriptor, wire,
+    descriptor, error, frame, hash, python_descriptor, status, stream_ffi, stream_marker, value,
+    wasm_descriptor, wire,
 };
 
 pub use descriptor::*;
 pub use error::PluginError;
 pub use status::*;
+pub use stream_marker::Stream;
 pub use value::{from_value, to_value, Value, ValueError};
 
 // Re-export inventory so generated code can reference it via fidius_core::inventory

@@ -389,6 +389,7 @@ impl PluginHost {
             .map(|m| WasmMethod {
                 name: m.name.to_string(),
                 wire_raw: m.wire_raw,
+                streaming: m.streaming,
             })
             .collect();
         let info = crate::types::PluginInfo {

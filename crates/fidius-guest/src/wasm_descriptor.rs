@@ -46,4 +46,8 @@ pub struct WasmMethodDesc {
     pub name: &'static str,
     /// Whether this method uses raw byte-passthrough wire mode (`#[wire(raw)]`).
     pub wire_raw: bool,
+    /// Whether this method is **server-streaming** (`-> fidius::Stream<T>`,
+    /// FIDIUS-I-0026). When true the export returns a `next()`-pollable resource
+    /// rather than a value, so the host routes it through the streaming path.
+    pub streaming: bool,
 }

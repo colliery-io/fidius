@@ -1,0 +1,5 @@
+error: fidius v1 supports server-streaming only: `Stream<T>` is not allowed in argument position (client-streaming and bidirectional are deferred)
+  --> tests/compile_fail/stream_in_arg_position.rs:23:27
+   |
+23 |     fn sink(&self, items: fidius::Stream<u32>) -> u32;
+   |                           ^^^^^^

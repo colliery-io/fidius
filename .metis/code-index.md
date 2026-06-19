@@ -1,12 +1,15 @@
 # Code Index
 
-> Generated: 2026-04-24T20:48:11Z | 94 files | Python, Rust
+> Generated: 2026-06-19T18:06:20Z | 137 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
 ```
 ├── crates/
 │   ├── fidius/
+│   │   └── src/
+│   │       └── lib.rs
+│   ├── fidius-build/
 │   │   └── src/
 │   │       └── lib.rs
 │   ├── fidius-cli/
@@ -16,47 +19,72 @@
 │   │   │   └── python_stub.rs
 │   │   └── tests/
 │   │       ├── cli.rs
-│   │       └── full_pipeline.rs
+│   │       ├── full_pipeline.rs
+│   │       └── wasm_pack.rs
 │   ├── fidius-core/
 │   │   ├── src/
 │   │   │   ├── async_runtime.rs
-│   │   │   ├── descriptor.rs
-│   │   │   ├── error.rs
-│   │   │   ├── hash.rs
 │   │   │   ├── lib.rs
 │   │   │   ├── package.rs
-│   │   │   ├── python_descriptor.rs
-│   │   │   ├── registry.rs
-│   │   │   ├── status.rs
-│   │   │   └── wire.rs
+│   │   │   └── registry.rs
 │   │   └── tests/
 │   │       └── layout_and_roundtrip.rs
+│   ├── fidius-guest/
+│   │   └── src/
+│   │       ├── descriptor.rs
+│   │       ├── error.rs
+│   │       ├── frame.rs
+│   │       ├── hash.rs
+│   │       ├── lib.rs
+│   │       ├── python_descriptor.rs
+│   │       ├── status.rs
+│   │       ├── stream_ffi.rs
+│   │       ├── stream_marker.rs
+│   │       ├── value.rs
+│   │       ├── wasm_descriptor.rs
+│   │       └── wire.rs
 │   ├── fidius-host/
+│   │   ├── benches/
+│   │   │   └── backends.rs
 │   │   ├── build.rs
 │   │   ├── src/
 │   │   │   ├── arch.rs
 │   │   │   ├── arena.rs
 │   │   │   ├── error.rs
+│   │   │   ├── executor/
+│   │   │   │   ├── cdylib.rs
+│   │   │   │   ├── python.rs
+│   │   │   │   └── wasm.rs
+│   │   │   ├── executor.rs
 │   │   │   ├── handle.rs
 │   │   │   ├── host.rs
 │   │   │   ├── lib.rs
 │   │   │   ├── loader.rs
 │   │   │   ├── package.rs
 │   │   │   ├── signing.rs
+│   │   │   ├── stream.rs
 │   │   │   └── types.rs
 │   │   └── tests/
+│   │       ├── cdylib_streaming_e2e.rs
 │   │       ├── e2e.rs
 │   │       ├── integration.rs
+│   │       ├── macro_wasm.rs
+│   │       ├── macro_wasm_streaming.rs
 │   │       ├── package_e2e.rs
 │   │       ├── plugin_dep_graph.rs
 │   │       ├── python_plugin_e2e.rs
-│   │       └── python_routing.rs
+│   │       ├── python_routing.rs
+│   │       ├── python_streaming_e2e.rs
+│   │       ├── records_wasm.rs
+│   │       ├── wasm_executor.rs
+│   │       └── wasm_streaming_e2e.rs
 │   ├── fidius-macro/
 │   │   ├── src/
 │   │   │   ├── impl_macro.rs
 │   │   │   ├── interface.rs
 │   │   │   ├── ir.rs
-│   │   │   └── lib.rs
+│   │   │   ├── lib.rs
+│   │   │   └── wit.rs
 │   │   └── tests/
 │   │       ├── arena_basic.rs
 │   │       ├── async_plugin.rs
@@ -65,7 +93,8 @@
 │   │       │   ├── duplicate_method_meta_key.rs
 │   │       │   ├── missing_version.rs
 │   │       │   ├── mut_self.rs
-│   │       │   └── reserved_fidius_namespace.rs
+│   │       │   ├── reserved_fidius_namespace.rs
+│   │       │   └── stream_in_arg_position.rs
 │   │       ├── crate_path.rs
 │   │       ├── impl_basic.rs
 │   │       ├── interface_basic.rs
@@ -83,17 +112,23 @@
 │   │   │   ├── interpreter.rs
 │   │   │   ├── lib.rs
 │   │   │   ├── loader.rs
+│   │   │   ├── stream.rs
 │   │   │   └── value_bridge.rs
 │   │   └── tests/
 │   │       ├── loader_e2e.rs
 │   │       └── smoke.rs
-│   └── fidius-test/
-│       ├── src/
-│       │   ├── dylib.rs
-│       │   ├── lib.rs
-│       │   └── signing.rs
-│       └── tests/
-│           └── smoke.rs
+│   ├── fidius-test/
+│   │   ├── src/
+│   │   │   ├── dylib.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── signing.rs
+│   │   │   └── stream.rs
+│   │   └── tests/
+│   │       └── smoke.rs
+│   └── fidius-wit/
+│       └── src/
+│           ├── generate.rs
+│           └── lib.rs
 ├── pluggable-poc/
 │   ├── crates/
 │   │   ├── emit-console/
@@ -146,15 +181,66 @@
 │   │   └── _registry.py
 │   └── tests/
 │       └── test_sdk.py
-└── tests/
-    ├── test-plugin-py-greeter/
-    │   └── byte_pipe.py
-    └── test-plugin-smoke/
+├── tests/
+│   ├── test-plugin-py-greeter/
+│   │   └── byte_pipe.py
+│   ├── test-plugin-py-ticker/
+│   │   └── ticker.py
+│   ├── test-plugin-smoke/
+│   │   └── src/
+│   │       └── lib.rs
+│   └── wasm-fixtures/
+│       ├── greeter/
+│       │   └── src/
+│       │       └── lib.rs
+│       ├── greeter-go/
+│       │   └── main.go
+│       ├── greeter-js/
+│       │   └── greeter.js
+│       ├── greeter-py/
+│       │   └── app.py
+│       ├── macro-greeter/
+│       │   └── src/
+│       │       └── lib.rs
+│       ├── macro-ticker/
+│       │   └── src/
+│       │       └── lib.rs
+│       ├── records-greeter/
+│       │   ├── build.rs
+│       │   └── src/
+│       │       ├── geom.rs
+│       │       └── lib.rs
+│       ├── ticker/
+│       │   └── src/
+│       │       └── lib.rs
+│       ├── ticker-js/
+│       │   └── ticker.js
+│       └── ticker-py/
+│           ├── app.py
+│           └── componentize_py_runtime.pyi
+└── wasm-spike/
+    ├── guest/
+    │   └── src/
+    │       └── lib.rs
+    └── host/
         └── src/
-            └── lib.rs
+            └── main.rs
 ```
 
 ## Modules
+
+### crates/fidius-build/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-build/src/lib.rs
+
+- pub `emit_wit` function L41-48 — `()` — Regenerate `wit/` and the conversions from `src/lib.rs`.
+- pub `run` function L52-76 — `(manifest_dir: &Path, out_dir: &Path) -> Result<(), String>` — Core of [`emit_wit`], parameterized on the crate dir + output dir so it is
+-  `tests` module L79-165 — `-` — trait and the `#[derive(WitType)]` types to live in `src/lib.rs`.
+-  `writes_wit_and_conversions_for_a_user_typed_interface` function L83-108 — `()` — trait and the `#[derive(WitType)]` types to live in `src/lib.rs`.
+-  `follows_external_modules` function L111-142 — `()` — trait and the `#[derive(WitType)]` types to live in `src/lib.rs`.
+-  `primitives_only_writes_empty_conversions` function L145-164 — `()` — trait and the `#[derive(WitType)]` types to live in `src/lib.rs`.
 
 ### crates/fidius-cli/src
 
@@ -172,24 +258,28 @@
 - pub `test` function L531-612 — `(dir: &Path, release: bool) -> Result`
 - pub `package_validate` function L616-631 — `(dir: &Path) -> Result`
 - pub `package_build` function L635-666 — `(dir: &Path, release: bool) -> Result`
-- pub `package_inspect` function L670-692 — `(dir: &Path) -> Result`
-- pub `package_sign` function L696-717 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_verify` function L721-749 — `(key_path: &Path, dir: &Path) -> Result`
-- pub `package_pack` function L753-771 — `(dir: &Path, output: Option<&Path>) -> Result`
-- pub `package_unpack` function L775-780 — `(archive: &Path, dest: Option<&Path>) -> Result`
-- pub `python_stub` function L784-786 — `(interface_src: &Path, out: &Path, trait_name: Option<&str>) -> Result`
+- pub `package_inspect` function L670-707 — `(dir: &Path) -> Result`
+- pub `package_sign` function L711-732 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_verify` function L736-764 — `(key_path: &Path, dir: &Path) -> Result`
+- pub `package_pack` function L768-807 — `(dir: &Path, output: Option<&Path>, precompile: bool) -> Result`
+- pub `wit` function L882-897 — `(dir: Option<&Path>) -> Result` — Generate `<dir>/wit/<interface>.wit` from `<dir>/src/lib.rs` (the
+- pub `package_unpack` function L901-906 — `(archive: &Path, dest: Option<&Path>) -> Result`
+- pub `python_stub` function L910-912 — `(interface_src: &Path, out: &Path, trait_name: Option<&str>) -> Result`
 -  `Result` type L19 — `= std::result::Result<T, Box<dyn std::error::Error>>`
 -  `resolve_dep` function L30-56 — `(value: &str, version_override: Option<&str>) -> String` — Resolve a dependency string to a Cargo.toml dependency value.
 -  `check_crates_io` function L59-74 — `(name: &str) -> Option<String>` — Check crates.io for a crate and return its latest version, if found.
+-  `prepare_wasm_pack` function L812-836 — `(dir: &Path, component: &str, precompile: bool) -> Result` — Validate (and optionally precompile) a wasm component at pack time.
+-  `prepare_wasm_pack` function L839-848 — `(_dir: &Path, component: &str, precompile: bool) -> Result`
+-  `record_precompiled` function L853-874 — `(dir: &Path, cwasm_name: &str) -> Result` — Record `precompiled = "<name>"` under the `[wasm]` table in package.toml,
 
 #### crates/fidius-cli/src/main.rs
 
 -  `commands` module L20 — `-`
 -  `python_stub` module L21 — `-`
 -  `Cli` struct L25-28 — `{ command: Commands }`
--  `Commands` enum L31-138 — `InitInterface | InitPlugin | InitHost | Keygen | Sign | Verify | Inspect | Test ...`
--  `PackageCommands` enum L141-192 — `Validate | Build | Inspect | Sign | Verify | Pack | Unpack`
--  `main` function L194-266 — `()`
+-  `Commands` enum L31-145 — `InitInterface | InitPlugin | InitHost | Keygen | Sign | Verify | Inspect | Test ...`
+-  `PackageCommands` enum L148-203 — `Validate | Build | Inspect | Sign | Verify | Pack | Unpack`
+-  `main` function L205-280 — `()`
 
 #### crates/fidius-cli/src/python_stub.rs
 
@@ -206,15 +296,15 @@
 -  `extract_doc_line` function L228-242 — `(attr: &syn::Attribute) -> Option<String>` — agree byte-for-byte.
 -  `rust_type_to_python` function L246-313 — `(ty: &Type) -> String` — Map a Rust type to its Python type-hint counterpart.
 -  `is_u8` function L315-320 — `(ty: &Type) -> bool` — agree byte-for-byte.
--  `render_python_stub` function L322-389 — `(trait_name: &str, methods: &[MethodSpec]) -> String` — agree byte-for-byte.
--  `tests` module L392-532 — `-` — agree byte-for-byte.
--  `parse_methods` function L395-407 — `(src: &str) -> (String, Vec<MethodSpec>)` — agree byte-for-byte.
--  `primitive_type_mapping` function L410-425 — `()` — agree byte-for-byte.
--  `vec_u8_maps_to_bytes_even_without_wire_raw` function L428-438 — `()` — agree byte-for-byte.
--  `wire_raw_signatures_are_bytes` function L441-455 — `()` — agree byte-for-byte.
--  `unknown_types_get_todo_marker` function L458-468 — `()` — agree byte-for-byte.
--  `rendered_stub_hash_matches_macro` function L471-502 — `()` — agree byte-for-byte.
--  `picks_named_trait_when_multiple_present` function L505-531 — `()` — agree byte-for-byte.
+-  `render_python_stub` function L322-393 — `(trait_name: &str, methods: &[MethodSpec]) -> String` — agree byte-for-byte.
+-  `tests` module L396-537 — `-` — agree byte-for-byte.
+-  `parse_methods` function L399-411 — `(src: &str) -> (String, Vec<MethodSpec>)` — agree byte-for-byte.
+-  `primitive_type_mapping` function L414-429 — `()` — agree byte-for-byte.
+-  `vec_u8_maps_to_bytes_even_without_wire_raw` function L432-442 — `()` — agree byte-for-byte.
+-  `wire_raw_signatures_are_bytes` function L445-459 — `()` — agree byte-for-byte.
+-  `unknown_types_get_todo_marker` function L462-472 — `()` — agree byte-for-byte.
+-  `rendered_stub_hash_matches_macro` function L475-507 — `()` — agree byte-for-byte.
+-  `picks_named_trait_when_multiple_present` function L510-536 — `()` — agree byte-for-byte.
 
 ### crates/fidius-cli/tests
 
@@ -240,6 +330,14 @@
 -  `workspace_fidius_path` function L28-30 — `() -> PathBuf` — Path to the workspace root's `fidius` facade crate (for local dep resolution).
 -  `full_pipeline_scaffold_package_build_sign_load_call` function L33-363 — `()` — Everything is generated from scratch by the CLI.
 
+#### crates/fidius-cli/tests/wasm_pack.rs
+
+-  `stage_wasm_pkg` function L28-50 — `(dir: &std::path::Path)` — `fidius-host --features wasm` tests (`wasm_executor.rs`).
+-  `pack_wasm_package_archives_with_a_skip_warning` function L53-73 — `()` — `fidius-host --features wasm` tests (`wasm_executor.rs`).
+-  `precompile_without_wasm_feature_errors` function L76-87 — `()` — `fidius-host --features wasm` tests (`wasm_executor.rs`).
+-  `inspect_renders_wasm_fields` function L90-127 — `()` — `fidius-host --features wasm` tests (`wasm_executor.rs`).
+-  `sign_verify_and_tamper_wasm_package` function L130-163 — `()` — `fidius-host --features wasm` tests (`wasm_executor.rs`).
+
 ### crates/fidius-core/src
 
 > *Semantic summary to be generated by AI agent.*
@@ -248,7 +346,127 @@
 
 - pub `FIDIUS_RUNTIME` variable L25-31 — `: std::sync::LazyLock<tokio::runtime::Runtime>` — The shared tokio runtime for this dylib.
 
-#### crates/fidius-core/src/descriptor.rs
+#### crates/fidius-core/src/lib.rs
+
+- pub `package` module L16 — `-`
+- pub `registry` module L17 — `-`
+- pub `async_runtime` module L20 — `-`
+
+#### crates/fidius-core/src/package.rs
+
+- pub `PackageManifest` struct L32-47 — `{ package: PackageHeader, metadata: M, python: Option<PythonPackageMeta>, wasm: ...` — A parsed package manifest, generic over the host-defined metadata schema.
+- pub `validate_runtime` function L56-100 — `(&self) -> Result<(), PackageError>` — Cross-section validation: runtime + python section must agree.
+- pub `PackageHeader` struct L105-123 — `{ name: String, version: String, interface: String, interface_version: u32, exte...` — Fixed header fields that every package manifest must have.
+- pub `extension` function L127-129 — `(&self) -> &str` — Returns the package extension, defaulting to `"fid"`.
+- pub `runtime` function L134-144 — `(&self) -> PackageRuntime` — Returns the runtime kind, defaulting to `Rust` when absent.
+- pub `runtime_strict` function L147-156 — `(&self) -> Result<PackageRuntime, PackageError>` — Returns the runtime kind, erroring on unknown values.
+- pub `PackageRuntime` enum L162-175 — `Rust | Python | Wasm` — Plugin runtime kind.
+- pub `as_str` function L179-185 — `(&self) -> &'static str` — Returns the canonical string form used in `package.toml`.
+- pub `PythonPackageMeta` struct L197-206 — `{ entry_module: String, requirements: Option<String> }` — Fields under the `[python]` section of `package.toml`.
+- pub `WasmPackageMeta` struct L211-225 — `{ component: String, precompiled: Option<String>, capabilities: Vec<String> }` — Fields under the `[wasm]` section of `package.toml`.
+- pub `requirements_path` function L229-231 — `(&self) -> &str` — Returns the requirements file path, defaulting to `"requirements.txt"`.
+- pub `PackageError` enum L236-300 — `ManifestNotFound | ParseError | Io | BuildFailed | SignatureNotFound | Signature...` — Errors that can occur when loading a package manifest.
+- pub `UnpackOptions` struct L309-319 — `{ max_decompressed: u64, max_ratio: u64, max_entries: u32 }` — Options controlling archive extraction safety limits.
+- pub `load_manifest` function L349-366 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
+- pub `load_manifest_untyped` function L372-374 — `(dir: &Path) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
+- pub `package_digest` function L384-405 — `(dir: &Path) -> Result<[u8; 32], PackageError>` — Compute a deterministic SHA-256 digest over all package source files.
+- pub `PackResult` struct L474-479 — `{ path: PathBuf, unsigned: bool }` — Result of packing a package, including any warnings.
+- pub `pack_package` function L560-613 — `(dir: &Path, output: Option<&Path>) -> Result<PackResult, PackageError>` — Create a `.fid` archive (tar + bzip2) from a package directory.
+- pub `unpack_package` function L632-634 — `(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError>` — Extract a `.fid` archive (tar + bzip2) to a destination directory using
+- pub `unpack_package_with_options` function L640-777 — `( archive: &Path, dest: &Path, options: &UnpackOptions, ) -> Result<PathBuf, Pac...` — Extract a `.fid` archive with caller-provided safety limits.
+-  `PackageHeader` type L125-157 — `= PackageHeader` — host-defined schema type.
+-  `PackageRuntime` type L177-186 — `= PackageRuntime` — host-defined schema type.
+-  `PackageRuntime` type L188-192 — `= PackageRuntime` — host-defined schema type.
+-  `fmt` function L189-191 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — host-defined schema type.
+-  `PythonPackageMeta` type L227-232 — `= PythonPackageMeta` — host-defined schema type.
+-  `UnpackOptions` type L321-329 — `impl Default for UnpackOptions` — host-defined schema type.
+-  `default` function L322-328 — `() -> Self` — host-defined schema type.
+-  `collect_files` function L408-439 — `(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError>` — Recursively collect file paths relative to `root`, skipping excluded dirs/files.
+-  `collect_archive_files` function L442-470 — `( root: &Path, dir: &Path, out: &mut Vec<String>, ) -> Result<(), PackageError>` — Recursively collect file paths for archiving (includes `.sig` files).
+-  `vendor_python_deps` function L490-545 — `(dir: &Path, py: &PythonPackageMeta) -> Result<(), PackageError>` — Vendor Python dependencies into `<dir>/vendor/` by invoking
+-  `tests` module L780-1696 — `-` — host-defined schema type.
+-  `write_manifest` function L784-786 — `(dir: &Path, content: &str)` — host-defined schema type.
+-  `TestMeta` struct L789-793 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
+-  `valid_manifest_parses` function L796-820 — `()` — host-defined schema type.
+-  `missing_required_metadata_field_fails` function L823-847 — `()` — host-defined schema type.
+-  `missing_manifest_returns_not_found` function L850-854 — `()` — host-defined schema type.
+-  `extra_metadata_fields_ignored` function L857-878 — `()` — host-defined schema type.
+-  `untyped_manifest_accepts_any_metadata` function L881-902 — `()` — host-defined schema type.
+-  `digest_is_deterministic` function L905-913 — `()` — host-defined schema type.
+-  `digest_changes_on_file_modification` function L916-927 — `()` — host-defined schema type.
+-  `digest_excludes_target_and_sig` function L930-944 — `()` — host-defined schema type.
+-  `make_package` function L946-962 — `(dir: &Path)` — host-defined schema type.
+-  `pack_unpack_round_trip` function L965-986 — `()` — host-defined schema type.
+-  `pack_includes_sig_file` function L989-1003 — `()` — host-defined schema type.
+-  `pack_excludes_target_and_git` function L1006-1022 — `()` — host-defined schema type.
+-  `unpack_invalid_archive_no_manifest` function L1025-1055 — `()` — host-defined schema type.
+-  `pack_default_output_name` function L1058-1068 — `()` — host-defined schema type.
+-  `pack_custom_extension` function L1071-1101 — `()` — host-defined schema type.
+-  `extension_defaults_to_fid` function L1104-1120 — `()` — host-defined schema type.
+-  `rust_runtime_default_when_absent` function L1125-1143 — `()` — host-defined schema type.
+-  `python_runtime_with_python_section_parses` function L1146-1171 — `()` — host-defined schema type.
+-  `python_runtime_requirements_default` function L1174-1198 — `()` — host-defined schema type.
+-  `python_runtime_without_python_section_rejected` function L1201-1227 — `()` — host-defined schema type.
+-  `python_section_without_python_runtime_rejected` function L1230-1250 — `()` — host-defined schema type.
+-  `unknown_runtime_rejected` function L1253-1276 — `()` — host-defined schema type.
+-  `package_runtime_display_and_str` function L1279-1283 — `()` — host-defined schema type.
+-  `build_archive` function L1293-1302 — `(path: &Path, build: F)` — Build a bz2-compressed tar archive from a builder callback.
+-  `write_name` function L1307-1315 — `(header: &mut Header, path: &str)` — Write a raw entry name directly into a GNU tar header, bypassing
+-  `write_linkname` function L1317-1325 — `(header: &mut Header, link: &str)` — host-defined schema type.
+-  `append_regular` function L1330-1338 — `(tar: &mut tar::Builder<BzEncoder<std::fs::File>>, path: &str, data: &[u8])` — Append a regular file entry with explicit path and content bytes.
+-  `append_link` function L1341-1355 — `( tar: &mut tar::Builder<BzEncoder<std::fs::File>>, path: &str, link_target: &st...` — Append a link entry with a chosen EntryType (symlink/hardlink).
+-  `unpack_rejects_parent_dir_component` function L1358-1373 — `()` — host-defined schema type.
+-  `unpack_rejects_absolute_path` function L1376-1389 — `()` — host-defined schema type.
+-  `unpack_rejects_symlink` function L1392-1405 — `()` — host-defined schema type.
+-  `unpack_rejects_hardlink` function L1408-1421 — `()` — host-defined schema type.
+-  `unpack_symlink_then_file_rejected_at_first_entry` function L1424-1445 — `()` — host-defined schema type.
+-  `unpack_rejects_declared_size_bomb` function L1448-1477 — `()` — host-defined schema type.
+-  `unpack_rejects_ratio_bomb` function L1480-1507 — `()` — host-defined schema type.
+-  `unpack_rejects_too_many_entries` function L1510-1529 — `()` — host-defined schema type.
+-  `unpack_staging_cleans_up_on_rejection` function L1532-1553 — `()` — host-defined schema type.
+-  `unpack_with_options_accepts_large_archive` function L1556-1574 — `()` — host-defined schema type.
+-  `make_python_package` function L1579-1613 — `(dir: &Path, with_requirements: Option<&str>)` — Build a minimal Python package directory (manifest + entry .py).
+-  `pack_python_with_prevendored_directory_skips_pip` function L1616-1642 — `()` — host-defined schema type.
+-  `pack_python_with_no_requirements_or_vendor_warns_but_succeeds` function L1645-1658 — `()` — host-defined schema type.
+-  `pack_python_with_unresolvable_requirement_surfaces_pip_error` function L1661-1695 — `()` — host-defined schema type.
+
+#### crates/fidius-core/src/registry.rs
+
+- pub `DescriptorEntry` struct L24-26 — `{ descriptor: &'static PluginDescriptor }` — A submitted descriptor pointer.
+- pub `get_registry` function L55-58 — `() -> &'static PluginRegistry` — Get or build the plugin registry.
+-  `build_registry` function L34-49 — `() -> PluginRegistry` — Build the plugin registry from all submitted descriptors.
+-  `REGISTRY` variable L56 — `: std::sync::OnceLock<PluginRegistry>` — `fidius_get_registry` export function that the host calls via `dlsym`.
+-  `fidius_plugin_registry` macro L69-76 — `-` — Emit the `fidius_get_registry` export function.
+
+### crates/fidius-core/tests
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-core/tests/layout_and_roundtrip.rs
+
+-  `registry_size_and_align` function L32-36 — `()` — and interface hash determinism.
+-  `registry_field_offsets` function L39-44 — `()` — and interface hash determinism.
+-  `descriptor_size_and_align` function L49-58 — `()` — and interface hash determinism.
+-  `descriptor_field_offsets` function L61-80 — `()` — and interface hash determinism.
+-  `buffer_strategy_kind_layout` function L85-90 — `()` — and interface hash determinism.
+-  `status_code_values` function L95-101 — `()` — and interface hash determinism.
+-  `TestPayload` struct L106-110 — `{ name: String, value: i64, tags: Vec<String> }` — and interface hash determinism.
+-  `wire_roundtrip` function L113-123 — `()` — and interface hash determinism.
+-  `wire_is_bincode_always` function L126-140 — `()` — and interface hash determinism.
+-  `plugin_error_roundtrip_without_details` function L145-152 — `()` — and interface hash determinism.
+-  `plugin_error_roundtrip_with_details` function L155-162 — `()` — and interface hash determinism.
+-  `plugin_error_display` function L165-168 — `()` — and interface hash determinism.
+-  `hash_known_vectors` function L173-201 — `()` — and interface hash determinism.
+-  `hash_const_fnv1a` function L204-209 — `()` — and interface hash determinism.
+-  `HASH` variable L206 — `: u64` — and interface hash determinism.
+-  `magic_bytes_value` function L214-217 — `()` — and interface hash determinism.
+-  `version_constants` function L220-226 — `()` — and interface hash determinism.
+
+### crates/fidius-guest/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-guest/src/descriptor.rs
 
 - pub `FIDIUS_MAGIC` variable L24 — `: [u8; 8]` — Magic bytes identifying a Fidius plugin registry.
 - pub `REGISTRY_VERSION` variable L27 — `: u32` — Current version of the `PluginRegistry` struct layout.
@@ -280,7 +498,7 @@
 -  `DescriptorPtr` type L245 — `impl Sync for DescriptorPtr` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
 -  `PluginDescriptor` type L247-291 — `= PluginDescriptor` — All types use `#[repr(C)]` layout and are read directly from dylib memory.
 
-#### crates/fidius-core/src/error.rs
+#### crates/fidius-guest/src/error.rs
 
 - pub `PluginError` struct L30-37 — `{ code: String, message: String, details: Option<String> }` — Error returned by plugin method implementations to signal business logic failures.
 - pub `new` function L41-47 — `(code: impl Into<String>, message: impl Into<String>) -> Self` — Create a new `PluginError` without details.
@@ -291,159 +509,316 @@
 -  `fmt` function L75-77 — `(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result` — Error types for the Fidius plugin framework.
 -  `PluginError` type L80 — `= PluginError` — Error types for the Fidius plugin framework.
 
-#### crates/fidius-core/src/hash.rs
+#### crates/fidius-guest/src/frame.rs
+
+- pub `FRAME_ITEM` variable L45 — `: u8` — Frame tag: one streamed item.
+- pub `FRAME_END` variable L47 — `: u8` — Frame tag: clean end of stream.
+- pub `FRAME_ERROR` variable L49 — `: u8` — Frame tag: producer error.
+- pub `FRAME_HEADER_LEN` variable L52 — `: usize` — Fixed size of a frame header: one tag byte plus a `u32` length.
+- pub `Frame` enum L60-67 — `Item | End | Error` — One frame crossing the streaming boundary.
+- pub `FrameError` enum L71-88 — `Truncated | UnknownTag | Payload | Malformed` — Errors decoding a [`Frame`] from bytes.
+- pub `encode` function L92-103 — `(&self) -> Result<Vec<u8>, WireError>` — Encode this frame as `[tag][len][payload]`.
+- pub `decode` function L108-117 — `(bytes: &[u8]) -> Result<Frame, FrameError>` — Decode exactly one frame from `bytes`, which must contain a single frame
+- pub `read` function L122-153 — `(bytes: &[u8]) -> Result<(Frame, usize), FrameError>` — Read one frame from the front of `bytes`, returning the frame and the
+-  `Frame` type L90-154 — `= Frame` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `tests` module L157-265 — `-` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `item` function L160-162 — `(payload: &[u8]) -> Frame` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `item_round_trip` function L165-170 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `end_round_trip` function L173-178 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `error_round_trip` function L181-187 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `empty_item_is_valid` function L190-194 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `read_walks_concatenated_frames` function L197-210 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `truncated_header_is_rejected` function L213-216 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `truncated_payload_is_rejected` function L219-226 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `unknown_tag_is_rejected` function L229-236 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `end_with_payload_is_rejected` function L239-247 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `trailing_bytes_after_single_decode_rejected` function L250-257 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+-  `garbage_is_rejected_not_panicking` function L260-264 — `()` — D5) is simply *n* `ITEM` frames concatenated, needing no wire change.
+
+#### crates/fidius-guest/src/hash.rs
 
 - pub `fnv1a` function L28-37 — `(bytes: &[u8]) -> u64` — Compute the FNV-1a 64-bit hash of a byte slice.
 - pub `interface_hash` function L47-52 — `(signatures: &[&str]) -> u64` — Compute the interface hash from a set of method signatures.
-- pub `signature_string` function L75-78 — `(name: &str, arg_types: &[String], ret: &str, wire_raw: bool) -> String` — Build the canonical signature string for one method.
+- pub `signature_string` function L80-97 — `( name: &str, arg_types: &[String], ret: &str, wire_raw: bool, streaming: bool, ...` — Build the canonical signature string for one method.
 -  `FNV_OFFSET_BASIS` variable L22 — `: u64` — FNV-1a 64-bit offset basis.
 -  `FNV_PRIME` variable L25 — `: u64` — FNV-1a 64-bit prime.
--  `tests` module L81-129 — `-` — plugins compiled against a different interface.
--  `empty_input` function L85-89 — `()` — plugins compiled against a different interface.
--  `known_vector` function L92-98 — `()` — plugins compiled against a different interface.
--  `order_independence` function L101-111 — `()` — plugins compiled against a different interface.
--  `sensitivity` function L114-118 — `()` — plugins compiled against a different interface.
--  `different_signatures_differ` function L121-128 — `()` — plugins compiled against a different interface.
+-  `tests` module L100-148 — `-` — plugins compiled against a different interface.
+-  `empty_input` function L104-108 — `()` — plugins compiled against a different interface.
+-  `known_vector` function L111-117 — `()` — plugins compiled against a different interface.
+-  `order_independence` function L120-130 — `()` — plugins compiled against a different interface.
+-  `sensitivity` function L133-137 — `()` — plugins compiled against a different interface.
+-  `different_signatures_differ` function L140-147 — `()` — plugins compiled against a different interface.
 
-#### crates/fidius-core/src/lib.rs
+#### crates/fidius-guest/src/lib.rs
 
-- pub `descriptor` module L15 — `-`
-- pub `error` module L16 — `-`
-- pub `hash` module L17 — `-`
-- pub `package` module L18 — `-`
-- pub `python_descriptor` module L19 — `-`
-- pub `registry` module L20 — `-`
-- pub `status` module L21 — `-`
-- pub `wire` module L22 — `-`
-- pub `async_runtime` module L25 — `-`
+- pub `descriptor` module L32 — `-` — `fidius-guest` — the wasm-buildable subset of the Fidius shared types.
+- pub `error` module L33 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `frame` module L34 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `hash` module L35 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `python_descriptor` module L36 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `status` module L37 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `stream_ffi` module L38 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `stream_marker` module L39 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `value` module L40 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `wasm_descriptor` module L41 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `wire` module L42 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
 
-#### crates/fidius-core/src/package.rs
-
-- pub `PackageManifest` struct L32-43 — `{ package: PackageHeader, metadata: M, python: Option<PythonPackageMeta> }` — A parsed package manifest, generic over the host-defined metadata schema.
-- pub `validate_runtime` function L52-73 — `(&self) -> Result<(), PackageError>` — Cross-section validation: runtime + python section must agree.
-- pub `PackageHeader` struct L78-96 — `{ name: String, version: String, interface: String, interface_version: u32, exte...` — Fixed header fields that every package manifest must have.
-- pub `extension` function L100-102 — `(&self) -> &str` — Returns the package extension, defaulting to `"fid"`.
-- pub `runtime` function L107-116 — `(&self) -> PackageRuntime` — Returns the runtime kind, defaulting to `Rust` when absent.
-- pub `runtime_strict` function L119-127 — `(&self) -> Result<PackageRuntime, PackageError>` — Returns the runtime kind, erroring on unknown values.
-- pub `PackageRuntime` enum L133-141 — `Rust | Python` — Plugin runtime kind.
-- pub `as_str` function L145-150 — `(&self) -> &'static str` — Returns the canonical string form used in `package.toml`.
-- pub `PythonPackageMeta` struct L162-171 — `{ entry_module: String, requirements: Option<String> }` — Fields under the `[python]` section of `package.toml`.
-- pub `requirements_path` function L175-177 — `(&self) -> &str` — Returns the requirements file path, defaulting to `"requirements.txt"`.
-- pub `PackageError` enum L182-246 — `ManifestNotFound | ParseError | Io | BuildFailed | SignatureNotFound | Signature...` — Errors that can occur when loading a package manifest.
-- pub `UnpackOptions` struct L255-265 — `{ max_decompressed: u64, max_ratio: u64, max_entries: u32 }` — Options controlling archive extraction safety limits.
-- pub `load_manifest` function L295-312 — `(dir: &Path) -> Result<PackageManifest<M>, PackageError>` — Load and parse a `package.toml` manifest from a package directory.
-- pub `load_manifest_untyped` function L318-320 — `(dir: &Path) -> Result<PackageManifest<toml::Value>, PackageError>` — Load a manifest validating only the fixed header (accepting any metadata).
-- pub `package_digest` function L330-351 — `(dir: &Path) -> Result<[u8; 32], PackageError>` — Compute a deterministic SHA-256 digest over all package source files.
-- pub `PackResult` struct L420-425 — `{ path: PathBuf, unsigned: bool }` — Result of packing a package, including any warnings.
-- pub `pack_package` function L506-559 — `(dir: &Path, output: Option<&Path>) -> Result<PackResult, PackageError>` — Create a `.fid` archive (tar + bzip2) from a package directory.
-- pub `unpack_package` function L578-580 — `(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError>` — Extract a `.fid` archive (tar + bzip2) to a destination directory using
-- pub `unpack_package_with_options` function L586-723 — `( archive: &Path, dest: &Path, options: &UnpackOptions, ) -> Result<PathBuf, Pac...` — Extract a `.fid` archive with caller-provided safety limits.
--  `PackageHeader` type L98-128 — `= PackageHeader` — host-defined schema type.
--  `PackageRuntime` type L143-151 — `= PackageRuntime` — host-defined schema type.
--  `PackageRuntime` type L153-157 — `= PackageRuntime` — host-defined schema type.
--  `fmt` function L154-156 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — host-defined schema type.
--  `PythonPackageMeta` type L173-178 — `= PythonPackageMeta` — host-defined schema type.
--  `UnpackOptions` type L267-275 — `impl Default for UnpackOptions` — host-defined schema type.
--  `default` function L268-274 — `() -> Self` — host-defined schema type.
--  `collect_files` function L354-385 — `(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError>` — Recursively collect file paths relative to `root`, skipping excluded dirs/files.
--  `collect_archive_files` function L388-416 — `( root: &Path, dir: &Path, out: &mut Vec<String>, ) -> Result<(), PackageError>` — Recursively collect file paths for archiving (includes `.sig` files).
--  `vendor_python_deps` function L436-491 — `(dir: &Path, py: &PythonPackageMeta) -> Result<(), PackageError>` — Vendor Python dependencies into `<dir>/vendor/` by invoking
--  `tests` module L726-1642 — `-` — host-defined schema type.
--  `write_manifest` function L730-732 — `(dir: &Path, content: &str)` — host-defined schema type.
--  `TestMeta` struct L735-739 — `{ category: String, tags: Vec<String> }` — host-defined schema type.
--  `valid_manifest_parses` function L742-766 — `()` — host-defined schema type.
--  `missing_required_metadata_field_fails` function L769-793 — `()` — host-defined schema type.
--  `missing_manifest_returns_not_found` function L796-800 — `()` — host-defined schema type.
--  `extra_metadata_fields_ignored` function L803-824 — `()` — host-defined schema type.
--  `untyped_manifest_accepts_any_metadata` function L827-848 — `()` — host-defined schema type.
--  `digest_is_deterministic` function L851-859 — `()` — host-defined schema type.
--  `digest_changes_on_file_modification` function L862-873 — `()` — host-defined schema type.
--  `digest_excludes_target_and_sig` function L876-890 — `()` — host-defined schema type.
--  `make_package` function L892-908 — `(dir: &Path)` — host-defined schema type.
--  `pack_unpack_round_trip` function L911-932 — `()` — host-defined schema type.
--  `pack_includes_sig_file` function L935-949 — `()` — host-defined schema type.
--  `pack_excludes_target_and_git` function L952-968 — `()` — host-defined schema type.
--  `unpack_invalid_archive_no_manifest` function L971-1001 — `()` — host-defined schema type.
--  `pack_default_output_name` function L1004-1014 — `()` — host-defined schema type.
--  `pack_custom_extension` function L1017-1047 — `()` — host-defined schema type.
--  `extension_defaults_to_fid` function L1050-1066 — `()` — host-defined schema type.
--  `rust_runtime_default_when_absent` function L1071-1089 — `()` — host-defined schema type.
--  `python_runtime_with_python_section_parses` function L1092-1117 — `()` — host-defined schema type.
--  `python_runtime_requirements_default` function L1120-1144 — `()` — host-defined schema type.
--  `python_runtime_without_python_section_rejected` function L1147-1173 — `()` — host-defined schema type.
--  `python_section_without_python_runtime_rejected` function L1176-1196 — `()` — host-defined schema type.
--  `unknown_runtime_rejected` function L1199-1222 — `()` — host-defined schema type.
--  `package_runtime_display_and_str` function L1225-1229 — `()` — host-defined schema type.
--  `build_archive` function L1239-1248 — `(path: &Path, build: F)` — Build a bz2-compressed tar archive from a builder callback.
--  `write_name` function L1253-1261 — `(header: &mut Header, path: &str)` — Write a raw entry name directly into a GNU tar header, bypassing
--  `write_linkname` function L1263-1271 — `(header: &mut Header, link: &str)` — host-defined schema type.
--  `append_regular` function L1276-1284 — `(tar: &mut tar::Builder<BzEncoder<std::fs::File>>, path: &str, data: &[u8])` — Append a regular file entry with explicit path and content bytes.
--  `append_link` function L1287-1301 — `( tar: &mut tar::Builder<BzEncoder<std::fs::File>>, path: &str, link_target: &st...` — Append a link entry with a chosen EntryType (symlink/hardlink).
--  `unpack_rejects_parent_dir_component` function L1304-1319 — `()` — host-defined schema type.
--  `unpack_rejects_absolute_path` function L1322-1335 — `()` — host-defined schema type.
--  `unpack_rejects_symlink` function L1338-1351 — `()` — host-defined schema type.
--  `unpack_rejects_hardlink` function L1354-1367 — `()` — host-defined schema type.
--  `unpack_symlink_then_file_rejected_at_first_entry` function L1370-1391 — `()` — host-defined schema type.
--  `unpack_rejects_declared_size_bomb` function L1394-1423 — `()` — host-defined schema type.
--  `unpack_rejects_ratio_bomb` function L1426-1453 — `()` — host-defined schema type.
--  `unpack_rejects_too_many_entries` function L1456-1475 — `()` — host-defined schema type.
--  `unpack_staging_cleans_up_on_rejection` function L1478-1499 — `()` — host-defined schema type.
--  `unpack_with_options_accepts_large_archive` function L1502-1520 — `()` — host-defined schema type.
--  `make_python_package` function L1525-1559 — `(dir: &Path, with_requirements: Option<&str>)` — Build a minimal Python package directory (manifest + entry .py).
--  `pack_python_with_prevendored_directory_skips_pip` function L1562-1588 — `()` — host-defined schema type.
--  `pack_python_with_no_requirements_or_vendor_warns_but_succeeds` function L1591-1604 — `()` — host-defined schema type.
--  `pack_python_with_unresolvable_requirement_surfaces_pip_error` function L1607-1641 — `()` — host-defined schema type.
-
-#### crates/fidius-core/src/python_descriptor.rs
+#### crates/fidius-guest/src/python_descriptor.rs
 
 - pub `PythonInterfaceDescriptor` struct L31-42 — `{ interface_name: &'static str, interface_hash: u64, methods: &'static [PythonMe...` — Static descriptor for one fidius interface, consumed by the Python
 - pub `PythonMethodDesc` struct L46-54 — `{ name: &'static str, wire_raw: bool }` — One method on the interface.
 
-#### crates/fidius-core/src/registry.rs
-
-- pub `DescriptorEntry` struct L24-26 — `{ descriptor: &'static PluginDescriptor }` — A submitted descriptor pointer.
-- pub `get_registry` function L55-58 — `() -> &'static PluginRegistry` — Get or build the plugin registry.
--  `build_registry` function L34-49 — `() -> PluginRegistry` — Build the plugin registry from all submitted descriptors.
--  `REGISTRY` variable L56 — `: std::sync::OnceLock<PluginRegistry>` — `fidius_get_registry` export function that the host calls via `dlsym`.
--  `fidius_plugin_registry` macro L69-76 — `-` — Emit the `fidius_get_registry` export function.
-
-#### crates/fidius-core/src/status.rs
+#### crates/fidius-guest/src/status.rs
 
 - pub `STATUS_OK` variable L22 — `: i32` — Method executed successfully.
 - pub `STATUS_BUFFER_TOO_SMALL` variable L26 — `: i32` — Output buffer was too small (CallerAllocated/Arena strategies only).
 - pub `STATUS_SERIALIZATION_ERROR` variable L30 — `: i32` — Serialization or deserialization failed at the FFI boundary.
 - pub `STATUS_PLUGIN_ERROR` variable L34 — `: i32` — The plugin method returned an error.
 - pub `STATUS_PANIC` variable L38 — `: i32` — A panic was caught at the `extern "C"` boundary via `catch_unwind`.
+- pub `STATUS_STREAM_END` variable L43 — `: i32` — Clean end of a server-stream: the streaming `next()` shim has no more items
 
-#### crates/fidius-core/src/wire.rs
+#### crates/fidius-guest/src/stream_ffi.rs
+
+- pub `FidiusStreamHandle` struct L50-59 — `{ next: unsafe extern "C" fn(*mut FidiusStreamHandle, *mut u8, u32, *mut u32) ->...` — Per-stream handle returned by a cdylib streaming method's init shim.
+- pub `NextStatus` enum L63-73 — `Item | End | TooSmall | SerErr` — Outcome of [`StreamState::next_into`] — mapped to FFI status codes by the
+- pub `StreamState` struct L81-85 — `{ stream: crate::stream_marker::Stream<T>, pending: Option<T> }` — Guest-side driver for an arena-style cdylib stream (FIDIUS-T-0138).
+- pub `new` function L89-94 — `(stream: crate::stream_marker::Stream<T>) -> Self` — Wrap a producer stream.
+- pub `next_into` function L99-120 — `(&mut self, buf: &mut [u8]) -> NextStatus` — Pull the next item (if needed) and serialize it **directly into `buf`** —
+
+#### crates/fidius-guest/src/stream_marker.rs
+
+- pub `Stream` struct L61-65 — `{ iter: Option<Box<dyn Iterator<Item = T> + Send>>, _marker: PhantomData<fn() ->...` — Marker type a plugin interface uses to declare a **server-streaming** method:
+- pub `new` function L70-75 — `() -> Self` — The marker form — declares a streaming method without producing items.
+- pub `from_iter` function L81-90 — `(items: I) -> Self` — Build a stream from any iterator — how a Rust WASM guest produces its
+- pub `next_item` function L95-97 — `(&mut self) -> Option<T>` — Advance the underlying iterator by one item.
+-  `default` function L101-103 — `() -> Self` — The `fidius::Stream<T>` server-streaming return marker (FIDIUS-I-0026, D4).
+-  `tests` module L107-142 — `-` — The `fidius::Stream<T>` server-streaming return marker (FIDIUS-I-0026, D4).
+-  `from_iter_yields_then_none` function L111-118 — `()` — The `fidius::Stream<T>` server-streaming return marker (FIDIUS-I-0026, D4).
+-  `from_iter_accepts_a_range` function L121-125 — `()` — The `fidius::Stream<T>` server-streaming return marker (FIDIUS-I-0026, D4).
+-  `marker_form_is_empty` function L128-133 — `()` — The `fidius::Stream<T>` server-streaming return marker (FIDIUS-I-0026, D4).
+-  `collect` function L135-141 — `(mut s: Stream<T>) -> Vec<T>` — The `fidius::Stream<T>` server-streaming return marker (FIDIUS-I-0026, D4).
+
+#### crates/fidius-guest/src/value.rs
+
+- pub `Value` enum L48-97 — `Bool | S8 | S16 | S32 | S64 | U8 | U16 | U32 | U64 | F32 | F64 | Char | String |...` — A self-describing value crossing the plugin-call boundary.
+- pub `ValueError` struct L102 — `-` — Error produced while converting to or from [`Value`].
+- pub `to_value` function L117-119 — `(value: &T) -> Result<Value, ValueError>` — Convert any [`Serialize`] type into a [`Value`].
+- pub `from_value` function L122-127 — `(value: Value) -> Result<T, ValueError>` — Convert a [`Value`] into any [`Deserialize`] type.
+-  `ValueError` type L104-108 — `= ValueError` — records, options, and variants.
+-  `custom` function L105-107 — `(msg: T) -> Self` — records, options, and variants.
+-  `ValueError` type L110-114 — `= ValueError` — records, options, and variants.
+-  `custom` function L111-113 — `(msg: T) -> Self` — records, options, and variants.
+-  `ValueSerializer` struct L133 — `-` — records, options, and variants.
+-  `ValueSerializer` type L135-296 — `= ValueSerializer` — records, options, and variants.
+-  `Ok` type L136 — `= Value` — records, options, and variants.
+-  `Error` type L137 — `= ValueError` — records, options, and variants.
+-  `SerializeSeq` type L139 — `= SeqSerializer` — records, options, and variants.
+-  `SerializeTuple` type L140 — `= SeqSerializer` — records, options, and variants.
+-  `SerializeTupleStruct` type L141 — `= SeqSerializer` — records, options, and variants.
+-  `SerializeTupleVariant` type L142 — `= TupleVariantSerializer` — records, options, and variants.
+-  `SerializeMap` type L143 — `= MapSerializer` — records, options, and variants.
+-  `SerializeStruct` type L144 — `= StructSerializer` — records, options, and variants.
+-  `SerializeStructVariant` type L145 — `= StructVariantSerializer` — records, options, and variants.
+-  `serialize_bool` function L147-149 — `(self, v: bool) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_i8` function L150-152 — `(self, v: i8) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_i16` function L153-155 — `(self, v: i16) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_i32` function L156-158 — `(self, v: i32) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_i64` function L159-161 — `(self, v: i64) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_u8` function L162-164 — `(self, v: u8) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_u16` function L165-167 — `(self, v: u16) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_u32` function L168-170 — `(self, v: u32) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_u64` function L171-173 — `(self, v: u64) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_f32` function L174-176 — `(self, v: f32) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_f64` function L177-179 — `(self, v: f64) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_char` function L180-182 — `(self, v: char) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_str` function L183-185 — `(self, v: &str) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_bytes` function L186-188 — `(self, v: &[u8]) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_none` function L189-191 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_some` function L192-199 — `(self, value: &T) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_unit` function L200-202 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_unit_struct` function L203-205 — `(self, _name: &'static str) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_unit_variant` function L206-216 — `( self, _name: &'static str, _variant_index: u32, variant: &'static str, ) -> Re...` — records, options, and variants.
+-  `serialize_newtype_struct` function L217-226 — `( self, _name: &'static str, value: &T, ) -> Result<Value, ValueError>` — records, options, and variants.
+-  `serialize_newtype_variant` function L227-241 — `( self, _name: &'static str, _variant_index: u32, variant: &'static str, value: ...` — records, options, and variants.
+-  `serialize_seq` function L242-246 — `(self, len: Option<usize>) -> Result<SeqSerializer, ValueError>` — records, options, and variants.
+-  `serialize_tuple` function L247-249 — `(self, len: usize) -> Result<SeqSerializer, ValueError>` — records, options, and variants.
+-  `serialize_tuple_struct` function L250-256 — `( self, _name: &'static str, len: usize, ) -> Result<SeqSerializer, ValueError>` — records, options, and variants.
+-  `serialize_tuple_variant` function L257-268 — `( self, _name: &'static str, _variant_index: u32, variant: &'static str, len: us...` — records, options, and variants.
+-  `serialize_map` function L269-274 — `(self, _len: Option<usize>) -> Result<MapSerializer, ValueError>` — records, options, and variants.
+-  `serialize_struct` function L275-283 — `( self, _name: &'static str, len: usize, ) -> Result<StructSerializer, ValueErro...` — records, options, and variants.
+-  `serialize_struct_variant` function L284-295 — `( self, _name: &'static str, _variant_index: u32, variant: &'static str, len: us...` — records, options, and variants.
+-  `SeqSerializer` struct L298-300 — `{ items: Vec<Value> }` — records, options, and variants.
+-  `SeqSerializer` type L301-314 — `= SeqSerializer` — records, options, and variants.
+-  `Ok` type L302 — `= Value` — records, options, and variants.
+-  `Error` type L303 — `= ValueError` — records, options, and variants.
+-  `serialize_element` function L304-310 — `(&mut self, value: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `end` function L311-313 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `SeqSerializer` type L315-327 — `= SeqSerializer` — records, options, and variants.
+-  `Ok` type L316 — `= Value` — records, options, and variants.
+-  `Error` type L317 — `= ValueError` — records, options, and variants.
+-  `serialize_element` function L318-323 — `(&mut self, value: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `end` function L324-326 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `SeqSerializer` type L328-340 — `= SeqSerializer` — records, options, and variants.
+-  `Ok` type L329 — `= Value` — records, options, and variants.
+-  `Error` type L330 — `= ValueError` — records, options, and variants.
+-  `serialize_field` function L331-336 — `(&mut self, value: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `end` function L337-339 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `TupleVariantSerializer` struct L342-345 — `{ name: String, items: Vec<Value> }` — records, options, and variants.
+-  `TupleVariantSerializer` type L346-362 — `= TupleVariantSerializer` — records, options, and variants.
+-  `Ok` type L347 — `= Value` — records, options, and variants.
+-  `Error` type L348 — `= ValueError` — records, options, and variants.
+-  `serialize_field` function L349-355 — `(&mut self, value: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `end` function L356-361 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `MapSerializer` struct L364-367 — `{ entries: Vec<(Value, Value)>, next_key: Option<Value> }` — records, options, and variants.
+-  `MapSerializer` type L368-410 — `= MapSerializer` — records, options, and variants.
+-  `Ok` type L369 — `= Value` — records, options, and variants.
+-  `Error` type L370 — `= ValueError` — records, options, and variants.
+-  `serialize_key` function L371-377 — `(&mut self, key: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `serialize_value` function L378-388 — `(&mut self, value: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `end` function L389-409 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `StructSerializer` struct L412-414 — `{ fields: Vec<(String, Value)> }` — records, options, and variants.
+-  `StructSerializer` type L415-429 — `= StructSerializer` — records, options, and variants.
+-  `Ok` type L416 — `= Value` — records, options, and variants.
+-  `Error` type L417 — `= ValueError` — records, options, and variants.
+-  `serialize_field` function L418-425 — `(&mut self, key: &'static str, value: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `end` function L426-428 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `StructVariantSerializer` struct L431-434 — `{ name: String, fields: Vec<(String, Value)> }` — records, options, and variants.
+-  `StructVariantSerializer` type L435-452 — `= StructVariantSerializer` — records, options, and variants.
+-  `Ok` type L436 — `= Value` — records, options, and variants.
+-  `Error` type L437 — `= ValueError` — records, options, and variants.
+-  `serialize_field` function L438-445 — `(&mut self, key: &'static str, value: &T) -> Result<(), ValueError>` — records, options, and variants.
+-  `end` function L446-451 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
+-  `Value` type L458-578 — `= Value` — records, options, and variants.
+-  `Error` type L459 — `= ValueError` — records, options, and variants.
+-  `deserialize_any` function L461-499 — `(self, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `deserialize_option` function L501-510 — `(self, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `deserialize_enum` function L512-537 — `( self, _name: &'static str, _variants: &'static [&'static str], visitor: V, ) -...` — records, options, and variants.
+-  `deserialize_newtype_struct` function L539-548 — `( self, _name: &'static str, visitor: V, ) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `deserialize_unit_struct` function L550-559 — `( self, _name: &'static str, visitor: V, ) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `deserialize_unit` function L561-571 — `(self, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `Value` type L580-598 — `= Value` — records, options, and variants.
+-  `kind` function L581-597 — `(&self) -> &'static str` — records, options, and variants.
+-  `SeqAccess` struct L600-602 — `{ iter: std::vec::IntoIter<Value> }` — records, options, and variants.
+-  `SeqAccess` type L603-617 — `= SeqAccess` — records, options, and variants.
+-  `Error` type L604 — `= ValueError` — records, options, and variants.
+-  `next_element_seed` function L605-613 — `(&mut self, seed: T) -> Result<Option<T::Value>, ValueError>` — records, options, and variants.
+-  `size_hint` function L614-616 — `(&self) -> Option<usize>` — records, options, and variants.
+-  `RecordAccess` struct L619-622 — `{ iter: std::vec::IntoIter<(String, Value)>, value: Option<Value> }` — records, options, and variants.
+-  `RecordAccess` type L623-650 — `= RecordAccess` — records, options, and variants.
+-  `Error` type L624 — `= ValueError` — records, options, and variants.
+-  `next_key_seed` function L625-636 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
+-  `next_value_seed` function L637-646 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `size_hint` function L647-649 — `(&self) -> Option<usize>` — records, options, and variants.
+-  `MapAccess` struct L652-655 — `{ iter: std::vec::IntoIter<(Value, Value)>, value: Option<Value> }` — records, options, and variants.
+-  `MapAccess` type L656-683 — `= MapAccess` — records, options, and variants.
+-  `Error` type L657 — `= ValueError` — records, options, and variants.
+-  `next_key_seed` function L658-669 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
+-  `next_value_seed` function L670-679 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `size_hint` function L680-682 — `(&self) -> Option<usize>` — records, options, and variants.
+-  `SingletonMapAccess` struct L687-690 — `{ key: Option<String>, value: Option<Value> }` — Presents a `Value::Variant` as a single-entry map for `deserialize_any`
+-  `SingletonMapAccess` type L691-712 — `= SingletonMapAccess` — records, options, and variants.
+-  `Error` type L692 — `= ValueError` — records, options, and variants.
+-  `next_key_seed` function L693-701 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
+-  `next_value_seed` function L702-711 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `EnumAccess` struct L714-717 — `{ name: String, value: Value }` — records, options, and variants.
+-  `EnumAccess` type L718-728 — `= EnumAccess` — records, options, and variants.
+-  `Error` type L719 — `= ValueError` — records, options, and variants.
+-  `Variant` type L720 — `= VariantAccess` — records, options, and variants.
+-  `variant_seed` function L721-727 — `(self, seed: V) -> Result<(V::Value, VariantAccess), ValueError>` — records, options, and variants.
+-  `VariantAccess` struct L730-732 — `{ value: Value }` — records, options, and variants.
+-  `VariantAccess` type L733-783 — `= VariantAccess` — records, options, and variants.
+-  `Error` type L734 — `= ValueError` — records, options, and variants.
+-  `unit_variant` function L735-743 — `(self) -> Result<(), ValueError>` — records, options, and variants.
+-  `newtype_variant_seed` function L744-749 — `(self, seed: T) -> Result<T::Value, ValueError>` — records, options, and variants.
+-  `tuple_variant` function L750-763 — `(self, _len: usize, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `struct_variant` function L764-782 — `( self, _fields: &'static [&'static str], visitor: V, ) -> Result<V::Value, Valu...` — records, options, and variants.
+-  `tests` module L786-898 — `-` — records, options, and variants.
+-  `round_trip` function L790-797 — `(value: T)` — records, options, and variants.
+-  `Greeting` struct L800-804 — `{ name: String, times: u32, loud: bool }` — records, options, and variants.
+-  `Wrapper` struct L807 — `-` — records, options, and variants.
+-  `Shape` enum L810-815 — `Unit | Newtype | Tuple | Struct` — records, options, and variants.
+-  `primitives` function L818-828 — `()` — records, options, and variants.
+-  `collections` function L831-837 — `()` — records, options, and variants.
+-  `structs_and_maps` function L840-858 — `()` — records, options, and variants.
+-  `enums` function L861-866 — `()` — records, options, and variants.
+-  `nested` function L869-879 — `()` — records, options, and variants.
+-  `Outer` struct L871-874 — `{ shapes: Vec<Shape>, tag: Option<String> }` — records, options, and variants.
+-  `struct_shape_is_record` function L882-897 — `()` — records, options, and variants.
+-  `Value` type L902-957 — `impl Serialize for Value` — records, options, and variants.
+-  `serialize` function L903-956 — `(&self, serializer: S) -> Result<S::Ok, S::Error>` — records, options, and variants.
+-  `Value` type L959-1050 — `= Value` — records, options, and variants.
+-  `deserialize` function L960-1049 — `(deserializer: D) -> Result<Value, D::Error>` — records, options, and variants.
+-  `ValueVisitor` struct L964 — `-` — records, options, and variants.
+-  `ValueVisitor` type L965-1047 — `= ValueVisitor` — records, options, and variants.
+-  `Value` type L966 — `= Value` — records, options, and variants.
+-  `expecting` function L967-969 — `(&self, f: &mut fmt::Formatter) -> fmt::Result` — records, options, and variants.
+-  `visit_bool` function L970-972 — `(self, v: bool) -> Result<Value, E>` — records, options, and variants.
+-  `visit_i64` function L973-975 — `(self, v: i64) -> Result<Value, E>` — records, options, and variants.
+-  `visit_i128` function L976-983 — `(self, v: i128) -> Result<Value, E>` — records, options, and variants.
+-  `visit_u64` function L984-986 — `(self, v: u64) -> Result<Value, E>` — records, options, and variants.
+-  `visit_u128` function L987-994 — `(self, v: u128) -> Result<Value, E>` — records, options, and variants.
+-  `visit_f64` function L995-997 — `(self, v: f64) -> Result<Value, E>` — records, options, and variants.
+-  `visit_char` function L998-1000 — `(self, v: char) -> Result<Value, E>` — records, options, and variants.
+-  `visit_str` function L1001-1003 — `(self, v: &str) -> Result<Value, E>` — records, options, and variants.
+-  `visit_string` function L1004-1006 — `(self, v: String) -> Result<Value, E>` — records, options, and variants.
+-  `visit_bytes` function L1007-1009 — `(self, v: &[u8]) -> Result<Value, E>` — records, options, and variants.
+-  `visit_byte_buf` function L1010-1012 — `(self, v: Vec<u8>) -> Result<Value, E>` — records, options, and variants.
+-  `visit_unit` function L1013-1015 — `(self) -> Result<Value, E>` — records, options, and variants.
+-  `visit_none` function L1016-1018 — `(self) -> Result<Value, E>` — records, options, and variants.
+-  `visit_some` function L1019-1026 — `(self, deserializer: D) -> Result<Value, D::Error>` — records, options, and variants.
+-  `visit_seq` function L1027-1036 — `(self, mut seq: A) -> Result<Value, A::Error>` — records, options, and variants.
+-  `visit_map` function L1037-1046 — `(self, mut map: A) -> Result<Value, A::Error>` — records, options, and variants.
+
+#### crates/fidius-guest/src/wasm_descriptor.rs
+
+- pub `WasmInterfaceDescriptor` struct L27-40 — `{ interface_name: &'static str, interface_export: &'static str, interface_hash: ...` — Static descriptor for one fidius interface, consumed by the WASM loader to
+- pub `WasmMethodDesc` struct L44-53 — `{ name: &'static str, wire_raw: bool, streaming: bool }` — One method on the interface.
+
+#### crates/fidius-guest/src/wire.rs
 
 - pub `WireError` enum L28-32 — `Bincode` — Errors that can occur during wire serialization or deserialization.
 - pub `serialize` function L35-37 — `(val: &T) -> Result<Vec<u8>, WireError>` — Serialize a value as bincode for transport across the FFI boundary.
 - pub `deserialize` function L40-42 — `(bytes: &[u8]) -> Result<T, WireError>` — Deserialize a value from bincode bytes received across the FFI boundary.
+- pub `serialized_size` function L47-49 — `(val: &T) -> Result<u64, WireError>` — The exact serialized size of `val` in bytes, without allocating.
+- pub `serialize_into` function L54-56 — `(mut buf: &mut [u8], val: &T) -> Result<(), WireError>` — Serialize `val` directly into a caller-provided buffer — no intermediate
 
-### crates/fidius-core/tests
+### crates/fidius-host/benches
 
 > *Semantic summary to be generated by AI agent.*
 
-#### crates/fidius-core/tests/layout_and_roundtrip.rs
+#### crates/fidius-host/benches/backends.rs
 
--  `registry_size_and_align` function L32-36 — `()` — and interface hash determinism.
--  `registry_field_offsets` function L39-44 — `()` — and interface hash determinism.
--  `descriptor_size_and_align` function L49-58 — `()` — and interface hash determinism.
--  `descriptor_field_offsets` function L61-80 — `()` — and interface hash determinism.
--  `buffer_strategy_kind_layout` function L85-90 — `()` — and interface hash determinism.
--  `status_code_values` function L95-101 — `()` — and interface hash determinism.
--  `TestPayload` struct L106-110 — `{ name: String, value: i64, tags: Vec<String> }` — and interface hash determinism.
--  `wire_roundtrip` function L113-123 — `()` — and interface hash determinism.
--  `wire_is_bincode_always` function L126-140 — `()` — and interface hash determinism.
--  `plugin_error_roundtrip_without_details` function L145-152 — `()` — and interface hash determinism.
--  `plugin_error_roundtrip_with_details` function L155-162 — `()` — and interface hash determinism.
--  `plugin_error_display` function L165-168 — `()` — and interface hash determinism.
--  `hash_known_vectors` function L173-201 — `()` — and interface hash determinism.
--  `hash_const_fnv1a` function L204-209 — `()` — and interface hash determinism.
--  `HASH` variable L206 — `: u64` — and interface hash determinism.
--  `magic_bytes_value` function L214-217 — `()` — and interface hash determinism.
--  `version_constants` function L220-225 — `()` — and interface hash determinism.
+-  `IFACE` variable L45 — `: &str` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `HASH` variable L46 — `: u64` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `METHODS` variable L47-68 — `: [WasmMethodDesc; 4]` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `GREETER` variable L69-74 — `: WasmInterfaceDescriptor` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `W_ADD` variable L76 — `: usize` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `W_ECHO` variable L77 — `: usize` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `T_IFACE` variable L85 — `: &str` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `T_HASH` variable L87 — `: u64` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `T_METHODS` variable L89-93 — `: [WasmMethodDesc; 1]` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `TICKER` variable L95-100 — `: WasmInterfaceDescriptor` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `C_ADD` variable L102 — `: usize` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `C_ECHO` variable L103 — `: usize` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `SIZES` variable L105 — `: &[usize]` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `greeter_component` function L107-117 — `() -> Vec<u8>` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `load_wasm` function L120-144 — `(host: &PluginHost, root: &std::path::Path, bytes: &[u8], aot: bool) -> PluginHa...` — Stage a wasm package dir (optionally with a precompiled `.cwasm`) and load it.
+-  `compute` function L148-156 — `(op_is_add: bool, body: &[u8]) -> Vec<u8>` — The op a request asks the server to do.
+-  `serve_lenprefix` function L161-179 — `(mut s: S)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `lenprefix_call` function L181-191 — `(s: &mut S, op: u8, payload: &[u8]) -> Vec<u8>` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `spawn_tcp` function L193-203 — `() -> u16` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `spawn_uds` function L205-212 — `(path: PathBuf)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `spawn_http` function L217-261 — `() -> u16` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `http_call` function L263-287 — `(s: &mut TcpStream, path: &str, payload: &[u8]) -> Vec<u8>` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `find_subslice` function L289-291 — `(hay: &[u8], needle: &[u8]) -> Option<usize>` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `content_length` function L293-301 — `(head: &str) -> usize` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `cdylib_handle` function L303-305 — `(host: &PluginHost, name: &str) -> PluginHandle` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `ticker_component` function L309-318 — `() -> Vec<u8>` — Build the (hand-authored) ticker streaming component for the per-item bench.
+-  `stage_load_wasm_ticker` function L325-344 — `( host: &PluginHost, root: &std::path::Path, pkg: &str, bytes: &[u8], ) -> Plugi...` — Stage + load a ticker streaming **wasm** component (Rust or JS guest) as a
+-  `ticker_component_file` function L349-351 — `(rel: &str) -> Option<Vec<u8>>` — A committed polyglot ticker component (JS/Python/C), if built.
+-  `stage_load_python_ticker` function L357-376 — `(host: &PluginHost, root: &std::path::Path) -> PluginHandle` — Stage the py-ticker package (copy fixture + vendor the SDK + inject the macro
+-  `copy_dir` function L379-391 — `(src: &std::path::Path, dst: &std::path::Path)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
+-  `benches` function L393-560 — `(c: &mut Criterion)` — - `echo(bytes) -> bytes` at 64 B / 4 KiB / 256 KiB — payload marshalling/throughput.
 
 ### crates/fidius-host
 
@@ -483,31 +858,37 @@
 
 #### crates/fidius-host/src/error.rs
 
-- pub `LoadError` enum L21-72 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
-- pub `CallError` enum L76-103 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
+- pub `LoadError` enum L21-78 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
+- pub `CallError` enum L82-143 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
+-  `CallError` type L153-175 — `= CallError` — Fold the Python backend's call error into the unified [`CallError`].
+-  `from` function L154-174 — `(e: fidius_python::PythonCallError) -> Self` — Error types for fidius-host plugin loading and calling.
+
+#### crates/fidius-host/src/executor.rs
+
+- pub `cdylib` module L42 — `-` — `PluginExecutor` — the dispatch seam across execution backends.
+- pub `python` module L44 — `-` — bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
+- pub `wasm` module L46 — `-` — bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
+- pub `PluginExecutor` interface L63-74 — `{ fn info(), fn method_count(), fn call_raw() }` — The surface every execution backend shares.
+- pub `ValueExecutor` interface L82-87 — `{ fn call() }` — Backends whose typed boundary is the self-describing [`Value`] model —
 
 #### crates/fidius-host/src/handle.rs
 
-- pub `PluginHandle` struct L47-66 — `{ _library: Option<Arc<Library>>, vtable: *const c_void, descriptor: *const Plug...` — A handle to a loaded plugin, ready for calling methods.
-- pub `from_loaded` function L103-113 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a PluginHandle from a LoadedPlugin.
-- pub `from_descriptor` function L122-143 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a PluginHandle from a plugin descriptor already registered in
-- pub `find_in_process_descriptor` function L151-165 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
-- pub `call_method` function L183-203 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `call_method_raw` function L214-225 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
-- pub `has_capability` function L568-573 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L576-578 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L591-623 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
-- pub `trait_metadata` function L629-650 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
--  `FfiFn` type L34 — `= unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32` — Type alias for the PluginAllocated FFI function pointer signature.
--  `ArenaFn` type L37 — `= unsafe extern "C" fn(*const u8, u32, *mut u8, u32, *mut u32, *mut u32) -> i32` — Type alias for the Arena FFI function pointer signature.
--  `PluginHandle` type L76 — `impl Send for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L77 — `impl Sync for PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `PluginHandle` type L79-651 — `= PluginHandle` — PluginHandle — type-safe proxy for calling plugin methods via FFI.
--  `new` function L82-100 — `( library: Arc<Library>, vtable: *const c_void, descriptor: *const PluginDescrip...` — Create a new PluginHandle.
--  `call_plugin_allocated` function L229-307 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
--  `call_arena` function L313-399 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
--  `call_plugin_allocated_raw` function L404-482 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
--  `call_arena_raw` function L486-563 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
+- pub `PluginHandle` struct L68-70 — `{ backend: Backend }` — A handle to a loaded plugin, ready for calling methods.
+- pub `from_loaded` function L74-78 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a `PluginHandle` from a freshly loaded cdylib plugin.
+- pub `from_descriptor` function L83-87 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a `PluginHandle` from a descriptor already registered in the
+- pub `find_in_process_descriptor` function L91-95 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
+- pub `from_python` function L101-105 — `(py: fidius_python::PythonPluginHandle, info: PluginInfo) -> Self` — Create a `PluginHandle` backed by a loaded Python plugin.
+- pub `from_wasm` function L110-114 — `(executor: WasmComponentExecutor) -> Self` — Create a `PluginHandle` backed by a loaded WASM component.
+- pub `call_method` function L121-149 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `call_streaming` function L164-191 — `( &self, index: usize, input: &I, ) -> Result<crate::stream::ChunkStream, CallEr...` — Start a server-streaming method call by vtable index (FIDIUS-I-0026).
+- pub `call_method_raw` function L194-202 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
+- pub `has_capability` function L206-211 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
+- pub `info` function L214-222 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L227-236 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
+- pub `trait_metadata` function L240-248 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
+-  `Backend` enum L50-60 — `Cdylib | Python | Wasm` — The execution backend behind a [`PluginHandle`].
+-  `PluginHandle` type L72-249 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
+-  `cdylib_stream_decode` function L257-263 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
 
 #### crates/fidius-host/src/host.rs
 
@@ -522,27 +903,31 @@
 - pub `build` function L97-106 — `(self) -> Result<PluginHost, LoadError>` — Build the PluginHost.
 - pub `builder` function L111-113 — `() -> PluginHostBuilder` — Create a new builder.
 - pub `discover` function L124-149 — `(&self) -> Result<Vec<PluginInfo>, LoadError>` — Discover all valid plugins in the configured search paths.
-- pub `load` function L201-245 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
-- pub `find_python_package` function L250-280 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
-- pub `load_python` function L292-300 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
+- pub `load` function L206-250 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
+- pub `find_python_package` function L255-285 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
+- pub `load_python` function L297-324 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
+- pub `find_wasm_package` function L329-355 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
+- pub `load_wasm` function L367-476 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
 -  `PluginHostBuilder` type L48-107 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
 -  `new` function L49-58 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L109-301 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `PluginHost` type L109-477 — `= PluginHost` — PluginHost builder and plugin discovery.
 -  `discover_cdylib` function L151-171 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
--  `discover_python_package` function L173-195 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
--  `is_dylib` function L304-313 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+-  `discover_package` function L176-200 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — Discover a directory-based package (`package.toml`) and surface it by
+-  `is_dylib` function L480-489 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### crates/fidius-host/src/lib.rs
 
 - pub `arch` module L15 — `-`
 - pub `arena` module L16 — `-`
 - pub `error` module L17 — `-`
-- pub `handle` module L18 — `-`
-- pub `host` module L19 — `-`
-- pub `loader` module L20 — `-`
-- pub `package` module L21 — `-`
-- pub `signing` module L22 — `-`
-- pub `types` module L23 — `-`
+- pub `executor` module L18 — `-`
+- pub `handle` module L19 — `-`
+- pub `host` module L20 — `-`
+- pub `loader` module L21 — `-`
+- pub `package` module L22 — `-`
+- pub `signing` module L23 — `-`
+- pub `stream` module L25 — `-`
+- pub `types` module L26 — `-`
 
 #### crates/fidius-host/src/loader.rs
 
@@ -566,28 +951,146 @@
 
 #### crates/fidius-host/src/signing.rs
 
-- pub `sig_path_for` function L26-31 — `(path: &Path) -> std::path::PathBuf` — Compute the detached signature file path for a given file.
-- pub `verify_signature` function L42-73 — `(dylib_path: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), LoadError>` — Verify a plugin dylib's signature against trusted public keys.
--  `tests` module L76-145 — `-` — Ed25519 signature verification for plugin dylibs.
--  `create_test_file` function L82-86 — `(content: &[u8]) -> NamedTempFile` — Ed25519 signature verification for plugin dylibs.
--  `sign_file` function L88-96 — `(path: &Path, signing_key: &SigningKey)` — Ed25519 signature verification for plugin dylibs.
--  `valid_signature_succeeds` function L99-108 — `()` — Ed25519 signature verification for plugin dylibs.
--  `tampered_file_fails` function L111-123 — `()` — Ed25519 signature verification for plugin dylibs.
--  `wrong_key_fails` function L126-135 — `()` — Ed25519 signature verification for plugin dylibs.
--  `missing_sig_file_returns_required` function L138-144 — `()` — Ed25519 signature verification for plugin dylibs.
+- pub `sig_path_for` function L27-32 — `(path: &Path) -> std::path::PathBuf` — Compute the detached signature file path for a given file.
+- pub `verify_signature` function L43-74 — `(dylib_path: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), LoadError>` — Verify a plugin dylib's signature against trusted public keys.
+- pub `verify_package_signature` function L84-117 — `( dir: &Path, trusted_keys: &[VerifyingKey], ) -> Result<(), LoadError>` — Verify a **package** signature: `package.sig` in `dir`, an Ed25519 signature
+-  `tests` module L120-189 — `-` — packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
+-  `create_test_file` function L126-130 — `(content: &[u8]) -> NamedTempFile` — packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
+-  `sign_file` function L132-140 — `(path: &Path, signing_key: &SigningKey)` — packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
+-  `valid_signature_succeeds` function L143-152 — `()` — packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
+-  `tampered_file_fails` function L155-167 — `()` — packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
+-  `wrong_key_fails` function L170-179 — `()` — packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
+-  `missing_sig_file_returns_required` function L182-188 — `()` — packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
+
+#### crates/fidius-host/src/stream.rs
+
+- pub `ChunkStream` struct L57-59 — `{ inner: Pin<Box<dyn Stream<Item = Result<Value, CallError>> + Send>> }` — Host-facing pull handle for a server-streaming plugin call.
+- pub `new` function L64-71 — `(stream: S) -> Self` — Wrap any item stream as a [`ChunkStream`].
+- pub `from_frame_bytes` function L95-127 — `(frames: S, decode_item: D) -> Self` — Build a [`ChunkStream`] from a stream of raw, length-delimited frame
+- pub `from_frames` function L133-142 — `(frames: Vec<Frame>, decode_item: D) -> Self` — Build a [`ChunkStream`] over a fixed, in-memory sequence of [`Frame`]s.
+- pub `StreamExecutor` interface L161-166 — `{ fn call_streaming() }` — Backends whose typed boundary can produce a **server-streaming** result.
+-  `ChunkStream` type L61-143 — `= ChunkStream` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `ChunkStream` type L145-151 — `impl Stream for ChunkStream` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `Item` type L146 — `= Result<Value, CallError>` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `poll_next` function L148-150 — `(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>>` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `tests` module L169-273 — `-` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `item` function L176-178 — `(v: i64) -> Frame` — An ITEM frame carrying a concrete `i64` (bincode of a concrete type
+-  `decode_i64` function L181-185 — `(b: &[u8]) -> Result<Value, CallError>` — The matching item decoder: concrete-bincode `i64` → `Value`.
+-  `collect` function L187-193 — `(mut s: ChunkStream) -> Vec<Result<Value, CallError>>` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `items_then_clean_end` function L196-207 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `native_value_stream_via_new` function L210-224 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `error_frame_terminates_after_one_err` function L227-240 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `missing_terminal_is_abort` function L243-250 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `malformed_frame_surfaces_then_stops` function L253-266 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `empty_stream_just_ends` function L269-272 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
 
 #### crates/fidius-host/src/types.rs
 
-- pub `PluginRuntimeKind` enum L23-29 — `Cdylib | Python` — Plugin runtime kind.
-- pub `PluginInfo` struct L38-54 — `{ name: String, interface_name: String, interface_hash: u64, interface_version: ...` — Owned metadata for a discovered or loaded plugin.
-- pub `is_cdylib` function L58-60 — `(&self) -> bool` — True if this is a cdylib-backed plugin.
-- pub `is_python` function L63-65 — `(&self) -> bool` — True if this is a Python plugin.
-- pub `LoadPolicy` enum L70-76 — `Strict | Lenient` — Controls how strictly the host validates plugins.
--  `PluginInfo` type L56-66 — `= PluginInfo` — Owned metadata types for loaded plugins.
+- pub `PluginRuntimeKind` enum L23-34 — `Cdylib | Python | Wasm` — Plugin runtime kind.
+- pub `PluginInfo` struct L43-59 — `{ name: String, interface_name: String, interface_hash: u64, interface_version: ...` — Owned metadata for a discovered or loaded plugin.
+- pub `is_cdylib` function L63-65 — `(&self) -> bool` — True if this is a cdylib-backed plugin.
+- pub `is_python` function L68-70 — `(&self) -> bool` — True if this is a Python plugin.
+- pub `is_wasm` function L73-75 — `(&self) -> bool` — True if this is a WASM component plugin.
+- pub `LoadPolicy` enum L80-86 — `Strict | Lenient` — Controls how strictly the host validates plugins.
+-  `PluginInfo` type L61-76 — `= PluginInfo` — Owned metadata types for loaded plugins.
+
+### crates/fidius-host/src/executor
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-host/src/executor/cdylib.rs
+
+- pub `CdylibExecutor` struct L57-76 — `{ _library: Option<Arc<Library>>, vtable: *const c_void, descriptor: *const Plug...` — A handle to a loaded plugin, ready for calling methods.
+- pub `from_loaded` function L113-123 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a CdylibExecutor from a LoadedPlugin.
+- pub `from_descriptor` function L132-153 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a CdylibExecutor from a plugin descriptor already registered in
+- pub `find_in_process_descriptor` function L161-175 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
+- pub `call_method` function L193-213 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `call_method_raw` function L224-235 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
+- pub `call_streaming_raw` function L590-724 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
+- pub `has_capability` function L729-734 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L737-739 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L752-784 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
+- pub `trait_metadata` function L790-811 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
+-  `FfiFn` type L44 — `= unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32` — Type alias for the PluginAllocated FFI function pointer signature.
+-  `ArenaFn` type L47 — `= unsafe extern "C" fn(*const u8, u32, *mut u8, u32, *mut u32, *mut u32) -> i32` — Type alias for the Arena FFI function pointer signature.
+-  `CdylibExecutor` type L86 — `impl Send for CdylibExecutor` — (and future WASM) backends.
+-  `CdylibExecutor` type L87 — `impl Sync for CdylibExecutor` — (and future WASM) backends.
+-  `CdylibExecutor` type L89-812 — `= CdylibExecutor` — (and future WASM) backends.
+-  `new` function L92-110 — `( library: Arc<Library>, vtable: *const c_void, descriptor: *const PluginDescrip...` — Create a new CdylibExecutor.
+-  `call_plugin_allocated` function L239-317 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
+-  `call_arena` function L323-409 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
+-  `call_plugin_allocated_raw` function L414-492 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
+-  `call_arena_raw` function L496-573 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
+-  `STREAM_CHANNEL_CAP` variable L601 — `: usize` — Bounded backpressure/memory window between the pump thread and the
+-  `SendHandle` struct L641 — `-` — (and future WASM) backends.
+-  `SendHandle` type L642 — `impl Send for SendHandle` — (and future WASM) backends.
+-  `INITIAL_ITEM_CAP` variable L657 — `: usize` — (and future WASM) backends.
+-  `CdylibExecutor` type L814-830 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
+-  `info` function L815-817 — `(&self) -> &PluginInfo` — (and future WASM) backends.
+-  `method_count` function L819-821 — `(&self) -> u32` — (and future WASM) backends.
+-  `call_raw` function L827-829 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
+
+#### crates/fidius-host/src/executor/python.rs
+
+- pub `Pyo3Executor` struct L39-42 — `{ py: PythonPluginHandle, info: PluginInfo }` — Python-backed executor: an embedded-interpreter plugin handle plus the
+- pub `new` function L46-48 — `(py: PythonPluginHandle, info: PluginInfo) -> Self` — Wrap a loaded `PythonPluginHandle` with its owned metadata.
+-  `Pyo3Executor` type L44-49 — `= Pyo3Executor` — routed through the neutral `Value` currency.
+-  `Pyo3Executor` type L51-64 — `impl PluginExecutor for Pyo3Executor` — routed through the neutral `Value` currency.
+-  `info` function L52-54 — `(&self) -> &PluginInfo` — routed through the neutral `Value` currency.
+-  `method_count` function L56-58 — `(&self) -> u32` — routed through the neutral `Value` currency.
+-  `call_raw` function L60-63 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — routed through the neutral `Value` currency.
+-  `Pyo3Executor` type L66-79 — `impl ValueExecutor for Pyo3Executor` — routed through the neutral `Value` currency.
+-  `call` function L67-78 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — routed through the neutral `Value` currency.
+-  `STREAM_CHANNEL_CAP` variable L86 — `: usize` — Bounded channel depth between the GIL-holding pump thread and the host's
+-  `Pyo3Executor` type L90-151 — `= Pyo3Executor` — routed through the neutral `Value` currency.
+-  `call_streaming` function L91-150 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — routed through the neutral `Value` currency.
+
+#### crates/fidius-host/src/executor/wasm.rs
+
+- pub `WasmMethod` struct L120-128 — `{ name: String, wire_raw: bool, streaming: bool }` — A method on the WASM interface, in declaration (vtable) order.
+- pub `WasmComponentExecutor` struct L131-147 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
+- pub `from_component_bytes` function L152-166 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
+- pub `from_cwasm` function L174-188 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
+- pub `interface_hash` function L292-308 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
+- pub `validate_component` function L657-665 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L671-679 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+-  `HostState` struct L41-44 — `{ ctx: WasiCtx, table: ResourceTable }` — Per-store host state.
+-  `KNOWN_CAPABILITIES` variable L50-52 — `: &[&str]` — Capabilities the host knows how to grant.
+-  `validate_capabilities` function L56-69 — `(caps: &[String]) -> Result<(), CallError>` — Reject unknown capability names early (at load) so a typo fails closed and
+-  `build_wasi_ctx` function L74-105 — `(caps: &[String]) -> WasiCtx` — Build a `WasiCtx` from the allow-list.
+-  `HostState` type L109-116 — `impl WasiView for HostState` — from the package manifest's allow-list.
+-  `ctx` function L110-115 — `(&mut self) -> WasiCtxView<'_>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L149-309 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `build` function L192-221 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
+-  `instantiate` function L226-240 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
+-  `func` function L243-270 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
+-  `method` function L272-288 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L311-348 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `info` function L312-314 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
+-  `method_count` function L316-318 — `(&self) -> u32` — from the package manifest's allow-list.
+-  `call_raw` function L320-347 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L350-382 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call` function L351-381 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
+-  `STREAM_CHANNEL_CAP` variable L388 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
+-  `WasmComponentExecutor` type L392-493 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call_streaming` function L393-492 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
+-  `plugin_error_from_val` function L497-523 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
+-  `to_kebab` function L528-543 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
+-  `kebab_to_snake` function L546-548 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
+-  `kebab_to_pascal` function L551-561 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
+-  `value_to_val` function L563-606 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
+-  `val_to_value` function L609-647 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
 
 ### crates/fidius-host/tests
 
 > *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-host/tests/cdylib_streaming_e2e.rs
+
+-  `ticker_handle` function L31-43 — `() -> PluginHandle` — streaming peer alongside Python and WASM.
+-  `cdylib_stream_yields_all_items` function L46-54 — `()` — streaming peer alongside Python and WASM.
+-  `cdylib_empty_stream` function L57-61 — `()` — streaming peer alongside Python and WASM.
+-  `cdylib_huge_stream_is_bounded_and_cancellable` function L64-78 — `()` — streaming peer alongside Python and WASM.
 
 #### crates/fidius-host/tests/e2e.rs
 
@@ -627,6 +1130,26 @@
 -  `arena_plugin_grows_buffer_on_too_small_retry` function L234-256 — `()` — capability / info assertions where the Client abstracts them away.
 -  `trait_and_method_metadata_readable_through_handle` function L259-285 — `()` — capability / info assertions where the Client abstracts them away.
 -  `has_capability_returns_false_for_high_bits` function L288-302 — `()` — capability / info assertions where the Client abstracts them away.
+-  `discover_surfaces_wasm_package_with_wasm_runtime` function L308-347 — `()` — Routing reserves the WASM seat (FIDIUS-I-0021 Phase 1): a `runtime = "wasm"`
+
+#### crates/fidius-host/tests/macro_wasm.rs
+
+- pub `Greeter` interface L42-47 — `{ fn greet(), fn echo() }` — here via a separate `cargo build --target wasm32-wasip2` invocation.
+-  `macro_greeter_component` function L50-64 — `() -> &'static [u8]` — Build the macro-greeter component once and return its bytes.
+-  `BYTES` variable L51 — `: OnceLock<Vec<u8>>` — here via a separate `cargo build --target wasm32-wasip2` invocation.
+-  `stage_pkg` function L67-89 — `(root: &std::path::Path)` — Stage a `runtime = "wasm"` package containing the built component.
+-  `macro_built_component_loads_and_calls` function L92-118 — `()` — here via a separate `cargo build --target wasm32-wasip2` invocation.
+-  `macro_descriptor_export_and_hash_are_self_consistent` function L121-131 — `()` — here via a separate `cargo build --target wasm32-wasip2` invocation.
+
+#### crates/fidius-host/tests/macro_wasm_streaming.rs
+
+- pub `Ticker` interface L37-39 — `{ fn tick() }` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
+-  `macro_ticker_component` function L41-55 — `() -> &'static [u8]` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
+-  `BYTES` variable L42 — `: OnceLock<Vec<u8>>` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
+-  `stage_pkg` function L57-79 — `(root: &std::path::Path)` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
+-  `macro_descriptor_marks_tick_streaming` function L82-91 — `()` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
+-  `macro_streaming_component_loads_and_streams` function L94-116 — `()` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
+-  `macro_streaming_bounded_and_cancellable` function L119-141 — `()` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
 
 #### crates/fidius-host/tests/package_e2e.rs
 
@@ -652,9 +1175,9 @@
 -  `copy_dir` function L77-89 — `(src: &std::path::Path, dst: &std::path::Path)` — 5.
 -  `byte_pipe_descriptor` function L95-97 — `() -> &'static PythonInterfaceDescriptor` — Produce the BytePipe descriptor from the Rust trait via the macro-emitted
 -  `discover_lists_python_plugin_with_python_runtime` function L100-114 — `()` — 5.
--  `typed_method_round_trips` function L117-132 — `()` — 5.
--  `raw_wire_method_round_trips_2mb` function L135-154 — `()` — 5.
--  `tampered_interface_hash_is_rejected_at_load` function L157-190 — `()` — 5.
+-  `typed_method_round_trips` function L117-130 — `()` — 5.
+-  `raw_wire_method_round_trips_2mb` function L133-152 — `()` — 5.
+-  `tampered_interface_hash_is_rejected_at_load` function L155-190 — `()` — 5.
 
 #### crates/fidius-host/tests/python_routing.rs
 
@@ -666,9 +1189,97 @@
 -  `make_python_package` function L60-109 — `( plugins_root: &std::path::Path, pkg_name: &str, entry_module: &str, ) -> PathB...` — when the `python` feature is enabled.
 -  `repo_root` function L111-118 — `() -> PathBuf` — when the `python` feature is enabled.
 -  `discover_surfaces_python_package` function L121-138 — `()` — when the `python` feature is enabled.
--  `load_python_dispatches_through_host` function L141-158 — `()` — when the `python` feature is enabled.
--  `load_python_unknown_name_returns_not_found` function L161-174 — `()` — when the `python` feature is enabled.
--  `cdylib_load_path_unaffected` function L177-195 — `()` — when the `python` feature is enabled.
+-  `load_python_dispatches_through_host` function L141-160 — `()` — when the `python` feature is enabled.
+-  `load_python_unknown_name_returns_not_found` function L163-180 — `()` — when the `python` feature is enabled.
+-  `cdylib_load_path_unaffected` function L183-201 — `()` — when the `python` feature is enabled.
+
+#### crates/fidius-host/tests/python_streaming_e2e.rs
+
+-  `ticker_descriptor` function L41-43 — `() -> &'static PythonInterfaceDescriptor` — The macro-generated descriptor for the `Ticker` interface — its
+-  `stage` function L47-66 — `(tmp: &tempfile::TempDir) -> PathBuf` — Stage the py-ticker package into a fresh temp dir, vendor the in-tree SDK,
+-  `repo_root` function L68-75 — `() -> PathBuf` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
+-  `copy_dir` function L77-89 — `(src: &std::path::Path, dst: &std::path::Path)` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
+-  `tick_index` function L91-93 — `() -> usize` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
+-  `discover_lists_streaming_python_plugin` function L96-107 — `()` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
+-  `server_stream_yields_all_items` function L110-130 — `()` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
+-  `huge_stream_is_bounded_and_cancellable` function L133-159 — `()` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
+-  `composition_pump_into_sink` function L162-186 — `()` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
+
+#### crates/fidius-host/tests/records_wasm.rs
+
+- pub `Point` struct L38-41 — `{ x: i32, y: i32 }` — exercising the kebab↔snake/Pascal name normalization end to end.
+- pub `Shape` enum L44-49 — `Circle | Rect | Triangle | Dot` — exercising the kebab↔snake/Pascal name normalization end to end.
+- pub `Geo` interface L52-55 — `{ fn midpoint(), fn describe() }` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `records_greeter_component` function L57-71 — `() -> &'static [u8]` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `BYTES` variable L58 — `: OnceLock<Vec<u8>>` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `stage_pkg` function L73-99 — `(root: &std::path::Path)` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `record_in_record_out_round_trips` function L102-118 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `variant_in_round_trips_all_cases` function L121-149 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+
+#### crates/fidius-host/tests/wasm_executor.rs
+
+-  `IFACE` variable L32 — `: &str` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `EXPECTED_HASH` variable L33 — `: u64` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `greeter_component` function L36-50 — `() -> &'static [u8]` — Build the greeter component once (process-wide cache) and return its bytes.
+-  `BYTES` variable L37 — `: OnceLock<Vec<u8>>` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `executor_with` function L52-92 — `(capabilities: Vec<String>) -> WasmComponentExecutor` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `executor` function L94-96 — `() -> WasmComponentExecutor` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `interface_hash_matches` function L99-101 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `typed_call_greet` function L104-111 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `typed_call_add_ok_and_err` function L114-129 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `raw_call_echo_bytes_reverses` function L132-136 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `method_count_and_info` function L139-143 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `METHOD_DESCS` variable L147-168 — `: [WasmMethodDesc; 4]` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `GREETER_DESC` variable L169-174 — `: WasmInterfaceDescriptor` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `stage_wasm_package` function L178-212 — `(root: &std::path::Path, capabilities: &[&str])` — Stage a `runtime = "wasm"` package directory containing the built component,
+-  `load_wasm_through_host_and_call` function L215-234 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `load_wasm_rejects_interface_hash_mismatch` function L237-259 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `BAD_DESC` variable L238-243 — `: WasmInterfaceDescriptor` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `discover_surfaces_wasm_package` function L262-275 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `PROBE_ENV` variable L279 — `: usize` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `env_capability_denied_by_default` function L282-295 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `env_capability_granted_via_allowlist` function L298-312 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `python_greeter_component` function L320-324 — `() -> Option<Vec<u8>>` — The Python-authored component, if it's been built (see
+-  `polyglot_python_guest_behaves_identically` function L330-379 — `()` — A Python guest implementing the SAME `greeter` WIT is loaded and called
+-  `unknown_capability_rejected_at_load` function L382-397 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `set_precompiled` function L402-412 — `(pkg_dir: &std::path::Path, cwasm: &str)` — Record `precompiled = "<name>"` under `[wasm]` in a staged package.toml.
+-  `precompiled_cwasm_loads_via_aot_and_calls` function L415-434 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `stale_cwasm_falls_back_to_jit` function L437-455 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `pack_unpack_load_roundtrip` function L458-481 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `sign_pkg` function L487-494 — `(pkg_dir: &std::path::Path) -> ed25519_dalek::VerifyingKey` — Sign a staged package dir over its `package_digest` (the same scheme
+-  `signed_wasm_package_loads_when_signature_required` function L497-513 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `unsigned_wasm_package_rejected_when_signature_required` function L516-535 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `tampered_wasm_package_fails_verification` function L538-561 — `()` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `js_greeter_component` function L565-569 — `() -> Option<Vec<u8>>` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `polyglot_js_guest_behaves_identically` function L575-622 — `()` — A JavaScript guest (jco/ComponentizeJS) implementing the SAME `greeter` WIT
+-  `go_greeter_component` function L626-630 — `() -> Option<Vec<u8>>` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `polyglot_go_guest_behaves_identically` function L636-682 — `()` — A Go guest (TinyGo + wit-bindgen-go) implementing the SAME `greeter` WIT loads
+-  `c_greeter_component` function L686-690 — `() -> Option<Vec<u8>>` — `--features wasm` and requires the component toolchain (FIDIUS-T-0094).
+-  `polyglot_c_guest_behaves_identically` function L696-742 — `()` — A C guest (wit-bindgen + wasi-sdk clang) implementing the SAME `greeter` WIT
+
+#### crates/fidius-host/tests/wasm_streaming_e2e.rs
+
+-  `IFACE` variable L33 — `: &str` — under the sandbox.
+-  `HASH` variable L35 — `: u64` — under the sandbox.
+-  `ticker_component` function L37-51 — `() -> &'static [u8]` — under the sandbox.
+-  `BYTES` variable L38 — `: OnceLock<Vec<u8>>` — under the sandbox.
+-  `handle` function L53-77 — `() -> PluginHandle` — under the sandbox.
+-  `wasm_stream_yields_all_items` function L80-88 — `()` — under the sandbox.
+-  `wasm_huge_stream_is_bounded_and_cancellable` function L91-104 — `()` — under the sandbox.
+-  `wasm_empty_stream` function L107-111 — `()` — under the sandbox.
+-  `wasm_composition_pump_into_sink` function L118-131 — `()` — under the sandbox.
+-  `ticker_js_component` function L139-143 — `() -> Option<Vec<u8>>` — under the sandbox.
+-  `js_handle` function L145-164 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
+-  `polyglot_js_guest_streams` function L167-183 — `()` — under the sandbox.
+-  `polyglot_js_guest_bounded_and_cancellable` function L186-202 — `()` — under the sandbox.
+-  `ticker_py_component` function L209-213 — `() -> Option<Vec<u8>>` — under the sandbox.
+-  `py_wasm_handle` function L215-234 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
+-  `polyglot_py_wasm_guest_streams` function L237-252 — `()` — under the sandbox.
+-  `polyglot_py_wasm_guest_bounded_and_cancellable` function L255-271 — `()` — under the sandbox.
+-  `ticker_c_component` function L278-282 — `() -> Option<Vec<u8>>` — under the sandbox.
+-  `c_wasm_handle` function L284-303 — `(bytes: &[u8]) -> PluginHandle` — under the sandbox.
+-  `polyglot_c_wasm_guest_streams` function L306-321 — `()` — under the sandbox.
+-  `polyglot_c_wasm_guest_bounded_and_cancellable` function L324-340 — `()` — under the sandbox.
 
 ### crates/fidius-macro/src
 
@@ -676,17 +1287,23 @@
 
 #### crates/fidius-macro/src/impl_macro.rs
 
-- pub `PluginImplAttrs` struct L84-93 — `{ trait_name: Ident, crate_path: Path, buffer_strategy: BufferStrategyAttr }` — Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`,
-- pub `generate_plugin_impl` function L148-256 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
--  `MethodInfo` struct L31-44 — `{ name: &'a Ident, is_async: bool, returns_result: bool, arg_types: Vec<&'a Type...` — Info about an impl method, extracted from the impl block.
--  `impl_method_is_raw` function L49-66 — `(attrs: &[syn::Attribute]) -> syn::Result<bool>` — Detect a `#[wire(raw)]` attribute on an impl-side method.
--  `is_result_type` function L69-80 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
--  `PluginImplAttrs` type L95-145 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `parse` function L96-144 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `generate_shims` function L260-464 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L470-491 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L494-572 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L575-585 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+- pub `PluginImplAttrs` struct L106-115 — `{ trait_name: Ident, crate_path: Path, buffer_strategy: BufferStrategyAttr }` — Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`,
+- pub `generate_plugin_impl` function L170-306 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
+-  `MethodInfo` struct L31-51 — `{ name: &'a Ident, is_async: bool, returns_result: bool, arg_types: Vec<&'a Type...` — Info about an impl method, extracted from the impl block.
+-  `impl_method_is_raw` function L56-73 — `(attrs: &[syn::Attribute]) -> syn::Result<bool>` — Detect a `#[wire(raw)]` attribute on an impl-side method.
+-  `kebab_to_pascal` function L78-88 — `(s: &str) -> String` — kebab-case → PascalCase, for deriving the wit-bindgen resource type name from
+-  `is_result_type` function L91-102 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
+-  `PluginImplAttrs` type L117-167 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `parse` function L118-166 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `generate_wasm_adapter` function L316-583 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], ) -> TokenS...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
+-  `collect_user_idents` function L587-632 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
+-  `gen_type` function L637-663 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
+-  `wasm_first_generic` function L665-674 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `wasm_unsupported` function L680-690 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
+-  `generate_shims` function L694-1004 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
+-  `generate_vtable_static` function L1010-1032 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L1035-1115 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L1118-1129 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### crates/fidius-macro/src/interface.rs
 
@@ -695,10 +1312,10 @@
 -  `is_fidius_helper` function L30-35 — `(attr: &syn::Attribute) -> bool` — capability bit constants, version/strategy constants, and a descriptor builder function.
 -  `generate_metadata` function L92-190 — `(ir: &InterfaceIR) -> TokenStream` — Emit the static metadata arrays for `#[method_meta]` and `#[trait_meta]`
 -  `generate_vtable` function L193-268 — `(ir: &InterfaceIR) -> TokenStream` — Generate the `#[repr(C)]` vtable struct.
--  `generate_constants` function L271-359 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
--  `generate_descriptor_builder` function L362-432 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
--  `generate_method_indices` function L435-451 — `(ir: &InterfaceIR) -> TokenStream` — Generate method index constants.
--  `generate_client` function L465-589 — `(ir: &InterfaceIR) -> TokenStream` — Generate a typed `{Trait}Client` struct that wraps a `PluginHandle` and
+-  `generate_constants` function L271-404 — `(ir: &InterfaceIR) -> TokenStream` — Generate interface hash, capability bit constants, version, and buffer strategy constants.
+-  `generate_descriptor_builder` function L407-477 — `(ir: &InterfaceIR) -> TokenStream` — Generate the descriptor builder function used by `#[plugin_impl]`.
+-  `generate_method_indices` function L480-496 — `(ir: &InterfaceIR) -> TokenStream` — Generate method index constants.
+-  `generate_client` function L510-655 — `(ir: &InterfaceIR) -> TokenStream` — Generate a typed `{Trait}Client` struct that wraps a `PluginHandle` and
 
 #### crates/fidius-macro/src/ir.rs
 
@@ -706,39 +1323,67 @@
 - pub `BufferStrategyAttr` enum L43-46 — `PluginAllocated | Arena` — Discriminants match `fidius_core::descriptor::BufferStrategyKind` — values
 - pub `MetaKvAttr` struct L125-128 — `{ key: String, value: String }` — A static metadata key/value pair parsed from a `#[method_meta(...)]`
 - pub `InterfaceIR` struct L132-140 — `{ trait_name: Ident, attrs: InterfaceAttrs, methods: Vec<MethodIR>, trait_metas:...` — Full IR for a parsed interface trait.
-- pub `MethodIR` struct L145-171 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
-- pub `is_required` function L175-177 — `(&self) -> bool` — Whether this is a required (non-optional) method.
-- pub `parse_interface` function L433-505 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
+- pub `MethodIR` struct L145-180 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
+- pub `is_required` function L184-186 — `(&self) -> bool` — Whether this is a required (non-optional) method.
+- pub `parse_interface` function L479-572 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
 -  `InterfaceAttrs` type L48-120 — `impl Parse for InterfaceAttrs` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `parse` function L49-119 — `(input: ParseStream) -> syn::Result<Self>` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `MethodIR` type L173-178 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_meta_attrs` function L184-228 — `(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>>` — Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]`
--  `parse_optional_attr` function L231-249 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
--  `parse_wire_attr` function L254-271 — `(attrs: &[Attribute]) -> syn::Result<bool>` — Parse a `#[wire(raw)]` attribute, if present.
--  `is_vec_u8` function L274-301 — `(ty: &Type) -> bool` — Return `true` if the given type is `Vec<u8>`.
--  `result_ok_type` function L304-320 — `(ty: &Type) -> Option<&Type>` — Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
--  `validate_raw_method_signature` function L325-362 — `( method: &TraitItemFn, arg_types: &[Type], return_type: Option<&Type>, ) -> syn...` — Validate that a method flagged `#[wire(raw)]` has a supported signature:
--  `build_signature_string` function L370-389 — `(method: &TraitItemFn, wire_raw: bool) -> String` — Build the canonical signature string for a method.
--  `extract_arg_names` function L392-409 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
--  `extract_arg_types` function L412-422 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
--  `extract_return_type` function L425-430 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
--  `tests` module L508-627 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_test_trait` function L512-520 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `basic_trait_parsing` function L523-540 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `optional_method_parsing` function L543-556 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `async_method_detection` function L559-569 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `rejects_mut_self` function L572-588 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `signature_string_format` function L591-601 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `interface_attrs_parsing` function L604-610 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `interface_attrs_with_crate_path` function L613-626 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `MethodIR` type L182-187 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_meta_attrs` function L193-237 — `(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>>` — Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]`
+-  `parse_optional_attr` function L240-258 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
+-  `parse_wire_attr` function L263-280 — `(attrs: &[Attribute]) -> syn::Result<bool>` — Parse a `#[wire(raw)]` attribute, if present.
+-  `is_vec_u8` function L283-310 — `(ty: &Type) -> bool` — Return `true` if the given type is `Vec<u8>`.
+-  `result_ok_type` function L313-329 — `(ty: &Type) -> Option<&Type>` — Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
+-  `validate_raw_method_signature` function L334-371 — `( method: &TraitItemFn, arg_types: &[Type], return_type: Option<&Type>, ) -> syn...` — Validate that a method flagged `#[wire(raw)]` has a supported signature:
+-  `stream_item_type` function L378-396 — `(ty: &Type) -> Option<Type>` — Return the per-item type `T` if `ty` is a `Stream<T>` (i.e.
+-  `build_signature_string` function L408-435 — `( method: &TraitItemFn, wire_raw: bool, stream_item: Option<&Type>, ) -> String` — Build the canonical signature string for a method.
+-  `extract_arg_names` function L438-455 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
+-  `extract_arg_types` function L458-468 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
+-  `extract_return_type` function L471-476 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
+-  `tests` module L575-761 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_test_trait` function L579-587 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `basic_trait_parsing` function L590-607 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `optional_method_parsing` function L610-623 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `async_method_detection` function L626-636 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `rejects_mut_self` function L639-655 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `signature_string_format` function L658-668 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `interface_attrs_parsing` function L671-677 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `interface_attrs_with_crate_path` function L680-693 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `detects_server_streaming_return` function L696-713 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `streaming_and_unary_hash_differently` function L716-730 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `bare_stream_marker_is_detected` function L733-740 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `rejects_stream_in_argument_position` function L743-760 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 
 #### crates/fidius-macro/src/lib.rs
 
-- pub `plugin_interface` function L42-53 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Define a plugin interface from a trait.
-- pub `plugin_impl` function L73-81 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Implement a plugin interface for a concrete type.
+- pub `plugin_interface` function L43-54 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Define a plugin interface from a trait.
+- pub `plugin_impl` function L74-82 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Implement a plugin interface for a concrete type.
+- pub `derive_wit_type` function L98-102 — `(_item: TokenStream) -> TokenStream` — Mark a `struct`/`enum` as usable in a WASM plugin interface (FIDIUS-I-0023).
 -  `impl_macro` module L15 — `-`
 -  `interface` module L16 — `-`
 -  `ir` module L17 — `-`
+-  `wit` module L18 — `-`
+
+#### crates/fidius-macro/src/wit.rs
+
+-  `to_kebab_case` function L32-47 — `(s: &str) -> String` — Convert a Rust identifier (CamelCase or snake_case) to kebab-case, the WIT
+-  `result_ok_type` function L50-59 — `(ty: &Type) -> Option<&Type>` — Extract the `T` from `Result<T, _>`, if `ty` is a `Result`.
+-  `WitMethod` struct L62-69 — `{ name: String, params: Vec<(String, String)>, ret: Option<String> }` — One method projected to WIT (already-mapped strings).
+-  `render_wit` function L75-102 — `(iface_kebab: &str, methods: &[WitMethod]) -> String` — Render a complete `.wit` document for an interface and its methods.
+-  `rust_type_to_wit` function L106-169 — `(ty: &Type) -> Result<String, String>` — Map a Rust argument/return type to its WIT spelling.
+-  `return_to_wit` function L174-193 — `(ret: Option<&Type>) -> Result<Option<String>, String>` — Map a method's return type to an optional WIT return.
+-  `is_unit` function L195-197 — `(ty: &Type) -> bool` — a clear compile error rather than silently-wrong WIT.
+-  `path_is` function L199-205 — `(p: &syn::TypePath, name: &str) -> bool` — a clear compile error rather than silently-wrong WIT.
+-  `single_generic` function L207-209 — `(seg: &'a syn::PathSegment, what: &str) -> Result<&'a Type, String>` — a clear compile error rather than silently-wrong WIT.
+-  `first_generic` function L211-220 — `(seg: &syn::PathSegment) -> Option<&Type>` — a clear compile error rather than silently-wrong WIT.
+-  `tests` module L223-296 — `-` — a clear compile error rather than silently-wrong WIT.
+-  `wit` function L226-228 — `(s: &str) -> String` — a clear compile error rather than silently-wrong WIT.
+-  `ret` function L229-231 — `(s: &str) -> Option<String>` — a clear compile error rather than silently-wrong WIT.
+-  `primitives_and_strings` function L234-242 — `()` — a clear compile error rather than silently-wrong WIT.
+-  `containers` function L245-251 — `()` — a clear compile error rather than silently-wrong WIT.
+-  `returns` function L254-266 — `()` — a clear compile error rather than silently-wrong WIT.
+-  `unsupported_is_error` function L269-271 — `()` — a clear compile error rather than silently-wrong WIT.
+-  `renders_greeter_like_wit` function L274-295 — `()` — a clear compile error rather than silently-wrong WIT.
 
 ### crates/fidius-macro/tests
 
@@ -883,6 +1528,11 @@
 - pub `BadPlugin` interface L7-10 — `{ fn do_thing() }`
 -  `main` function L12 — `()`
 
+#### crates/fidius-macro/tests/compile_fail/stream_in_arg_position.rs
+
+- pub `BadStream` interface L22-24 — `{ fn sink() }`
+-  `main` function L26 — `()`
+
 ### crates/fidius-python
 
 > *Semantic summary to be generated by AI agent.*
@@ -910,12 +1560,13 @@
 - pub `method_count` function L101-103 — `(&self) -> usize` — `code = <ExceptionClassName>` otherwise.
 - pub `call_typed` function L112-134 — `( &self, method_index: usize, input_bincode: &[u8], ) -> Result<Vec<u8>, PythonC...` — Typed dispatch.
 - pub `call_typed_json` function L139-159 — `( &self, method_index: usize, input_json: &[u8], ) -> Result<Vec<u8>, PythonCall...` — Typed dispatch where the input is already JSON-serialised (the
-- pub `call_raw` function L162-181 — `(&self, method_index: usize, input: &[u8]) -> Result<Vec<u8>, PythonCallError>` — Raw dispatch — pass bytes in, get bytes out, no encoding.
--  `PythonPluginHandle` type L84-206 — `= PythonPluginHandle` — `code = <ExceptionClassName>` otherwise.
+- pub `call_streaming_start` function L165-190 — `( &self, method_index: usize, input_json: &[u8], ) -> Result<crate::stream::Pyth...` — Start a server-streaming call (FIDIUS-I-0026).
+- pub `call_raw` function L193-212 — `(&self, method_index: usize, input: &[u8]) -> Result<Vec<u8>, PythonCallError>` — Raw dispatch — pass bytes in, get bytes out, no encoding.
+-  `PythonPluginHandle` type L84-237 — `= PythonPluginHandle` — `code = <ExceptionClassName>` otherwise.
 -  `new` function L85-95 — `( descriptor: &'static PythonInterfaceDescriptor, module: Py<PyAny>, method_call...` — `code = <ExceptionClassName>` otherwise.
--  `lookup_method` function L183-205 — `( &self, index: usize, attempting_raw: bool, ) -> Result<MethodLookup<'_>, Pytho...` — `code = <ExceptionClassName>` otherwise.
--  `MethodLookup` struct L208-210 — `{ callable: &'a Py<PyAny> }` — `code = <ExceptionClassName>` otherwise.
--  `build_call_args` function L219-238 — `( py: Python<'py>, input: &serde_json::Value, ) -> PyResult<Bound<'py, PyTuple>>` — Build positional args for `callable.call(...)` from a JSON value.
+-  `lookup_method` function L214-236 — `( &self, index: usize, attempting_raw: bool, ) -> Result<MethodLookup<'_>, Pytho...` — `code = <ExceptionClassName>` otherwise.
+-  `MethodLookup` struct L239-241 — `{ callable: &'a Py<PyAny> }` — `code = <ExceptionClassName>` otherwise.
+-  `build_call_args` function L250-269 — `( py: Python<'py>, input: &serde_json::Value, ) -> PyResult<Bound<'py, PyTuple>>` — Build positional args for `callable.call(...)` from a JSON value.
 
 #### crates/fidius-python/src/interpreter.rs
 
@@ -928,7 +1579,8 @@
 - pub `handle` module L28 — `-` — under FIDIUS-I-0020.
 - pub `interpreter` module L29 — `-` — under FIDIUS-I-0020.
 - pub `loader` module L30 — `-` — under FIDIUS-I-0020.
-- pub `value_bridge` module L31 — `-` — under FIDIUS-I-0020.
+- pub `stream` module L31 — `-` — under FIDIUS-I-0020.
+- pub `value_bridge` module L32 — `-` — under FIDIUS-I-0020.
 
 #### crates/fidius-python/src/loader.rs
 
@@ -938,6 +1590,23 @@
 -  `validate_interface_hash` function L175-197 — `( module: &Bound<'_, PyModule>, descriptor: &'static PythonInterfaceDescriptor, ...` — All Python work happens in the host's embedded interpreter (T-0085).
 -  `resolve_methods` function L199-227 — `( module: &Bound<'_, PyModule>, descriptor: &'static PythonInterfaceDescriptor, ...` — All Python work happens in the host's embedded interpreter (T-0085).
 -  `import_failure` function L229-235 — `(what: &str, err: PyErr) -> PythonLoadError` — All Python work happens in the host's embedded interpreter (T-0085).
+
+#### crates/fidius-python/src/stream.rs
+
+- pub `PyStreamStep` enum L39-46 — `Item | End | Error` — One step of advancing a Python plugin's server-streaming iterator.
+- pub `PythonStream` struct L53-55 — `{ iter: Py<PyAny> }` — A handle to an in-flight Python server-stream — the iterator obtained by
+- pub `next` function L64-80 — `(&self) -> PyStreamStep` — Advance one item.
+- pub `cancel` function L86-93 — `(&self)` — Cancel the stream: run the generator's cleanup by calling `close()`,
+-  `PythonStream` type L57-94 — `= PythonStream` — split (`fidius-python` has no async runtime).
+-  `new` function L58-60 — `(iter: Py<PyAny>) -> Self` — split (`fidius-python` has no async runtime).
+-  `tests` module L97-207 — `-` — split (`fidius-python` has no async runtime).
+-  `stream_from` function L102-111 — `(code: &str) -> PythonStream` — Build a `PythonStream` from a snippet that evaluates to an iterator.
+-  `item_i64` function L113-118 — `(step: PyStreamStep) -> i64` — split (`fidius-python` has no async runtime).
+-  `step_name` function L120-126 — `(s: &PyStreamStep) -> &'static str` — split (`fidius-python` has no async runtime).
+-  `yields_items_then_end` function L129-137 — `()` — split (`fidius-python` has no async runtime).
+-  `generator_exception_becomes_error` function L140-152 — `()` — split (`fidius-python` has no async runtime).
+-  `gen_from_def` function L155-164 — `(code: &str) -> PythonStream` — Run a snippet that binds `it` to an iterator/generator in fresh globals.
+-  `cancel_runs_generator_finally` function L167-206 — `()` — split (`fidius-python` has no async runtime).
 
 #### crates/fidius-python/src/value_bridge.rs
 
@@ -1004,12 +1673,34 @@
 
 - pub `dylib` module L45 — `-` — Testing helpers for Fidius plugin authors and hosts.
 - pub `signing` module L46 — `-` — ```
+- pub `stream` module L48 — `-` — ```
 
 #### crates/fidius-test/src/signing.rs
 
 - pub `fixture_keypair_with_seed` function L30-34 — `(seed: u8) -> (SigningKey, VerifyingKey)` — Deterministic Ed25519 keypair derived from `seed` repeated 32 times.
 - pub `fixture_keypair` function L37-39 — `() -> (SigningKey, VerifyingKey)` — Convenience: [`fixture_keypair_with_seed(1)`](fixture_keypair_with_seed).
 - pub `sign_dylib` function L45-54 — `(dylib: &Path, key: &SigningKey) -> std::io::Result<()>` — Sign a plugin dylib in place by writing a detached `.sig` file alongside it.
+
+#### crates/fidius-test/src/stream.rs
+
+- pub `StreamSink` interface L42-45 — `{ fn accept() }` — The destination side of a pipe: a consumer `pump` hands each item to, in
+- pub `stream_of` function L52-56 — `(items: Vec<Value>) -> ChunkStream` — An in-memory source over a fixed item sequence.
+- pub `collect` function L60-66 — `(mut s: ChunkStream) -> Result<Vec<Value>, CallError>` — Drain a stream to a `Vec`, stopping at — and returning — the first error.
+- pub `pump` function L76-84 — `(mut out: ChunkStream, into: &S) -> Result<(), CallError>` — The reference pull-loop wiring a producer stream to a [`StreamSink`].
+- pub `CollectSink` struct L89-91 — `{ items: Mutex<Vec<Value>> }` — A [`StreamSink`] that records everything it accepts — for asserting on the
+- pub `new` function L95-97 — `() -> Self` — A fresh, empty sink.
+- pub `take` function L100-102 — `(&self) -> Vec<Value>` — Snapshot of everything accepted so far.
+-  `CollectSink` type L93-103 — `= CollectSink` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `CollectSink` type L106-111 — `impl StreamSink for CollectSink` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `accept` function L107-110 — `(&self, item: Value) -> Result<(), CallError>` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `tests` module L114-173 — `-` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `vals` function L118-120 — `(xs: &[i64]) -> Vec<Value>` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `ints` function L122-124 — `(vs: Vec<Value>) -> Vec<i64>` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `stream_of_then_collect_round_trips` function L127-130 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `collect_surfaces_first_error` function L133-141 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `pump_delivers_all_items_to_sink` function L144-148 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `pump_stops_on_producer_error` function L151-161 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
+-  `compose_single_plugin_idiom` function L164-172 — `()` — See ADR FIDIUS-A-0004 ("Streaming as Mechanism, Not Protocol").
 
 ### crates/fidius-test/tests
 
@@ -1025,6 +1716,66 @@
 -  `dylib_fixture_is_cached_across_builds` function L97-106 — `()` — fixture.
 -  `client_in_process_calls_plugin_without_dylib_load` function L109-120 — `()` — fixture.
 -  `client_in_process_returns_not_found_for_missing_plugin` function L123-130 — `()` — fixture.
+
+### crates/fidius-wit/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-wit/src/generate.rs
+
+- pub `Generated` struct L33-45 — `{ interface_name: String, iface_kebab: String, user_types: Vec<String>, wit: Str...` — The product of generating from a plugin crate's source.
+- pub `generate` function L50-55 — `(src: &str) -> Result<Generated, String>` — Generate WIT + conversions from a crate's source string (`lib.rs`).
+- pub `generate_from_path` function L60-68 — `(lib_rs: &std::path::Path) -> Result<Generated, String>` — Like [`generate`], but reads `lib_rs` and follows external `mod m;` files
+- pub `conv_expr` function L352-379 — `(access: &str, ty: &Type, known: &BTreeSet<String>) -> String` — Conversion expression for a field/payload `access` of type `ty`.
+- pub `contains_user_type` function L383-398 — `(ty: &Type, known: &BTreeSet<String>) -> bool` — Whether `ty` is, or contains (through `Vec`/`Option`/`Box`), a user type in
+-  `Collected` struct L73-77 — `{ structs: Vec<(Vec<String>, syn::ItemStruct)>, enums: Vec<(Vec<String>, syn::It...` — `#[derive(WitType)]` types (tagged with their Rust module path) + the
+-  `collect` function L81-127 — `( items: &[Item], mod_path: &[String], dir: Option<&std::path::Path>, acc: &mut ...` — Recursively gather items, descending into inline `mod m { ..
+-  `assemble` function L130-207 — `(acc: Collected) -> Result<Generated, String>` — Build the `.wit` + conversions from the collected items.
+-  `author_path` function L210-216 — `(mod_path: &[String], name: &str) -> String` — `crate::<mod::path>::<Name>` — the author-side path for a type at `mod_path`.
+-  `render_conversions` function L222-344 — `( iface_kebab: &str, structs: &[(Vec<String>, syn::ItemStruct)], enums: &[(Vec<S...` — Render `From` impls (both directions) between each user type and its
+-  `single_generic` function L400-409 — `(seg: &syn::PathSegment) -> Option<&Type>` — the `fidius wit` CLI, which read the source files.
+-  `has_attr` function L412-420 — `(attrs: &[syn::Attribute], name: &str) -> bool` — Does `attrs` contain `#[<name>(...)]` / `#[<path>::<name>]` (last segment match)?
+-  `has_derive` function L423-445 — `(attrs: &[syn::Attribute], name: &str) -> bool` — Does `attrs` contain a `#[derive(...
+-  `tests` module L448-521 — `-` — the `fidius wit` CLI, which read the source files.
+-  `SRC` variable L451-464 — `: &str` — the `fidius wit` CLI, which read the source files.
+-  `generates_wit_with_records_variants_and_funcs` function L467-483 — `()` — the `fidius wit` CLI, which read the source files.
+-  `generates_conversions_both_ways` function L486-499 — `()` — the `fidius wit` CLI, which read the source files.
+-  `primitive_only_interface_has_no_conversions` function L502-511 — `()` — the `fidius wit` CLI, which read the source files.
+-  `unsupported_type_errors` function L514-520 — `()` — the `fidius wit` CLI, which read the source files.
+
+#### crates/fidius-wit/src/lib.rs
+
+- pub `to_kebab_case` function L35-50 — `(s: &str) -> String` — Convert a Rust identifier (CamelCase or snake_case) to kebab-case, the WIT
+- pub `result_ok_type` function L53-62 — `(ty: &Type) -> Option<&Type>` — Extract the `T` from `Result<T, _>`, if `ty` is a `Result`.
+- pub `WitMethod` struct L65-78 — `{ name: String, params: Vec<(String, String)>, ret: Option<String>, stream_item:...` — One method projected to WIT (already-mapped strings).
+- pub `stream_item_type` function L83-92 — `(ty: &Type) -> Option<&Type>` — If `ty` is `fidius::Stream<T>` (final path segment `Stream`, exactly one type
+- pub `wit_type_with` function L97-155 — `(ty: &Type, known: &BTreeSet<String>) -> Result<String, String>` — Map a Rust argument/return type to its WIT spelling, where `known` holds the
+- pub `rust_type_to_wit` function L159-161 — `(ty: &Type) -> Result<String, String>` — Primitive/std-only mapping (no user types) — the form `fidius-macro` uses for
+- pub `return_to_wit_with` function L166-188 — `( ret: Option<&Type>, known: &BTreeSet<String>, ) -> Result<Option<String>, Stri...` — Map a method's return type to an optional WIT return, with user types in
+- pub `return_to_wit` function L191-193 — `(ret: Option<&Type>) -> Result<Option<String>, String>` — Primitive/std-only return mapping (no user types).
+- pub `struct_to_record` function L198-215 — `(item: &ItemStruct, known: &BTreeSet<String>) -> Result<String, String>` — Render a `record <name> { ...
+- pub `enum_to_wit` function L225-268 — `( item: &ItemEnum, known: &BTreeSet<String>, ) -> Result<(Vec<String>, String), ...` — Render a Rust enum to WIT: a `variant <name> { ...
+- pub `render_wit_full` function L274-323 — `(iface_kebab: &str, type_defs: &[String], methods: &[WitMethod]) -> String` — Render a complete `.wit` document: package + interface (the `plugin-error`
+- pub `render_wit` function L327-329 — `(iface_kebab: &str, methods: &[WitMethod]) -> String` — Convenience: render a WIT document with no user type defs (the primitives-only
+-  `generate` module L30 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `is_unit` function L333-335 — `(ty: &Type) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `path_is` function L337-343 — `(p: &syn::TypePath, name: &str) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `single_generic` function L345-347 — `(seg: &'a syn::PathSegment, what: &str) -> Result<&'a Type, String>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `first_generic` function L349-358 — `(seg: &syn::PathSegment) -> Option<&Type>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `tests` module L361-513 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `known` function L364-366 — `(names: &[&str]) -> BTreeSet<String>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `wit` function L367-369 — `(s: &str) -> String` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `primitives_strings_containers` function L372-380 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `returns` function L383-394 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `user_types_need_the_known_set` function L397-410 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_renders_to_record` function L413-419 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_with_nested_user_type` function L422-427 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `enum_renders_to_variant` function L430-439 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_variant_synthesizes_a_record` function L442-451 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `multifield_tuple_variant_is_rejected` function L454-457 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `full_document_places_type_defs_before_funcs` function L460-483 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `streaming_method_renders_a_resource` function L486-501 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `stream_item_type_detects_marker` function L504-512 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
 
 ### pluggable-poc/crates/emit-console/src
 
@@ -1335,6 +2086,8 @@
 - pub `ArenaEchoer` struct L90 — `-`
 - pub `BytePipe` interface L103-110 — `{ fn reverse(), fn name() }`
 - pub `ReverseBytes` struct L112 — `-`
+- pub `Ticker` interface L134-137 — `{ fn tick() }`
+- pub `TickerImpl` struct L142 — `-`
 -  `BasicCalculator` type L61-81 — `impl Calculator for BasicCalculator`
 -  `add` function L62-66 — `(&self, input: AddInput) -> AddOutput`
 -  `add_direct` function L68-70 — `(&self, a: i64, b: i64) -> i64`
@@ -1345,4 +2098,174 @@
 -  `ReverseBytes` type L115-125 — `impl BytePipe for ReverseBytes`
 -  `reverse` function L117-120 — `(&self, mut data: Vec<u8>) -> Vec<u8>`
 -  `name` function L122-124 — `(&self) -> String`
+-  `TickerImpl` type L145-149 — `impl Ticker for TickerImpl`
+-  `tick` function L146-148 — `(&self, count: u32) -> fidius::Stream<u64>`
+
+### tests/wasm-fixtures/greeter/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/greeter/src/lib.rs
+
+-  `bindings` module L9 — `-`
+-  `INTERFACE_HASH` variable L15 — `: u64` — Must match what the host expects for this interface.
+-  `Component` struct L17 — `-`
+-  `Component` type L19-47 — `impl Guest for Component`
+-  `greet` function L20-22 — `(name: String) -> String`
+-  `add` function L24-30 — `(a: i64, b: i64) -> Result<i64, PluginError>`
+-  `echo_bytes` function L32-37 — `(data: Vec<u8>) -> Vec<u8>`
+-  `fidius_interface_hash` function L39-41 — `() -> u64`
+-  `probe_env` function L43-46 — `() -> bool`
+
+### tests/wasm-fixtures/greeter-go
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/greeter-go/main.go
+
+-  `init` function L17-34 — `func init()`
+-  `main` function L36 — `func main()`
+
+### tests/wasm-fixtures/greeter-py
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/greeter-py/app.py
+
+- pub `Greeter` class L14-33 — `{ greet, add, echo_bytes, probe_env, fidius_interface_hash }` — Implements the exported `greeter` interface.
+- pub `greet` method L17-18 — `def greet(self, name: str) -> str`
+- pub `add` method L20-22 — `def add(self, a: int, b: int) -> int`
+- pub `echo_bytes` method L24-25 — `def echo_bytes(self, data: bytes) -> bytes`
+- pub `probe_env` method L27-29 — `def probe_env(self) -> bool`
+- pub `fidius_interface_hash` method L31-33 — `def fidius_interface_hash(self) -> int`
+
+### tests/wasm-fixtures/macro-greeter/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/macro-greeter/src/lib.rs
+
+- pub `Greeter` interface L11-16 — `{ fn greet(), fn echo() }`
+- pub `MyGreeter` struct L18 — `-`
+-  `MyGreeter` type L21-32 — `impl Greeter for MyGreeter`
+-  `greet` function L22-24 — `(&self, name: String) -> String`
+-  `echo` function L27-31 — `(&self, data: Vec<u8>) -> Vec<u8>`
+
+### tests/wasm-fixtures/macro-ticker/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/macro-ticker/src/lib.rs
+
+- pub `Ticker` interface L13-16 — `{ fn tick() }`
+- pub `MyTicker` struct L18 — `-`
+-  `MyTicker` type L21-25 — `impl Ticker for MyTicker`
+-  `tick` function L22-24 — `(&self, count: u32) -> fidius_guest::Stream<u64>`
+
+### tests/wasm-fixtures/records-greeter
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/records-greeter/build.rs
+
+-  `main` function L7-9 — `()`
+
+### tests/wasm-fixtures/records-greeter/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/records-greeter/src/geom.rs
+
+- pub `Point` struct L7-10 — `{ x: i32, y: i32 }`
+
+#### tests/wasm-fixtures/records-greeter/src/lib.rs
+
+- pub `geom` module L11 — `-`
+- pub `Shape` enum L15-20 — `Circle | Rect | Triangle | Dot`
+- pub `Geo` interface L23-26 — `{ fn midpoint(), fn describe() }`
+- pub `MyGeo` struct L28 — `-`
+-  `MyGeo` type L31-47 — `impl Geo for MyGeo`
+-  `midpoint` function L32-37 — `(&self, a: Point, b: Point) -> Point`
+-  `describe` function L39-46 — `(&self, s: Shape) -> String`
+
+### tests/wasm-fixtures/ticker/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/ticker/src/lib.rs
+
+-  `bindings` module L8 — `-`
+-  `INTERFACE_HASH` variable L17 — `: u64`
+-  `Component` struct L19 — `-`
+-  `Ticks` struct L23-26 — `{ current: Cell<u64>, count: u64 }` — Guest-side stream state.
+-  `Ticks` type L28-38 — `impl GuestTickStream for Ticks`
+-  `next` function L29-37 — `(&self) -> Result<Option<u64>, PluginError>`
+-  `Component` type L40-53 — `impl Guest for Component`
+-  `TickStream` type L41 — `= Ticks`
+-  `tick` function L43-48 — `(count: u32) -> TickStream`
+-  `fidius_interface_hash` function L50-52 — `() -> u64`
+
+### tests/wasm-fixtures/ticker-js
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/ticker-js/ticker.js
+
+- pub `constructor` method L14-17 — `constructor(count)`
+- pub `next` method L18-25 — `next()`
+-  `TickStream` class L13-26 — `-`
+
+### tests/wasm-fixtures/ticker-py
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/ticker-py/app.py
+
+- pub `TickStream` class L19-31 — `(ticker_exports.TickStream) { __init__, next }` — The server-stream resource handle.
+- pub `__init__` method L22-24 — `def __init__(self, count: int)`
+- pub `next` method L26-31 — `def next(self) -> Optional[int]`
+- pub `Ticker` class L34-42 — `{ tick, fidius_interface_hash }` — Implements the exported `ticker` interface (the free functions).
+- pub `tick` method L37-38 — `def tick(self, count: int) -> TickStream`
+- pub `fidius_interface_hash` method L40-42 — `def fidius_interface_hash(self) -> int`
+
+#### tests/wasm-fixtures/ticker-py/componentize_py_runtime.pyi
+
+- pub `call_task_return` function L10 — `def call_task_return(index: int, borrows: int, result: Any) -> None`
+- pub `waitable_set_drop` function L12 — `def waitable_set_drop(set: int) -> None`
+- pub `context_set` function L14 — `def context_set(value: Any) -> None`
+- pub `context_get` function L16 — `def context_get() -> Any`
+- pub `waitable_join` function L18 — `def waitable_join(waitable: int, set: int) -> None`
+- pub `subtask_drop` function L20 — `def subtask_drop(task: int) -> None`
+- pub `waitable_set_new` function L22 — `def waitable_set_new() -> int`
+- pub `promise_get_result` function L24 — `def promise_get_result(event: int, promise: int) -> Any`
+- pub `future_read` function L26 — `def future_read(ty: int, future: int) -> Result[Any, tuple[int, int]]`
+- pub `future_write` function L28 — `def future_write(ty: int, future: int, value: Any) -> Result[tuple[int, int], tu...`
+- pub `future_drop_readable` function L30 — `def future_drop_readable(ty: int, future: int) -> None`
+- pub `future_drop_writable` function L32 — `def future_drop_writable(ty: int, future: int) -> None`
+- pub `stream_read` function L34 — `def stream_read(ty: int, stream: int, max_count: int) -> Result[tuple[int, bytes...`
+- pub `stream_write` function L36 — `def stream_write(ty: int, stream: int, values: bytes | list[Any]) -> Result[tupl...`
+- pub `stream_drop_readable` function L38 — `def stream_drop_readable(ty: int, stream: int) -> None`
+- pub `stream_drop_writable` function L40 — `def stream_drop_writable(ty: int, stream: int) -> None`
+
+### wasm-spike/guest/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### wasm-spike/guest/src/lib.rs
+
+- pub `fd_alloc` function L20-27 — `(len: usize) -> *mut u8` — Allocate `len` bytes in the guest's linear memory and return the pointer.
+- pub `fd_dealloc` function L31-37 — `(ptr: *mut u8, len: usize)` — Free a buffer previously returned by `fd_alloc` (or by `fd_call_raw`).
+- pub `fd_call_raw` function L47-59 — `(ptr: *mut u8, len: usize) -> u64` — The raw-wire round trip.
+
+### wasm-spike/host/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### wasm-spike/host/src/main.rs
+
+-  `WARMUP` variable L16 — `: u32` — Run: cargo run --release -- <path-to-guest.wasm>
+-  `ITERS` variable L17 — `: u32` — Run: cargo run --release -- <path-to-guest.wasm>
+-  `bench` function L19-28 — `(iters: u32, mut f: F) -> f64` — Run: cargo run --release -- <path-to-guest.wasm>
+-  `round_trip` function L32-54 — `( store: &mut Store<()>, memory: &wasmtime::Memory, alloc: &TypedFunc<u32, u32>,...` — One raw-wire round trip on a warm instance: write `input` into guest memory
+-  `main` function L56-150 — `()` — Run: cargo run --release -- <path-to-guest.wasm>
 

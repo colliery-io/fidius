@@ -168,6 +168,15 @@ pub struct MethodIR {
     /// the host unchanged. Error-path payloads (for `Result<Vec<u8>, E>`
     /// returns) continue to go through bincode.
     pub wire_raw: bool,
+    /// Whether this is a server-streaming method — its return type is
+    /// `fidius::Stream<T>` (FIDIUS-I-0026, D4). When true, [`Self::stream_item_type`]
+    /// holds the per-item type `T`, the signature string carries a `!stream`
+    /// marker (so it hashes distinctly from a unary `-> T`), and the host-side
+    /// client (ST.3) returns a `ChunkStream` instead of a `Result<T, _>`.
+    pub streaming: bool,
+    /// The per-item type `T` for a `streaming` method (the `T` in
+    /// `fidius::Stream<T>`). `None` for non-streaming methods.
+    pub stream_item_type: Option<Type>,
 }
 
 impl MethodIR {
@@ -361,13 +370,46 @@ fn validate_raw_method_signature(
     ))
 }
 
+/// Return the per-item type `T` if `ty` is a `Stream<T>` (i.e. its final path
+/// segment is `Stream` with exactly one angle-bracketed type argument). Matches
+/// `fidius::Stream<T>`, `crate::fidius::Stream<T>`, or a bare `Stream<T>` — the
+/// detection keys on the segment name, since the marker is written explicitly
+/// (FIDIUS-I-0026, D4). Returns `None` for any other type.
+fn stream_item_type(ty: &Type) -> Option<Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+    let last = type_path.path.segments.last()?;
+    if last.ident != "Stream" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    if args.args.len() != 1 {
+        return None;
+    }
+    match args.args.first()? {
+        syn::GenericArgument::Type(t) => Some(t.clone()),
+        _ => None,
+    }
+}
+
 /// Build the canonical signature string for a method.
 ///
 /// Delegates the format to `fidius_core::hash::signature_string` so the
 /// proc macro and any other tooling (e.g. `fidius python-stub`) share one
-/// source of truth. The `!raw` marker for `#[wire(raw)]` methods is part
-/// of that shared format.
-fn build_signature_string(method: &TraitItemFn, wire_raw: bool) -> String {
+/// source of truth. The `!raw` (raw-wire) and `!stream` (server-streaming)
+/// markers are part of that shared format.
+///
+/// For a streaming method (`-> fidius::Stream<T>`) the canonical return type is
+/// the per-item type `T` (passed in `stream_item`), plus the `!stream` marker —
+/// so `read:->Row!stream` hashes distinctly from a unary `read:->Row`.
+fn build_signature_string(
+    method: &TraitItemFn,
+    wire_raw: bool,
+    stream_item: Option<&Type>,
+) -> String {
     let name = method.sig.ident.to_string();
 
     let arg_types: Vec<String> = method
@@ -380,12 +422,16 @@ fn build_signature_string(method: &TraitItemFn, wire_raw: bool) -> String {
         })
         .collect();
 
-    let ret = match &method.sig.output {
-        ReturnType::Default => String::new(),
-        ReturnType::Type(_, ty) => ty.to_token_stream().to_string(),
+    let ret = match stream_item {
+        // Streaming: the canonical return is the per-item type `T`.
+        Some(item) => item.to_token_stream().to_string(),
+        None => match &method.sig.output {
+            ReturnType::Default => String::new(),
+            ReturnType::Type(_, ty) => ty.to_token_stream().to_string(),
+        },
     };
 
-    fidius_core::hash::signature_string(&name, &arg_types, &ret, wire_raw)
+    fidius_core::hash::signature_string(&name, &arg_types, &ret, wire_raw, stream_item.is_some())
 }
 
 /// Extract argument names from a method signature (excluding `self`).
@@ -468,6 +514,22 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
         let return_type = extract_return_type(method);
         let method_metas = parse_meta_attrs(&method.attrs, "method_meta")?;
 
+        // Server-streaming detection (FIDIUS-I-0026, D4): a method whose return
+        // type is `fidius::Stream<T>`. Argument-position `Stream<T>`
+        // (client-streaming / bidirectional) is rejected — v1 is server-streaming
+        // only.
+        for at in &arg_types {
+            if stream_item_type(at).is_some() {
+                return Err(syn::Error::new(
+                    at.span(),
+                    "fidius v1 supports server-streaming only: `Stream<T>` is not allowed in \
+                     argument position (client-streaming and bidirectional are deferred)",
+                ));
+            }
+        }
+        let stream_item = return_type.as_ref().and_then(stream_item_type);
+        let streaming = stream_item.is_some();
+
         if wire_raw {
             if is_async {
                 return Err(syn::Error::new(
@@ -475,10 +537,13 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
                     "#[wire(raw)] is not supported on async methods in this release",
                 ));
             }
+            // A `#[wire(raw)]` method must return `Vec<u8>`/`Result<Vec<u8>,_>`,
+            // which is never a `Stream<T>`; validate_raw_method_signature
+            // enforces that, so raw + streaming can't co-occur.
             validate_raw_method_signature(method, &arg_types, return_type.as_ref())?;
         }
 
-        let signature_string = build_signature_string(method, wire_raw);
+        let signature_string = build_signature_string(method, wire_raw, stream_item.as_ref());
 
         methods.push(MethodIR {
             name: method.sig.ident.clone(),
@@ -490,6 +555,8 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             signature_string,
             method_metas,
             wire_raw,
+            streaming,
+            stream_item_type: stream_item,
         });
     }
 
@@ -623,5 +690,74 @@ mod tests {
             .map(|s| s.ident.to_string())
             .collect();
         assert_eq!(segments, vec!["my_crate", "fidius"]);
+    }
+
+    #[test]
+    fn detects_server_streaming_return() {
+        let ir = parse_test_trait(quote! {
+            pub trait Source: Send + Sync {
+                fn read(&self, cfg: String) -> fidius::Stream<u64>;
+                fn ping(&self) -> bool;
+            }
+        });
+        // Streaming method: flagged, item type captured, `!stream` in signature.
+        assert!(ir.methods[0].streaming);
+        let item = ir.methods[0].stream_item_type.as_ref().unwrap();
+        assert_eq!(quote!(#item).to_string(), "u64");
+        assert!(ir.methods[0].signature_string.ends_with("!stream"));
+        assert!(ir.methods[0]
+            .signature_string
+            .starts_with("read:String->u64"));
+        // Unary method: untouched.
+        assert!(!ir.methods[1].streaming);
+        assert!(ir.methods[1].stream_item_type.is_none());
+        assert!(!ir.methods[1].signature_string.contains("!stream"));
+    }
+
+    #[test]
+    fn streaming_and_unary_hash_differently() {
+        let streaming = parse_test_trait(quote! {
+            pub trait A: Send + Sync { fn read(&self) -> fidius::Stream<Row>; }
+        });
+        let unary = parse_test_trait(quote! {
+            pub trait A: Send + Sync { fn read(&self) -> Row; }
+        });
+        let hs =
+            fidius_core::hash::interface_hash(&[streaming.methods[0].signature_string.as_str()]);
+        let hu = fidius_core::hash::interface_hash(&[unary.methods[0].signature_string.as_str()]);
+        assert_ne!(
+            hs, hu,
+            "a streaming method must hash differently from a unary one of the same name/args"
+        );
+    }
+
+    #[test]
+    fn bare_stream_marker_is_detected() {
+        // Detection keys on the final path segment, so a bare `Stream<T>` works
+        // too (e.g. via `use fidius::Stream`).
+        let ir = parse_test_trait(quote! {
+            pub trait S: Send + Sync { fn read(&self) -> Stream<String>; }
+        });
+        assert!(ir.methods[0].streaming);
+    }
+
+    #[test]
+    fn rejects_stream_in_argument_position() {
+        let item: ItemTrait = syn::parse2(quote! {
+            pub trait Bad: Send + Sync {
+                fn sink(&self, items: fidius::Stream<Row>) -> u32;
+            }
+        })
+        .unwrap();
+        let attrs = InterfaceAttrs {
+            version: 1,
+            buffer_strategy: BufferStrategyAttr::PluginAllocated,
+            crate_path: syn::parse_str("fidius").unwrap(),
+        };
+        let err = parse_interface(attrs, &item).unwrap_err();
+        assert!(
+            err.to_string().contains("server-streaming only"),
+            "got: {err}"
+        );
     }
 }

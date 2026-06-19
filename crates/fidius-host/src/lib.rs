@@ -21,6 +21,8 @@ pub mod host;
 pub mod loader;
 pub mod package;
 pub mod signing;
+#[cfg(feature = "streaming")]
+pub mod stream;
 pub mod types;
 
 pub use error::{CallError, LoadError};
@@ -28,4 +30,6 @@ pub use executor::PluginExecutor;
 pub use handle::PluginHandle;
 pub use host::PluginHost;
 pub use loader::{LoadedLibrary, LoadedPlugin};
+#[cfg(feature = "streaming")]
+pub use stream::{ChunkStream, StreamExecutor};
 pub use types::{LoadPolicy, PluginInfo, PluginRuntimeKind};

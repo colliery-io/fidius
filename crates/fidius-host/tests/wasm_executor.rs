@@ -63,18 +63,22 @@ fn executor_with(capabilities: Vec<String>) -> WasmComponentExecutor {
         WasmMethod {
             name: "greet".to_string(),
             wire_raw: false,
+            streaming: false,
         },
         WasmMethod {
             name: "add".to_string(),
             wire_raw: false,
+            streaming: false,
         },
         WasmMethod {
             name: "echo-bytes".to_string(),
             wire_raw: true,
+            streaming: false,
         },
         WasmMethod {
             name: "probe-env".to_string(),
             wire_raw: false,
+            streaming: false,
         },
     ];
     WasmComponentExecutor::from_component_bytes(
@@ -144,18 +148,22 @@ static METHOD_DESCS: [WasmMethodDesc; 4] = [
     WasmMethodDesc {
         name: "greet",
         wire_raw: false,
+        streaming: false,
     },
     WasmMethodDesc {
         name: "add",
         wire_raw: false,
+        streaming: false,
     },
     WasmMethodDesc {
         name: "echo-bytes",
         wire_raw: true,
+        streaming: false,
     },
     WasmMethodDesc {
         name: "probe-env",
         wire_raw: false,
+        streaming: false,
     },
 ];
 static GREETER_DESC: WasmInterfaceDescriptor = WasmInterfaceDescriptor {

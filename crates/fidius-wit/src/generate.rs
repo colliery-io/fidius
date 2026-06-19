@@ -171,12 +171,26 @@ fn assemble(acc: Collected) -> Result<Generated, String> {
             ReturnType::Type(_, t) => Some(t.as_ref()),
             ReturnType::Default => None,
         };
-        let ret = return_to_wit_with(ret_ty, &known)
-            .map_err(|e| format!("method `{}` return: {e}", f.sig.ident))?;
+        // Server-streaming (`-> fidius::Stream<T>`): the func renders as a
+        // resource-returning export, not a value return (FIDIUS-I-0026).
+        let stream_item = ret_ty.and_then(crate::stream_item_type);
+        let (ret, stream_item) = match stream_item {
+            Some(item_ty) => {
+                let item_wit = wit_type_with(item_ty, &known)
+                    .map_err(|e| format!("method `{}` stream item: {e}", f.sig.ident))?;
+                (None, Some(item_wit))
+            }
+            None => {
+                let ret = return_to_wit_with(ret_ty, &known)
+                    .map_err(|e| format!("method `{}` return: {e}", f.sig.ident))?;
+                (ret, None)
+            }
+        };
         methods.push(WitMethod {
             name: to_kebab_case(&f.sig.ident.to_string()),
             params,
             ret,
+            stream_item,
         });
     }
 

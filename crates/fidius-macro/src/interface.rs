@@ -350,10 +350,12 @@ fn generate_constants(ir: &InterfaceIR) -> TokenStream {
         .map(|m| {
             let name = crate::wit::to_kebab_case(&m.name.to_string());
             let wire_raw = m.wire_raw;
+            let streaming = m.streaming;
             quote! {
                 #crate_path::wasm_descriptor::WasmMethodDesc {
                     name: #name,
                     wire_raw: #wire_raw,
+                    streaming: #streaming,
                 }
             }
         })
@@ -544,7 +546,28 @@ fn generate_client(ir: &InterfaceIR) -> TokenStream {
                 quote! {}
             };
 
-            if m.wire_raw {
+            if m.streaming {
+                // Server-streaming methods (FIDIUS-I-0026) are intentionally NOT
+                // given a typed Client method here. Emitting one would reference
+                // `#crate_path::ChunkStream`, which only exists when the consuming
+                // crate enables `fidius`'s `streaming` feature — coupling every
+                // `host` build of a streaming interface to `streaming` and
+                // breaking it otherwise. Instead, callers reach a streaming
+                // method through the handle:
+                //
+                // ```ignore
+                // let stream = client.handle()
+                //     .call_streaming(MyTrait_METHOD_READ, &(arg,))
+                //     .await?;            // -> fidius::ChunkStream
+                // ```
+                //
+                // (Method index constants are still generated.) A typed Client
+                // wrapper can return once a clean cross-crate feature story
+                // exists. The `_ = (method_name, index, arg_types, arg_names)`
+                // keeps these bindings "used" for the non-emitting branch.
+                let _ = (method_name, index, arg_types, arg_names);
+                quote! {}
+            } else if m.wire_raw {
                 // Raw client method: takes &[u8], returns Result<Vec<u8>, CallError>.
                 // The interface IR validation guarantees there's exactly one arg.
                 let arg_name = arg_names

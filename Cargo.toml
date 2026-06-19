@@ -27,6 +27,8 @@ clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 thiserror = "2"
 inventory = "0.3"
+futures = "0.3"
+async-trait = "0.1"
 trybuild = "1"
 toml = "0.8"
 tracing = "0.1"

@@ -31,14 +31,20 @@
 
 pub mod descriptor;
 pub mod error;
+pub mod frame;
 pub mod hash;
 pub mod python_descriptor;
 pub mod status;
+pub mod stream_ffi;
+pub mod stream_marker;
 pub mod value;
 pub mod wasm_descriptor;
 pub mod wire;
 
 pub use descriptor::*;
 pub use error::PluginError;
+pub use frame::{Frame, FrameError};
 pub use status::*;
+pub use stream_ffi::FidiusStreamHandle;
+pub use stream_marker::Stream;
 pub use value::{from_value, to_value, Value, ValueError};

@@ -148,6 +148,48 @@ impl PluginHandle {
         }
     }
 
+    /// Start a server-streaming method call by vtable index (FIDIUS-I-0026).
+    ///
+    /// Returns a [`crate::stream::ChunkStream`] — a `futures::Stream` of
+    /// `Result<Value, _>` the caller pulls with `.next().await`. Backpressure and
+    /// cancellation are structural: a slow consumer parks the producer, and
+    /// dropping the stream tears the producer down. All three backends stream:
+    /// Python and WASM cross via the self-describing [`Value`] currency; cdylib
+    /// crosses items as concrete bincode of the item type `O` and decodes them
+    /// here (FIDIUS-T-0137).
+    ///
+    /// `O` is the stream's item type. Python/WASM ignore it (they're already
+    /// `Value`-native); cdylib uses it to `bincode::<O>`-decode each item.
+    #[cfg(feature = "streaming")]
+    pub async fn call_streaming<I: Serialize, O: DeserializeOwned + Serialize>(
+        &self,
+        index: usize,
+        input: &I,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
+        match &self.backend {
+            // cdylib: concrete bincode of the args (no `Value` hop), then the
+            // iterator-handle streaming path (FIDIUS-I-0026 CS.1). Items also cross
+            // as concrete bincode, decoded by `cdylib_stream_decode::<O>`.
+            Backend::Cdylib(e) => {
+                let input_bytes = fidius_core::wire::serialize(input)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                e.call_streaming_raw(index, &input_bytes, cdylib_stream_decode::<O>)
+            }
+            #[cfg(feature = "python")]
+            Backend::Python(e) => {
+                let args = fidius_core::to_value(input)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                crate::stream::StreamExecutor::call_streaming(e, index, args).await
+            }
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(e) => {
+                let args = fidius_core::to_value(input)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                crate::stream::StreamExecutor::call_streaming(e, index, args).await
+            }
+        }
+    }
+
     /// Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
     pub fn call_method_raw(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError> {
         match &self.backend {
@@ -204,4 +246,18 @@ impl PluginHandle {
             Backend::Wasm(_) => Vec::new(),
         }
     }
+}
+
+/// Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
+/// crosses as concrete `bincode(O)` (byte-identical to the unary cdylib wire), so
+/// we `wire::deserialize::<O>` then lift to a `Value`. This is the `decode_item`
+/// fn pointer the typed caller hands to [`CdylibExecutor::call_streaming_raw`] —
+/// `O` is monomorphised in by `call_streaming::<_, O>`.
+#[cfg(feature = "streaming")]
+fn cdylib_stream_decode<O: DeserializeOwned + Serialize>(
+    bytes: &[u8],
+) -> Result<fidius_core::Value, CallError> {
+    let item: O = fidius_core::wire::deserialize(bytes)
+        .map_err(|e| CallError::Deserialization(e.to_string()))?;
+    fidius_core::to_value(&item).map_err(|e| CallError::Serialization(e.to_string()))
 }

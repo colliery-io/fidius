@@ -69,6 +69,26 @@ pub struct WitMethod {
     pub params: Vec<(String, String)>,
     /// WIT return type, or `None` for no return.
     pub ret: Option<String>,
+    /// For a **server-streaming** method (`-> fidius::Stream<T>`): the WIT item
+    /// type `T` (FIDIUS-I-0026). When `Some`, the method renders as an exported
+    /// `resource <name>-stream { next: func() -> result<option<T>, plugin-error>; }`
+    /// and the func returns that resource (`-> <name>-stream`). `None` for a
+    /// normal func.
+    pub stream_item: Option<String>,
+}
+
+/// If `ty` is `fidius::Stream<T>` (final path segment `Stream`, exactly one type
+/// argument), return `T`. The server-streaming marker (FIDIUS-I-0026, D4). Public
+/// so the macro's WASM adapter shares the same detection.
+pub fn stream_item_type(ty: &Type) -> Option<&Type> {
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            if seg.ident == "Stream" {
+                return first_generic(seg);
+            }
+        }
+    }
+    None
 }
 
 /// Map a Rust argument/return type to its WIT spelling, where `known` holds the
@@ -263,6 +283,17 @@ pub fn render_wit_full(iface_kebab: &str, type_defs: &[String], methods: &[WitMe
     for def in type_defs {
         s.push_str(def);
     }
+    // Resource declarations for streaming methods, before the funcs that return
+    // them (FIDIUS-I-0026): `resource <m>-stream { next: ... }`.
+    for m in methods {
+        if let Some(item) = &m.stream_item {
+            s.push_str(&format!("    resource {}-stream {{\n", m.name));
+            s.push_str(&format!(
+                "        next: func() -> result<option<{item}>, plugin-error>;\n"
+            ));
+            s.push_str("    }\n");
+        }
+    }
     for m in methods {
         let params = m
             .params
@@ -270,9 +301,17 @@ pub fn render_wit_full(iface_kebab: &str, type_defs: &[String], methods: &[WitMe
             .map(|(n, t)| format!("{n}: {t}"))
             .collect::<Vec<_>>()
             .join(", ");
-        match &m.ret {
-            Some(r) => s.push_str(&format!("    {}: func({params}) -> {r};\n", m.name)),
-            None => s.push_str(&format!("    {}: func({params});\n", m.name)),
+        if m.stream_item.is_some() {
+            // Streaming: the func returns the owned stream resource.
+            s.push_str(&format!(
+                "    {}: func({params}) -> {}-stream;\n",
+                m.name, m.name
+            ));
+        } else {
+            match &m.ret {
+                Some(r) => s.push_str(&format!("    {}: func({params}) -> {r};\n", m.name)),
+                None => s.push_str(&format!("    {}: func({params});\n", m.name)),
+            }
         }
     }
     s.push_str("    fidius-interface-hash: func() -> u64;\n");
@@ -428,6 +467,7 @@ mod tests {
             name: "midpoint".into(),
             params: vec![("a".into(), "point".into()), ("b".into(), "point".into())],
             ret: Some("point".into()),
+            stream_item: None,
         }];
         let doc = render_wit_full("geo", &recs, &methods);
         assert!(doc.contains("package fidius:geo@0.1.0;"));
@@ -440,5 +480,34 @@ mod tests {
         assert!(doc.contains("midpoint: func(a: point, b: point) -> point;"));
         assert!(doc.contains("fidius-interface-hash: func() -> u64;"));
         assert!(doc.contains("world geo-plugin {"));
+    }
+
+    #[test]
+    fn streaming_method_renders_a_resource() {
+        let methods = vec![WitMethod {
+            name: "tick".into(),
+            params: vec![("count".into(), "u32".into())],
+            ret: None,
+            stream_item: Some("u64".into()),
+        }];
+        let doc = render_wit("ticker", &methods);
+        // Resource declared, with the poll method...
+        assert!(doc.contains("resource tick-stream {"));
+        assert!(doc.contains("next: func() -> result<option<u64>, plugin-error>;"));
+        // ...and the func returns the owned resource.
+        assert!(doc.contains("tick: func(count: u32) -> tick-stream;"));
+        // Resource precedes the func that returns it.
+        assert!(doc.find("resource tick-stream").unwrap() < doc.find("tick: func").unwrap());
+    }
+
+    #[test]
+    fn stream_item_type_detects_marker() {
+        let ty: Type = syn::parse_str("fidius::Stream<u64>").unwrap();
+        let item = stream_item_type(&ty).unwrap();
+        assert_eq!(rust_type_to_wit(item).unwrap(), "u64");
+        let bare: Type = syn::parse_str("Stream<String>").unwrap();
+        assert!(stream_item_type(&bare).is_some());
+        let not: Type = syn::parse_str("Vec<u64>").unwrap();
+        assert!(stream_item_type(&not).is_none());
     }
 }

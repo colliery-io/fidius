@@ -124,4 +124,28 @@ impl BytePipe for ReverseBytes {
     }
 }
 
+// Fourth interface: server-streaming (FIDIUS-I-0026). Interface-only — there is
+// NO `#[plugin_impl]` for it, because native (cdylib) streaming is rejected by
+// the macro; this interface is served by a Python plugin (see
+// tests/test-plugin-py-ticker). It exists here so the host tests get the
+// macro-generated `Ticker_PYTHON_DESCRIPTOR` (whose interface hash includes the
+// `!stream` marker) to validate the Python plugin against.
+#[plugin_interface(version = 1, buffer = PluginAllocated)]
+pub trait Ticker: Send + Sync {
+    /// Server-streaming: yield `count` increasing ticks (`0..count`).
+    fn tick(&self, count: u32) -> fidius::Stream<u64>;
+}
+
+// A cdylib server-streaming impl (FIDIUS-I-0026 CS.1): `#[plugin_impl]` now
+// generates the iterator-handle FFI shims (init/next/drop) instead of rejecting
+// streaming. Exercised by the cdylib streaming E2E + the perf bench.
+pub struct TickerImpl;
+
+#[plugin_impl(Ticker)]
+impl Ticker for TickerImpl {
+    fn tick(&self, count: u32) -> fidius::Stream<u64> {
+        fidius::Stream::from_iter(0..count as u64)
+    }
+}
+
 fidius::fidius_plugin_registry!();

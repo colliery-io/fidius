@@ -44,6 +44,10 @@
 
 pub mod dylib;
 pub mod signing;
+#[cfg(feature = "streaming")]
+pub mod stream;
 
 pub use dylib::{dylib_fixture, DylibFixture, DylibFixtureBuilder};
 pub use signing::{fixture_keypair, fixture_keypair_with_seed, sign_dylib};
+#[cfg(feature = "streaming")]
+pub use stream::{collect, pump, stream_of, CollectSink, StreamSink};

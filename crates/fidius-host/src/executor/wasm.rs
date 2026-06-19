@@ -122,6 +122,9 @@ pub struct WasmMethod {
     pub name: String,
     /// Whether this method uses `#[wire(raw)]` (bytes in/out).
     pub wire_raw: bool,
+    /// Whether this method is server-streaming (`-> fidius::Stream<T>`); the
+    /// export returns a `next()`-pollable resource the host pumps (WS.3).
+    pub streaming: bool,
 }
 
 /// WASM component execution backend.
@@ -375,6 +378,119 @@ impl ValueExecutor for WasmComponentExecutor {
             other => val_to_value(other),
         };
         Ok(ret)
+    }
+}
+
+/// Bounded channel depth between the wasmtime pump thread and the async
+/// consumer — the backpressure/memory window (REQ-003/NFR-003), like the Python
+/// backend's.
+#[cfg(feature = "streaming")]
+const STREAM_CHANNEL_CAP: usize = 4;
+
+#[cfg(feature = "streaming")]
+#[async_trait::async_trait]
+impl crate::stream::StreamExecutor for WasmComponentExecutor {
+    async fn call_streaming(
+        &self,
+        method: usize,
+        args: Value,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
+        let m = self.method(method, false)?.clone();
+        if !m.streaming {
+            return Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: format!("method '{}' is not a server-streaming method", m.name),
+            });
+        }
+
+        let (mut store, instance) = self.instantiate()?;
+        let params: Vec<Val> = match args {
+            Value::List(items) => items.iter().map(value_to_val).collect::<Result<_, _>>()?,
+            Value::Unit => Vec::new(),
+            single => vec![value_to_val(&single)?],
+        };
+
+        // Call the streaming export: it returns an owned stream `resource`.
+        let start = self.func(&mut store, &instance, &m.name)?;
+        let mut out = [Val::Bool(false)];
+        start
+            .call(&mut store, &params, &mut out)
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+        // (wasmtime 45: `post_return` is a no-op and deprecated — not called.)
+        let resource = match out.into_iter().next() {
+            Some(Val::Resource(r)) => r,
+            other => {
+                return Err(CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: format!(
+                        "streaming method '{}' did not return a resource: {other:?}",
+                        m.name
+                    ),
+                })
+            }
+        };
+
+        // The poll method on the returned resource: `[method]<m>-stream.next`
+        // (WS.1/WS.2 naming convention: the resource for method `m` is `m-stream`).
+        let next_name = format!("[method]{}-stream.next", m.name);
+        let next_func = self.func(&mut store, &instance, &next_name)?;
+
+        let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
+
+        // Dedicated pump thread owns the Store + resource (mirrors the Python GIL
+        // thread). Sync wasmtime `next()` calls, bounded channel = backpressure.
+        std::thread::spawn(move || {
+            loop {
+                let mut nout = [Val::Bool(false)];
+                if let Err(e) = next_func.call(&mut store, &[Val::Resource(resource)], &mut nout) {
+                    let _ = tx.blocking_send(Err(CallError::Backend {
+                        runtime: "wasm".into(),
+                        message: e.to_string(),
+                    }));
+                    break;
+                }
+                // (wasmtime 45: `post_return` is a deprecated no-op — not called.)
+
+                // nout[0] = result<option<u64>, plugin-error>
+                let step: Option<Result<Value, CallError>> = match &nout[0] {
+                    Val::Result(Ok(inner)) => match inner.as_deref() {
+                        Some(Val::Option(Some(v))) => Some(Ok(val_to_value(v))),
+                        // none → clean end of stream
+                        Some(Val::Option(None)) | None => None,
+                        Some(other) => Some(Ok(val_to_value(other))),
+                    },
+                    Val::Result(Err(payload)) => {
+                        Some(Err(plugin_error_from_val(payload.as_deref())))
+                    }
+                    other => Some(Ok(val_to_value(other))),
+                };
+
+                match step {
+                    None => break,
+                    Some(item) => {
+                        let is_err = item.is_err();
+                        if tx.blocking_send(item).is_err() {
+                            // Consumer dropped the stream → cancel.
+                            break;
+                        }
+                        if is_err {
+                            break;
+                        }
+                    }
+                }
+            }
+            // Drop the resource (runs the guest destructor = D3 cancel), then the Store.
+            let _ = resource.resource_drop(&mut store);
+            drop(store);
+        });
+
+        let body = futures::stream::unfold(rx, |mut rx| async move {
+            rx.recv().await.map(|item| (item, rx))
+        });
+        Ok(crate::stream::ChunkStream::new(body))
     }
 }
 

@@ -44,6 +44,10 @@ struct MethodInfo<'a> {
     /// The method's return type, if any (`None` for `-> ()`). Used by the
     /// WASM component WIT generator (FIDIUS-T-0106).
     ret_type: Option<&'a Type>,
+    /// For a server-streaming method (`-> fidius::Stream<T>`): the item type `T`
+    /// (FIDIUS-I-0026). When `Some`, the WASM adapter emits a `resource`
+    /// instead of a value-returning func, and the cdylib path is disabled.
+    stream_item: Option<&'a Type>,
 }
 
 /// Detect a `#[wire(raw)]` attribute on an impl-side method. Mirrors the
@@ -66,6 +70,21 @@ fn impl_method_is_raw(attrs: &[syn::Attribute]) -> syn::Result<bool> {
         return Ok(raw);
     }
     Ok(false)
+}
+
+/// kebab-case → PascalCase, for deriving the wit-bindgen resource type name from
+/// a method name: `tick` → resource `tick-stream` → `TickStream` (trait
+/// `GuestTickStream`). (FIDIUS-I-0026.)
+fn kebab_to_pascal(s: &str) -> String {
+    s.split('-')
+        .map(|seg| {
+            let mut c = seg.chars();
+            match c.next() {
+                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect()
 }
 
 /// Check if a return type looks like `Result<T, ...>`.
@@ -164,6 +183,10 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                 ReturnType::Type(_, ty) => Some(ty.as_ref()),
                 ReturnType::Default => None,
             };
+            // Server-streaming (`-> fidius::Stream<T>`): the WASM adapter emits a
+            // resource; the cdylib path is disabled for this plugin (handled in
+            // the codegen below). (FIDIUS-I-0026.)
+            let stream_item = ret_type.and_then(crate::wit::stream_item_type);
             let returns_result = ret_type.map(is_result_type).unwrap_or(false);
             let mut arg_types = Vec::new();
             let mut arg_names = Vec::new();
@@ -186,6 +209,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                 arg_names,
                 wire_raw,
                 ret_type,
+                stream_item,
             });
         }
     }
@@ -196,8 +220,19 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     let crate_path = &attrs.crate_path;
     let buffer_strategy = attrs.buffer_strategy;
 
-    // Generate shim functions (signature and body vary by buffer strategy)
-    let shims = generate_shims(&impl_ident, &impl_methods, crate_path, buffer_strategy);
+    // Server-streaming methods (`-> fidius::Stream<T>`, FIDIUS-I-0026) require the
+    // PluginAllocated buffer strategy on the cdylib path (the iterator-handle ABI
+    // and per-item Box<[u8]> allocation are PluginAllocated-shaped; Arena
+    // streaming is out of scope). Fail at macro time — this is a structural
+    // misconfiguration, not target-dependent.
+    let any_streaming = impl_methods.iter().any(|m| m.stream_item.is_some());
+    if any_streaming && matches!(buffer_strategy, BufferStrategyAttr::Arena) {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "server-streaming methods (`-> fidius::Stream<T>`) require the PluginAllocated \
+             buffer strategy; the Arena strategy does not support streaming.",
+        ));
+    }
 
     // Strip `#[wire(...)]` helper attrs from the re-emitted impl block so the
     // Rust compiler doesn't reject them as unknown attributes.
@@ -214,57 +249,58 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         static #instance_name: #impl_type = #impl_type;
     };
 
-    // Generate vtable static
-    let vtable = generate_vtable_static(trait_name, &impl_ident, &method_names);
+    // WASM Component Model auto-export (FIDIUS-T-0106). Emitted under
+    // `#[cfg(target_family = "wasm")]`; handles both unary and (FIDIUS-I-0026)
+    // server-streaming methods. cdylib/Python builds cfg this out entirely.
+    let wasm_adapter = generate_wasm_adapter(trait_name, &instance_name, &impl_methods);
 
-    // free_buffer is only needed for PluginAllocated — Arena doesn't allocate
-    // output, it writes into the host-provided arena, so nothing to free.
-    let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
-    let free_buffer = match buffer_strategy {
-        BufferStrategyAttr::PluginAllocated => quote! {
-            #[cfg(not(target_family = "wasm"))]
-            unsafe extern "C" fn #free_fn_name(ptr: *mut u8, len: usize) {
-                if !ptr.is_null() && len > 0 {
-                    // Reconstruct the Box<[u8]> from its raw parts. Safe because the
-                    // shim emitted by generate_shims always allocates output as a
-                    // Box<[u8]> (cap == len by construction — no mismatch possible).
-                    unsafe {
-                        let slice = std::slice::from_raw_parts_mut(ptr, len);
-                        drop(Box::from_raw(slice as *mut [u8]));
+    // The cdylib FFI machinery — shims (unary or, for streaming methods, the
+    // iterator-handle init/next/drop), vtable, descriptor, registration. All
+    // gated `#[cfg(not(target_family = "wasm"))]` inside; a wasm build uses the
+    // adapter above instead.
+    let cdylib = {
+        let shims = generate_shims(&impl_ident, &impl_methods, crate_path, buffer_strategy);
+        let free_fn_name = format_ident!("__fidius_free_buffer_{}", impl_ident);
+        let free_buffer = match buffer_strategy {
+            BufferStrategyAttr::PluginAllocated => quote! {
+                #[cfg(not(target_family = "wasm"))]
+                unsafe extern "C" fn #free_fn_name(ptr: *mut u8, len: usize) {
+                    if !ptr.is_null() && len > 0 {
+                        // Reconstruct the Box<[u8]> from its raw parts. Safe because the
+                        // shim emitted by generate_shims always allocates output as a
+                        // Box<[u8]> (cap == len by construction — no mismatch possible).
+                        // Streaming item buffers use the same contract.
+                        unsafe {
+                            let slice = std::slice::from_raw_parts_mut(ptr, len);
+                            drop(Box::from_raw(slice as *mut [u8]));
+                        }
                     }
                 }
-            }
-        },
-        BufferStrategyAttr::Arena => quote! {},
+            },
+            BufferStrategyAttr::Arena => quote! {},
+        };
+        let vtable = generate_vtable_static(trait_name, &impl_ident, &method_names);
+        let descriptor = generate_descriptor(
+            trait_name,
+            &impl_ident,
+            &method_names,
+            crate_path,
+            buffer_strategy,
+        );
+        let registration = generate_inventory_registration(&impl_ident, crate_path);
+        quote! {
+            #shims
+            #free_buffer
+            #vtable
+            #descriptor
+            #registration
+        }
     };
-
-    // Generate descriptor (free_buffer field is None for Arena)
-    let descriptor = generate_descriptor(
-        trait_name,
-        &impl_ident,
-        &method_names,
-        crate_path,
-        buffer_strategy,
-    );
-
-    // Register descriptor via inventory for multi-plugin collection
-    let registration = generate_inventory_registration(&impl_ident, crate_path);
-
-    // WASM Component Model auto-export (FIDIUS-T-0106). Emitted under
-    // `#[cfg(target_family = "wasm")]`; on a wasm build with an unsupported
-    // method signature it emits a clear `compile_error!` instead of silently
-    // producing a component that exports nothing. cdylib/Python builds cfg this
-    // out entirely, so they are never affected.
-    let wasm_adapter = generate_wasm_adapter(trait_name, &instance_name, &impl_methods);
 
     Ok(quote! {
         #item_emit
         #instance
-        #shims
-        #free_buffer
-        #vtable
-        #descriptor
-        #registration
+        #cdylib
         #wasm_adapter
     })
 }
@@ -313,7 +349,11 @@ fn generate_wasm_adapter(
             }
             collect_user_idents(ty, &mut known);
         }
-        if m.returns_result {
+        // For a streaming method, classify the stream *item* type, not the
+        // `Stream<T>` wrapper (which isn't a WIT type). (FIDIUS-I-0026.)
+        if let Some(item) = m.stream_item {
+            collect_user_idents(item, &mut known);
+        } else if m.returns_result {
             if let Some(ok) = m.ret_type.and_then(result_ok_type) {
                 collect_user_idents(ok, &mut known);
             }
@@ -327,12 +367,29 @@ fn generate_wasm_adapter(
                 return wasm_unsupported(m.name, &e);
             }
         }
-        if let Err(e) = return_to_wit_with(m.ret_type, &known) {
+        if let Some(item) = m.stream_item {
+            if let Err(e) = wit_type_with(item, &known) {
+                return wasm_unsupported(m.name, &e);
+            }
+        } else if let Err(e) = return_to_wit_with(m.ret_type, &known) {
             return wasm_unsupported(m.name, &e);
         }
     }
 
     let has_user = !known.is_empty();
+
+    // v1 scope: server-streaming is supported only with primitive/String item
+    // types and only in interfaces with no `#[derive(WitType)]` user types. The
+    // build.rs/user-type streaming path is a follow-on.
+    if has_user {
+        if let Some(m) = methods.iter().find(|m| m.stream_item.is_some()) {
+            return wasm_unsupported(
+                m.name,
+                "server-streaming alongside #[derive(WitType)] user types is not yet supported; \
+                 use a primitive or String stream item type in a user-type-free interface",
+            );
+        }
+    }
 
     if !has_user {
         // ── Primitives-only: self-contained inline WIT (no build.rs needed). ──
@@ -343,52 +400,99 @@ fn generate_wasm_adapter(
                 let wt = rust_type_to_wit(ty).expect("validated above");
                 params.push((to_kebab_case(&name.to_string()), wt));
             }
+            let (ret, stream_item) = if let Some(item) = m.stream_item {
+                (None, Some(rust_type_to_wit(item).expect("validated above")))
+            } else {
+                (return_to_wit(m.ret_type).expect("validated above"), None)
+            };
             wit_methods.push(WitMethod {
                 name: to_kebab_case(&m.name.to_string()),
                 params,
-                ret: return_to_wit(m.ret_type).expect("validated above"),
+                ret,
+                stream_item,
             });
         }
         let wit_doc = render_wit(&iface_kebab, &wit_methods);
-        let guest_methods: Vec<TokenStream> = methods
-            .iter()
-            .map(|m| {
-                let mname = m.name;
-                let arg_names = &m.arg_names;
-                let arg_types = &m.arg_types;
+
+        // Items inside `impl Guest` (fns + streaming `type` decls), plus
+        // module-level resource defs (struct + `Guest<M>Stream` impl) for each
+        // streaming method.
+        let mut guest_items: Vec<TokenStream> = Vec::new();
+        let mut resource_defs: Vec<TokenStream> = Vec::new();
+        for m in methods {
+            let mname = m.name;
+            let arg_names = &m.arg_names;
+            let arg_types = &m.arg_types;
+
+            if let Some(item) = m.stream_item {
+                // Server-streaming → a wit-bindgen exported resource. Resource
+                // `<m>-stream` → Pascal `<M>Stream`, trait `Guest<M>Stream`.
+                let res_pascal =
+                    kebab_to_pascal(&format!("{}-stream", to_kebab_case(&mname.to_string())));
+                let res_ident = format_ident!("{}", res_pascal);
+                let guest_trait = format_ident!("Guest{}", res_pascal);
+                let state_ident = format_ident!("__Fidius{}", res_pascal);
+                let stream_ty = m.ret_type.expect("streaming method has a return type");
+
+                resource_defs.push(quote! {
+                    struct #state_ident {
+                        stream: ::core::cell::RefCell<#stream_ty>,
+                    }
+                    impl exports::fidius::#pkg_seg::#pkg_seg::#guest_trait for #state_ident {
+                        fn next(&self) -> ::core::result::Result<
+                            ::core::option::Option<#item>,
+                            exports::fidius::#pkg_seg::#pkg_seg::PluginError,
+                        > {
+                            ::core::result::Result::Ok(self.stream.borrow_mut().next_item())
+                        }
+                    }
+                });
+                guest_items.push(quote! {
+                    type #res_ident = #state_ident;
+                    fn #mname(#(#arg_names: #arg_types),*)
+                        -> exports::fidius::#pkg_seg::#pkg_seg::#res_ident {
+                        let __s = super::#instance_name.#mname(#(#arg_names),*);
+                        exports::fidius::#pkg_seg::#pkg_seg::#res_ident::new(
+                            #state_ident { stream: ::core::cell::RefCell::new(__s) }
+                        )
+                    }
+                });
+            } else {
                 let call = quote! { super::#instance_name.#mname(#(#arg_names),*) };
                 if m.returns_result {
                     let ok = match m.ret_type.and_then(result_ok_type) {
                         Some(t) => quote! { #t },
                         None => quote! { () },
                     };
-                    quote! {
+                    guest_items.push(quote! {
                         fn #mname(#(#arg_names: #arg_types),*)
                             -> Result<#ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
                             #call.map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
                                 code: __e.code, message: __e.message, details: __e.details,
                             })
                         }
-                    }
+                    });
                 } else {
                     match m.ret_type {
-                        Some(rt) => {
-                            quote! { fn #mname(#(#arg_names: #arg_types),*) -> #rt { #call } }
-                        }
-                        None => quote! { fn #mname(#(#arg_names: #arg_types),*) { #call } },
+                        Some(rt) => guest_items.push(
+                            quote! { fn #mname(#(#arg_names: #arg_types),*) -> #rt { #call } },
+                        ),
+                        None => guest_items
+                            .push(quote! { fn #mname(#(#arg_names: #arg_types),*) { #call } }),
                     }
                 }
-            })
-            .collect();
+            }
+        }
         return quote! {
             #[cfg(target_family = "wasm")]
             #[allow(warnings, clippy::all)]
             mod #module_ident {
                 use super::*;
                 ::wit_bindgen::generate!({ inline: #wit_doc, world: #world });
+                #(#resource_defs)*
                 struct __FidiusComponent;
                 impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
-                    #(#guest_methods)*
+                    #(#guest_items)*
                     fn fidius_interface_hash() -> u64 { super::#companion::#hash_const }
                 }
                 export!(__FidiusComponent);
@@ -626,6 +730,105 @@ fn generate_shims(
                 }
             };
 
+            // Server-streaming (FIDIUS-I-0026 CS.1): the vtable slot holds an
+            // `init` shim that returns a `FidiusStreamHandle` (via the standard
+            // out_ptr); generated `next`/`drop_fn` drive and free it. Items cross
+            // as self-describing JSON(`Value`). Requires PluginAllocated (enforced
+            // in `generate_plugin_impl`).
+            if let Some(item_ty) = method.stream_item {
+                let stream_ty = method
+                    .ret_type
+                    .expect("a streaming method has a `-> fidius::Stream<T>` return type");
+                let next_name = format_ident!("__fidius_snext_{}_{}", impl_ident, method_name);
+                let drop_name = format_ident!("__fidius_sdrop_{}_{}", impl_ident, method_name);
+                // Per-stream state = `StreamState<ItemTy>` (producer + the bincode
+                // of the current item, retained across BUFFER_TOO_SMALL retries).
+                let state_ty = quote! { #crate_path::stream_ffi::StreamState<#item_ty> };
+                return quote! {
+                    // Arena-style next (FIDIUS-T-0138): the host passes a reusable
+                    // buffer; we write the bincode item into it. No per-item alloc,
+                    // no `free_buffer` crossing.
+                    #[cfg(not(target_family = "wasm"))]
+                    unsafe extern "C" fn #next_name(
+                        handle: *mut #crate_path::stream_ffi::FidiusStreamHandle,
+                        buf_ptr: *mut u8,
+                        buf_cap: u32,
+                        out_len: *mut u32,
+                    ) -> i32 {
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            let __state = unsafe { &mut *((*handle).state as *mut #state_ty) };
+                            let __buf = unsafe {
+                                ::core::slice::from_raw_parts_mut(buf_ptr, buf_cap as usize)
+                            };
+                            match __state.next_into(__buf) {
+                                #crate_path::stream_ffi::NextStatus::Item(__n) => {
+                                    unsafe { *out_len = __n as u32; }
+                                    #crate_path::status::STATUS_OK
+                                }
+                                #crate_path::stream_ffi::NextStatus::End => {
+                                    #crate_path::status::STATUS_STREAM_END
+                                }
+                                #crate_path::stream_ffi::NextStatus::TooSmall(__need) => {
+                                    unsafe { *out_len = __need as u32; }
+                                    #crate_path::status::STATUS_BUFFER_TOO_SMALL
+                                }
+                                #crate_path::stream_ffi::NextStatus::SerErr => {
+                                    #crate_path::status::STATUS_SERIALIZATION_ERROR
+                                }
+                            }
+                        }));
+                        match result {
+                            ::core::result::Result::Ok(s) => s,
+                            ::core::result::Result::Err(_) => #crate_path::status::STATUS_PANIC,
+                        }
+                    }
+
+                    #[cfg(not(target_family = "wasm"))]
+                    unsafe extern "C" fn #drop_name(
+                        handle: *mut #crate_path::stream_ffi::FidiusStreamHandle,
+                    ) {
+                        if handle.is_null() { return; }
+                        // Reclaim the handle box + the producer it owns (guest
+                        // frees its own allocations — never the host).
+                        unsafe {
+                            let __h = Box::from_raw(handle);
+                            drop(Box::from_raw(__h.state as *mut #state_ty));
+                        }
+                    }
+
+                    #[cfg(not(target_family = "wasm"))]
+                    unsafe extern "C" fn #shim_name(
+                        in_ptr: *const u8,
+                        in_len: u32,
+                        out_ptr: *mut *mut u8,
+                        out_len: *mut u32,
+                    ) -> i32 {
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
+                            #deserialize_args
+                            let __stream: #stream_ty = #instance_name.#method_name(#(#arg_names),*);
+                            let __state: Box<#state_ty> = Box::new(
+                                #crate_path::stream_ffi::StreamState::new(__stream),
+                            );
+                            let __state = Box::into_raw(__state) as *mut ::core::ffi::c_void;
+                            let __handle = Box::into_raw(Box::new(
+                                #crate_path::stream_ffi::FidiusStreamHandle {
+                                    next: #next_name,
+                                    drop_fn: #drop_name,
+                                    state: __state,
+                                },
+                            ));
+                            unsafe { *out_ptr = __handle as *mut u8; *out_len = 0; }
+                            #crate_path::status::STATUS_OK
+                        }));
+                        match result {
+                            ::core::result::Result::Ok(s) => s,
+                            ::core::result::Result::Err(_) => #crate_path::status::STATUS_PANIC,
+                        }
+                    }
+                };
+            }
+
             // The method call — either sync or async via block_on
             let method_call = if method.is_async {
                 quote! {
@@ -684,6 +887,7 @@ fn generate_shims(
 
             match buffer_strategy {
                 BufferStrategyAttr::Arena => quote! {
+                    #[cfg(not(target_family = "wasm"))]
                     unsafe extern "C" fn #shim_name(
                         in_ptr: *const u8,
                         in_len: u32,
@@ -736,6 +940,7 @@ fn generate_shims(
                     }
                 },
                 BufferStrategyAttr::PluginAllocated => quote! {
+                #[cfg(not(target_family = "wasm"))]
                 unsafe extern "C" fn #shim_name(
                     in_ptr: *const u8,
                     in_len: u32,
@@ -791,10 +996,12 @@ fn generate_shims(
         })
         .collect();
 
-    // cdylib FFI shims are only meaningful for native dynamic loading. Gate
-    // them off wasm so a component build (which exports via the WIT adapter,
-    // not these extern "C" shims) doesn't compile them.
-    quote! { #(#[cfg(not(target_family = "wasm"))] #shim_fns)* }
+    // cdylib FFI shims are only meaningful for native dynamic loading. Each
+    // emitted shim carries its own `#[cfg(not(target_family = "wasm"))]` (a
+    // streaming method emits three fns — init/next/drop — so the gate can't live
+    // on the group), so a wasm component build (which exports via the WIT
+    // adapter, not these extern "C" shims) doesn't compile them.
+    quote! { #(#shim_fns)* }
 }
 
 /// Generate the static vtable with function pointers.

@@ -36,3 +36,8 @@ pub const STATUS_PLUGIN_ERROR: i32 = -3;
 /// A panic was caught at the `extern "C"` boundary via `catch_unwind`.
 /// The output buffer may contain a panic message string, but this is not guaranteed.
 pub const STATUS_PANIC: i32 = -4;
+
+/// Clean end of a server-stream: the streaming `next()` shim has no more items
+/// (FIDIUS-I-0026 / FIDIUS-T-0138). Distinct from `STATUS_OK` with `out_len == 0`,
+/// which is a real zero-byte item (e.g. a unit `()` item).
+pub const STATUS_STREAM_END: i32 = -5;

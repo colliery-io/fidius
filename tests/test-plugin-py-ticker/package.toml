@@ -1,0 +1,18 @@
+# A reference Python *server-streaming* plugin for the fidius-host integration
+# tests (FIDIUS-I-0026). Implements the `Ticker` interface from
+# test-plugin-smoke (a Rust `#[plugin_interface]` with a `-> fidius::Stream<u64>`
+# method) entirely in Python, as a generator.
+
+[package]
+name = "py-ticker"
+version = "0.1.0"
+interface = "Ticker"
+interface_version = 1
+runtime = "python"
+
+[metadata]
+category = "test"
+description = "Python server-streaming implementation of the Ticker interface."
+
+[python]
+entry_module = "ticker"

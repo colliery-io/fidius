@@ -1,0 +1,32 @@
+// Copyright 2026 Colliery, Inc. Licensed under Apache 2.0
+//
+// FIDIUS-I-0026 Phase 2: a server-streaming interface projected to WIT. A
+// fidius `fn tick(count: u32) -> fidius::Stream<u64>` maps to an exported
+// *resource* the host polls: `next()` yields `some(item)`, `none` at clean end,
+// `err` on failure. Dropping the resource = the guest destructor = cancel.
+
+package fidius:ticker@1.0.0;
+
+interface ticker {
+    /// Error payload mirroring `fidius_core::PluginError`.
+    record plugin-error {
+        code: string,
+        message: string,
+        details: option<string>,
+    }
+
+    /// The server-stream handle. `next` is the poll method.
+    resource tick-stream {
+        next: func() -> result<option<u64>, plugin-error>;
+    }
+
+    /// Server-streaming method: returns an owned stream resource.
+    tick: func(count: u32) -> tick-stream;
+
+    /// Interface-hash carrier (parity with cdylib/Python).
+    fidius-interface-hash: func() -> u64;
+}
+
+world ticker-plugin {
+    export ticker;
+}

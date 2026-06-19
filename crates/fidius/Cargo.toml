@@ -12,6 +12,11 @@ async = ["fidius-core/async"]
 # handle, and error types. Interface crates that want a generated typed
 # Client (for host consumers) should declare this feature.
 host = ["dep:fidius-host"]
+# Server-streaming support (FIDIUS-I-0026): re-exports `ChunkStream` and enables
+# the generated Client's streaming methods + `PluginHandle::call_streaming`.
+# Implies `host`. An interface crate with a `-> fidius::Stream<T>` method must
+# enable this for host consumers.
+streaming = ["host", "fidius-host/streaming"]
 
 [dependencies]
 fidius-core = { path = "../fidius-core", version = "0.3.0" }

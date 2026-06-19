@@ -14,3 +14,6 @@ tests/wasm-fixtures/**/gen/
 tests/wasm-fixtures/**/bindings.rs
 __pycache__/
 tests/wasm-fixtures/records-greeter/wit/
+
+# Metis transient code-index dirty marker
+.metis/.index-dirty
