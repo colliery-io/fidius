@@ -4,14 +4,14 @@ level: task
 title: "E2 — wasi:http egress: fetcher wasm fixture + mock-server integration tests"
 short_code: "FIDIUS-T-0140"
 created_at: 2026-06-19T19:26:09.537722+00:00
-updated_at: 2026-06-19T19:26:09.537722+00:00
+updated_at: 2026-06-19T19:42:08.697272+00:00
 parent: FIDIUS-I-0027
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -68,6 +68,8 @@ End-to-end proof of the [[FIDIUS-T-0139]] mechanism: a real WASM guest that impo
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

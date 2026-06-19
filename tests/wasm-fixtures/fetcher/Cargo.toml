@@ -1,0 +1,26 @@
+# Standalone — kept out of the parent fidius workspace.
+# FIDIUS-I-0027 (E2): a WASM component that performs an outbound HTTP GET via
+# wasi:http. Built with `cargo build --release --target wasm32-wasip2` (the
+# wasip2 target emits a component directly; wit-bindgen reads the vendored
+# wit/ + wit/deps/). Exercises the capability-gated egress + EgressPolicy hook.
+[workspace]
+
+[package]
+name = "fetcher-guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# wit-bindgen generates the `fetcher` export + the wasi:http/io/clocks client
+# bindings (`generate_all`) from the vendored wit/ (pinned to 0.2.6 to match the
+# host's wasmtime-wasi-http 45).
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

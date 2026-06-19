@@ -1,0 +1,15 @@
+// Copyright 2026 Colliery, Inc. Licensed under Apache 2.0
+//
+// FIDIUS-I-0027 (E2): a sandboxed connector making an OUTBOUND HTTP GET via
+// wasi:http@0.2.6 (vendored to match the host's wasmtime-wasi-http 45). Egress
+// is host-gated (http capability + embedder EgressPolicy).
+package fidius:fetcher@1.0.0;
+
+interface fetcher {
+    fetch: func(url: string) -> string;
+}
+
+world fetcher-plugin {
+    import wasi:http/outgoing-handler@0.2.6;
+    export fetcher;
+}

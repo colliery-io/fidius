@@ -4,14 +4,14 @@ level: task
 title: "E1 — wasi:http egress mechanism: capability + required embedder hook (two-key, fail-closed)"
 short_code: "FIDIUS-T-0139"
 created_at: 2026-06-19T19:26:08.674575+00:00
-updated_at: 2026-06-19T19:27:48.767800+00:00
+updated_at: 2026-06-19T19:40:11.770738+00:00
 parent: FIDIUS-I-0027
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -77,6 +77,8 @@ Ship the **mechanism** for sandboxed WASM outbound HTTP: the `wasi:http` capabil
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
