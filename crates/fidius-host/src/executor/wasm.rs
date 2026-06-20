@@ -259,9 +259,10 @@ fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
             // Egress is wired at the linker level (two-key with the embedder's
             // EgressPolicy), not via the WasiCtx — no-op here.
             "http" => {}
-            // Scoped env (FIDIUS-T-0142): `env:VAR_NAME` exposes exactly that one
-            // host variable (skipped silently if unset on the host) — never the
-            // whole environment. Bare `env` is rejected in `validate_capabilities`.
+            // Scoped env (FIDIUS-T-0142, ADR FIDIUS-A-0009): `env:VAR_NAME` exposes
+            // exactly that one host variable (skipped silently if unset on the host)
+            // — never the whole environment. Bare `env` is rejected in
+            // `validate_capabilities`.
             _ if c.starts_with("env:") => {
                 let name = &c["env:".len()..];
                 if let Ok(val) = std::env::var(name) {
