@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T19:12:37Z | 146 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T19:28:02Z | 148 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -87,6 +87,7 @@
 │   │       ├── optional_methods_host.rs
 │   │       ├── package_e2e.rs
 │   │       ├── plugin_dep_graph.rs
+│   │       ├── python_client_stream_e2e.rs
 │   │       ├── python_plugin_e2e.rs
 │   │       ├── python_routing.rs
 │   │       ├── python_streaming_e2e.rs
@@ -164,6 +165,8 @@
 │   └── tests/
 │       └── test_sdk.py
 └── tests/
+    ├── test-plugin-py-client-stream/
+    │   └── sink.py
     ├── test-plugin-py-configured/
     │   └── configured_pipe.py
     ├── test-plugin-py-configured-stream/
@@ -951,14 +954,15 @@
 - pub `call_streaming` function L180-207 — `( &self, index: usize, input: &I, ) -> Result<crate::stream::ChunkStream, CallEr...` — Start a server-streaming method call by vtable index (FIDIUS-I-0026).
 - pub `call_method_raw` function L210-218 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
 - pub `call_client_streaming_raw` function L230-251 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2): pass the host's producer
-- pub `call_client_streaming` function L259-301 — `( &self, method: usize, items: impl IntoIterator<Item = I>, args: &A, ) -> Resul...` — Typed client-streaming (FIDIUS-I-0030): the host produces `items` (the
-- pub `has_capability` function L305-310 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
-- pub `info` function L313-321 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L326-335 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
-- pub `trait_metadata` function L339-347 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
+- pub `call_client_streaming` function L259-306 — `( &self, method: usize, items: impl IntoIterator<Item = I>, args: &A, ) -> Resul...` — Typed client-streaming (FIDIUS-I-0030): the host produces `items` (the
+- pub `has_capability` function L310-315 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
+- pub `info` function L318-326 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L331-340 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
+- pub `trait_metadata` function L344-352 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
 -  `Backend` enum L50-60 — `Cdylib | Python | Wasm` — The execution backend behind a [`PluginHandle`].
--  `PluginHandle` type L72-348 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
--  `cdylib_stream_decode` function L356-362 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
+-  `PluginHandle` type L72-353 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
+-  `cdylib_stream_decode` function L361-367 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
+-  `bincode_items` function L371-379 — `( items: impl IntoIterator<Item = I>, ) -> Result<Vec<Vec<u8>>, CallError>` — Bincode-encode each client-streaming item (the cdylib + WASM currency).
 
 #### crates/fidius-host/src/host.rs
 
@@ -1120,16 +1124,17 @@
 
 - pub `Pyo3Executor` struct L39-42 — `{ py: PythonPluginHandle, info: PluginInfo }` — Python-backed executor: an embedded-interpreter plugin handle plus the
 - pub `new` function L46-48 — `(py: PythonPluginHandle, info: PluginInfo) -> Self` — Wrap a loaded `PythonPluginHandle` with its owned metadata.
--  `Pyo3Executor` type L44-49 — `= Pyo3Executor` — routed through the neutral `Value` currency.
--  `Pyo3Executor` type L51-64 — `impl PluginExecutor for Pyo3Executor` — routed through the neutral `Value` currency.
--  `info` function L52-54 — `(&self) -> &PluginInfo` — routed through the neutral `Value` currency.
--  `method_count` function L56-58 — `(&self) -> u32` — routed through the neutral `Value` currency.
--  `call_raw` function L60-63 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — routed through the neutral `Value` currency.
--  `Pyo3Executor` type L66-79 — `impl ValueExecutor for Pyo3Executor` — routed through the neutral `Value` currency.
--  `call` function L67-78 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — routed through the neutral `Value` currency.
--  `STREAM_CHANNEL_CAP` variable L86 — `: usize` — Bounded channel depth between the GIL-holding pump thread and the host's
--  `Pyo3Executor` type L90-150 — `= Pyo3Executor` — routed through the neutral `Value` currency.
--  `call_streaming` function L91-149 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — routed through the neutral `Value` currency.
+- pub `call_client_streaming` function L54-69 — `( &self, method: usize, items: Vec<Value>, args: Value, ) -> Result<Value, CallE...` — Client-streaming (FIDIUS-I-0030 CS2.4): the host produces `items`; the plugin
+-  `Pyo3Executor` type L44-70 — `= Pyo3Executor` — routed through the neutral `Value` currency.
+-  `Pyo3Executor` type L72-85 — `impl PluginExecutor for Pyo3Executor` — routed through the neutral `Value` currency.
+-  `info` function L73-75 — `(&self) -> &PluginInfo` — routed through the neutral `Value` currency.
+-  `method_count` function L77-79 — `(&self) -> u32` — routed through the neutral `Value` currency.
+-  `call_raw` function L81-84 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — routed through the neutral `Value` currency.
+-  `Pyo3Executor` type L87-100 — `impl ValueExecutor for Pyo3Executor` — routed through the neutral `Value` currency.
+-  `call` function L88-99 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — routed through the neutral `Value` currency.
+-  `STREAM_CHANNEL_CAP` variable L107 — `: usize` — Bounded channel depth between the GIL-holding pump thread and the host's
+-  `Pyo3Executor` type L111-171 — `= Pyo3Executor` — routed through the neutral `Value` currency.
+-  `call_streaming` function L112-170 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — routed through the neutral `Value` currency.
 
 #### crates/fidius-host/src/executor/wasm.rs
 
@@ -1397,6 +1402,15 @@
 #### crates/fidius-host/tests/plugin_dep_graph.rs
 
 -  `plugin_without_host_feature_does_not_pull_libloading` function L26-65 — `()` — and asserts `libloading` is not in its dep graph.
+
+#### crates/fidius-host/tests/python_client_stream_e2e.rs
+
+- pub `Sink` interface L29-31 — `{ fn load() }` — backends.
+-  `sink_descriptor` function L33-35 — `() -> &'static PythonInterfaceDescriptor` — backends.
+-  `repo_root` function L37-44 — `() -> PathBuf` — backends.
+-  `copy_dir` function L46-58 — `(src: &Path, dst: &Path)` — backends.
+-  `stage` function L60-79 — `(tmp: &tempfile::TempDir) -> PathBuf` — backends.
+-  `python_consumes_a_host_produced_stream` function L82-97 — `()` — backends.
 
 #### crates/fidius-host/tests/python_plugin_e2e.rs
 
@@ -1848,13 +1862,18 @@
 - pub `method_count` function L101-103 — `(&self) -> usize` — `code = <ExceptionClassName>` otherwise.
 - pub `call_typed` function L112-134 — `( &self, method_index: usize, input_bincode: &[u8], ) -> Result<Vec<u8>, PythonC...` — Typed dispatch.
 - pub `call_typed_json` function L139-159 — `( &self, method_index: usize, input_json: &[u8], ) -> Result<Vec<u8>, PythonCall...` — Typed dispatch where the input is already JSON-serialised (the
-- pub `call_streaming_start` function L165-190 — `( &self, method_index: usize, input_json: &[u8], ) -> Result<crate::stream::Pyth...` — Start a server-streaming call (FIDIUS-I-0026).
-- pub `call_raw` function L193-212 — `(&self, method_index: usize, input: &[u8]) -> Result<Vec<u8>, PythonCallError>` — Raw dispatch — pass bytes in, get bytes out, no encoding.
--  `PythonPluginHandle` type L84-237 — `= PythonPluginHandle` — `code = <ExceptionClassName>` otherwise.
+- pub `call_client_streaming_json` function L165-213 — `( &self, method_index: usize, items_json: &[u8], args_json: &[u8], ) -> Result<V...` — **Client-streaming** call (FIDIUS-I-0030 CS2.4): the host produces the stream
+- pub `call_streaming_start` function L219-244 — `( &self, method_index: usize, input_json: &[u8], ) -> Result<crate::stream::Pyth...` — Start a server-streaming call (FIDIUS-I-0026).
+- pub `call_raw` function L247-266 — `(&self, method_index: usize, input: &[u8]) -> Result<Vec<u8>, PythonCallError>` — Raw dispatch — pass bytes in, get bytes out, no encoding.
+-  `PythonPluginHandle` type L84-291 — `= PythonPluginHandle` — `code = <ExceptionClassName>` otherwise.
 -  `new` function L85-95 — `( descriptor: &'static PythonInterfaceDescriptor, module: Py<PyAny>, method_call...` — `code = <ExceptionClassName>` otherwise.
--  `lookup_method` function L214-236 — `( &self, index: usize, attempting_raw: bool, ) -> Result<MethodLookup<'_>, Pytho...` — `code = <ExceptionClassName>` otherwise.
--  `MethodLookup` struct L239-241 — `{ callable: &'a Py<PyAny> }` — `code = <ExceptionClassName>` otherwise.
--  `build_call_args` function L250-269 — `( py: Python<'py>, input: &serde_json::Value, ) -> PyResult<Bound<'py, PyTuple>>` — Build positional args for `callable.call(...)` from a JSON value.
+-  `lookup_method` function L268-290 — `( &self, index: usize, attempting_raw: bool, ) -> Result<MethodLookup<'_>, Pytho...` — `code = <ExceptionClassName>` otherwise.
+-  `MethodLookup` struct L293-295 — `{ callable: &'a Py<PyAny> }` — `code = <ExceptionClassName>` otherwise.
+-  `build_call_args` function L304-323 — `( py: Python<'py>, input: &serde_json::Value, ) -> PyResult<Bound<'py, PyTuple>>` — Build positional args for `callable.call(...)` from a JSON value.
+-  `HostFedStream` struct L329-331 — `{ items: std::vec::IntoIter<serde_json::Value> }` — A host-fed Python iterator (FIDIUS-I-0030 CS2.4): yields the host's stream items
+-  `HostFedStream` type L334-345 — `= HostFedStream` — `code = <ExceptionClassName>` otherwise.
+-  `__iter__` function L335-337 — `(slf: PyRef<'_, Self>) -> PyRef<'_, Self>` — `code = <ExceptionClassName>` otherwise.
+-  `__next__` function L339-344 — `(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>>` — `code = <ExceptionClassName>` otherwise.
 
 #### crates/fidius-python/src/interpreter.rs
 

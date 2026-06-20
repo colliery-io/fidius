@@ -1,34 +1,43 @@
 ---
-id: cs2-5-host-call-client-streaming
+id: bd-2-cdylib-bidistreamfn-shape
 level: task
-title: "CS2.5 — host call_client_streaming + flip compile-fail + docs"
-short_code: "FIDIUS-T-0165"
-created_at: 2026-06-20T16:44:17.518435+00:00
-updated_at: 2026-06-20T19:27:32.952273+00:00
-parent: FIDIUS-I-0030
+title: "BD.2 — cdylib BidiStreamFn shape + shim + host call path + re-entrancy + E2E"
+short_code: "FIDIUS-T-0167"
+created_at: 2026-06-20T22:21:10.899033+00:00
+updated_at: 2026-06-20T22:21:10.899033+00:00
+parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/completed"
+  - "#phase/todo"
 
 
 exit_criteria_met: false
-initiative_id: FIDIUS-I-0030
+initiative_id: FIDIUS-I-0032
 ---
 
-# CS2.5 — host call_client_streaming + flip compile-fail + docs
+# BD.2 — cdylib BidiStreamFn shape + shim + host call path + re-entrancy + E2E
 
 *This template includes sections for various types of tasks. Delete sections that don't apply to your specific use case.*
 
 ## Parent Initiative **[CONDITIONAL: Assigned Task]**
 
-[[FIDIUS-I-0030]]
+[[FIDIUS-I-0032]]
 
 ## Objective **[REQUIRED]**
 
-Host API + close-out: `PluginHandle::call_client_streaming<I, O>(method, producer: impl Stream<Item = I>) -> O` — the host owns the producer, the plugin pulls; drop = cancel; backpressure flows. **Flip** the `compile_fail/stream_in_arg_position` test to compile-pass (it's now supported). Un-defer client-streaming in `docs/explanation/streaming.md` and reference [[FIDIUS-A-0007]]. Depends on CS2.2/2.3/2.4.
+cdylib bidirectional (ADR-0010): a combined vtable entry `BidiStreamFn(instance,
+input_producer_handle, args, *out_stream_handle) -> status` — the client-streaming
+producer handle (CS2.2) is passed in, the server-streaming output stream handle (CS.1/ST)
+is returned. Macro shim: build the user method's `Stream<In>` from the input handle
+(`HostStream`), call the method to get `Stream<Out>`, hand back an output stream handle.
+Host `call_bidi_streaming` (or extend the typed API): set the producer, get the output
+handle, pull it (each `out.next()` re-enters `input_producer.next()`). E2E: a transform
+plugin (e.g. running-sum / filter-double) fed host-produced `In`, host pulls `Out`,
+asserts the sequence; **plus an explicit re-entrancy test** (producer re-entered during an
+output pull). Depends on BD.1.
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -63,10 +72,6 @@ Host API + close-out: `PluginHandle::call_client_streaming<I, O>(method, produce
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
-
-## Acceptance Criteria
-
-## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -137,15 +142,4 @@ Host API + close-out: `PluginHandle::call_client_streaming<I, O>(method, produce
 
 ## Status Updates **[REQUIRED]**
 
-**DONE (commit cb8d19f; API + compile-fail landed earlier).** All three deliverables:
-- **Host API** — `PluginHandle::call_client_streaming<I,A,O>(method, items, &args)`, the
-  safe unified producer API over cdylib + WASM + Python (landed in CS2.3 commit a6a802e,
-  Python arm in CS2.4 e7b82ad). The host owns the producer; the plugin pulls.
-- **Compile-fail** — `stream_in_arg_position` was removed in CS2.2 (the interface now
-  compiles client-streaming; the three E2Es are the regression guard).
-- **Docs** — `streaming.md` un-defers client-streaming as a shipped, all-three-backends
-  feature, references ADR-0007, flags bidirectional as the separate later decision. (The
-  `docs/api/rust` rustdoc mirrors regenerate from the updated source.)
-
-**The entire client-streaming arc (FIDIUS-I-0030) is complete** — cdylib, WASM, Python,
-all E2E-proven, host API + docs shipped. CS2.1–CS2.5 all done.
+*To be added during implementation*

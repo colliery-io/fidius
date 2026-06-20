@@ -255,6 +255,22 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         ));
     }
 
+    // Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): `Stream<T>` in BOTH argument
+    // and return position. The IR + interface hash already model it (both markers); the
+    // per-backend codegen (input pull → output stream) lands in BD.2 (cdylib) / BD.3
+    // (WASM) / BD.4 (Python). Reject the whole impl with one clean error until then —
+    // emitting partial codegen would leave the descriptor referencing a stubbed shim.
+    if let Some(m) = impl_methods
+        .iter()
+        .find(|m| m.stream_item.is_some() && m.client_stream_item.is_some())
+    {
+        return Err(syn::Error::new(
+            m.name.span(),
+            "bidirectional streaming (`Stream<T>` in both argument and return position) is \
+             not yet wired — FIDIUS-I-0032 (BD.2 cdylib / BD.3 WASM / BD.4 Python)",
+        ));
+    }
+
     // Strip `#[wire(...)]` helper attrs from the re-emitted impl block so the
     // Rust compiler doesn't reject them as unknown attributes.
     let mut item_emit = item.clone();

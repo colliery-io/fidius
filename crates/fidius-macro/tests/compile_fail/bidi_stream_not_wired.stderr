@@ -1,0 +1,19 @@
+error: bidirectional streaming (`Stream<T>` in both argument and return position) is not yet wired — FIDIUS-I-0032 (BD.2 cdylib / BD.3 WASM / BD.4 Python)
+  --> tests/compile_fail/bidi_stream_not_wired.rs:20:8
+   |
+20 |     fn transform(&self, input: fidius::Stream<u32>) -> fidius::Stream<u32> {
+   |        ^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `host`
+  --> tests/compile_fail/bidi_stream_not_wired.rs:11:1
+   |
+11 | #[plugin_interface(version = 1, buffer = PluginAllocated)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: no expected values for `feature`
+   = note: using a cfg inside a attribute macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `plugin_interface` crate for guidance on how handle this unexpected cfg
+   = help: the attribute macro `plugin_interface` may come from an old version of the `fidius_macro` crate, try updating your dependency with `cargo update -p fidius_macro`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+   = note: this warning originates in the attribute macro `plugin_interface` (in Nightly builds, run with -Z macro-backtrace for more info)

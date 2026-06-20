@@ -4,14 +4,14 @@ level: initiative
 title: "Client-streaming — Stream&lt;T&gt; in argument position (host produces, plugin pulls)"
 short_code: "FIDIUS-I-0030"
 created_at: 2026-06-20T14:44:31.831323+00:00
-updated_at: 2026-06-20T16:45:30.916353+00:00
+updated_at: 2026-06-20T19:27:46.346043+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

@@ -143,26 +143,29 @@ mod tests {
 
     #[test]
     fn streaming_markers_are_distinct() {
-        // unary vs server-streaming (`!stream`) vs client-streaming (`<stream`)
-        // of the same name/args must hash distinctly (FIDIUS-I-0030).
+        // unary vs server-streaming (`!stream`) vs client-streaming (`<stream`) vs
+        // bidirectional (both markers) of the same name/args must hash distinctly
+        // (FIDIUS-I-0030 / FIDIUS-I-0032 / ADR-0010).
         let args = ["u32".to_string()];
         let unary = signature_string("read", &args, "Row", false, false, false);
         let server = signature_string("read", &args, "Row", false, true, false);
         let client = signature_string("read", &args, "Row", false, false, true);
+        let bidi = signature_string("read", &args, "Row", false, true, true);
         assert!(server.ends_with("!stream"));
         assert!(client.ends_with("<stream"));
-        assert_ne!(
-            interface_hash(&[unary.as_str()]),
-            interface_hash(&[server.as_str()])
-        );
-        assert_ne!(
-            interface_hash(&[unary.as_str()]),
-            interface_hash(&[client.as_str()])
-        );
-        assert_ne!(
-            interface_hash(&[server.as_str()]),
-            interface_hash(&[client.as_str()])
-        );
+        // Bidirectional carries BOTH markers (server then client), so its hash can't
+        // collide with unary, server-only, or client-only.
+        assert!(bidi.ends_with("!stream<stream"));
+        let sigs = [&unary, &server, &client, &bidi];
+        for (i, a) in sigs.iter().enumerate() {
+            for b in &sigs[i + 1..] {
+                assert_ne!(
+                    interface_hash(&[a.as_str()]),
+                    interface_hash(&[b.as_str()]),
+                    "signatures must hash distinctly: {a} vs {b}"
+                );
+            }
+        }
     }
 
     #[test]

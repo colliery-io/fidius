@@ -1,34 +1,41 @@
 ---
-id: cs2-5-host-call-client-streaming
+id: bd-1-macro-ir-accept-stream-in
 level: task
-title: "CS2.5 — host call_client_streaming + flip compile-fail + docs"
-short_code: "FIDIUS-T-0165"
-created_at: 2026-06-20T16:44:17.518435+00:00
-updated_at: 2026-06-20T19:27:32.952273+00:00
-parent: FIDIUS-I-0030
+title: "BD.1 — macro/IR: accept Stream in both arg and return + dual hash marker"
+short_code: "FIDIUS-T-0166"
+created_at: 2026-06-20T22:21:09.024837+00:00
+updated_at: 2026-06-20T22:23:33.555018+00:00
+parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/completed"
+  - "#phase/active"
 
 
 exit_criteria_met: false
-initiative_id: FIDIUS-I-0030
+initiative_id: FIDIUS-I-0032
 ---
 
-# CS2.5 — host call_client_streaming + flip compile-fail + docs
+# BD.1 — macro/IR: accept Stream in both arg and return + dual hash marker
 
 *This template includes sections for various types of tasks. Delete sections that don't apply to your specific use case.*
 
 ## Parent Initiative **[CONDITIONAL: Assigned Task]**
 
-[[FIDIUS-I-0030]]
+[[FIDIUS-I-0032]]
 
 ## Objective **[REQUIRED]**
 
-Host API + close-out: `PluginHandle::call_client_streaming<I, O>(method, producer: impl Stream<Item = I>) -> O` — the host owns the producer, the plugin pulls; drop = cancel; backpressure flows. **Flip** the `compile_fail/stream_in_arg_position` test to compile-pass (it's now supported). Un-defer client-streaming in `docs/explanation/streaming.md` and reference [[FIDIUS-A-0007]]. Depends on CS2.2/2.3/2.4.
+Macro/IR foundation (ADR-0010): accept a trait method with **both** a `Stream<In>`
+argument and a `Stream<Out>` return — today each alone is recognized but co-occurrence
+isn't routed. The IR carries both `client_stream_item` (arg) and `stream_item` (return);
+`build_signature_string`/`signature_string` emits **both** markers (`<stream` + `!stream`)
+so the interface hash is distinct from unary/server/client; the macro dispatch recognizes
+"bidirectional" and routes to per-backend codegen (scaffold only — BD.2/3/4 fill it).
+Unit test: a bidi method's hash differs from the same method as server-only and as
+client-only. Depends on CS2.1 (`<stream` marker) + ST (`!stream`).
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -63,8 +70,6 @@ Host API + close-out: `PluginHandle::call_client_streaming<I, O>(method, produce
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
-
-## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -137,15 +142,4 @@ Host API + close-out: `PluginHandle::call_client_streaming<I, O>(method, produce
 
 ## Status Updates **[REQUIRED]**
 
-**DONE (commit cb8d19f; API + compile-fail landed earlier).** All three deliverables:
-- **Host API** — `PluginHandle::call_client_streaming<I,A,O>(method, items, &args)`, the
-  safe unified producer API over cdylib + WASM + Python (landed in CS2.3 commit a6a802e,
-  Python arm in CS2.4 e7b82ad). The host owns the producer; the plugin pulls.
-- **Compile-fail** — `stream_in_arg_position` was removed in CS2.2 (the interface now
-  compiles client-streaming; the three E2Es are the regression guard).
-- **Docs** — `streaming.md` un-defers client-streaming as a shipped, all-three-backends
-  feature, references ADR-0007, flags bidirectional as the separate later decision. (The
-  `docs/api/rust` rustdoc mirrors regenerate from the updated source.)
-
-**The entire client-streaming arc (FIDIUS-I-0030) is complete** — cdylib, WASM, Python,
-all E2E-proven, host API + docs shipped. CS2.1–CS2.5 all done.
+*To be added during implementation*
