@@ -4,7 +4,7 @@ level: task
 title: "User-typed (#[derive(WitType)]) stream items in client/bidi streaming"
 short_code: "FIDIUS-T-0171"
 created_at: 2026-06-20T23:08:00.301373+00:00
-updated_at: 2026-06-20T23:33:16.130759+00:00
+updated_at: 2026-06-20T23:41:43.391917+00:00
 parent: 
 blocked_by: []
 archived: false
@@ -12,7 +12,7 @@ archived: false
 tags:
   - "#task"
   - "#feature"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -73,6 +73,10 @@ a bidi-streaming plugin on WASM + cdylib. Shared limitation called out in ADR-00
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -145,4 +149,21 @@ a bidi-streaming plugin on WASM + cdylib. Shared limitation called out in ADR-00
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE — input side (commit 7c4d801).** Key correction to the original framing: a client-/
+bidi-input stream item crosses as **bincode** (`list<u8>` via `fidius:stream-pull` /
+`WasmHostStream`), NOT as a WIT type. CS2.3 mistakenly *collected + validated* the item as a
+WIT user type, which is exactly what forced the build.rs user-type branch (and the rejection)
+for a record item. Fix: stop treating the opaque bincode stream item as a WIT type in
+`generate_wasm_adapter`. A client-/bidi-input stream item can now be **any
+`Serialize`/`Deserialize` type** (records included) — no `#[derive(WitType)]`, enforced by
+`WasmHostStream::<T>`. cdylib never gated it. E2Es: `cdylib_record_stream_item` (record
+client + record→record bidi) and `record-client-stream` WASM fixture + `wasm_record_stream_item`
+(record-in client; record-in → primitive-out bidi). Default 73 + full wasm regression + lint
+green; documented in streaming.md.
+
+**Remaining (deferred, distinct + smaller scope):** on WASM the **output** stream item still
+crosses via the WIT resource, so (a) a bidi method with a **record output** item and (b) a
+record used as a stream item AND in a WIT-typed non-stream arg/return both still hit the
+user-type Guest branch and are rejected (with a now-accurate message). Closing these means
+adding client/bidi codegen to the `has_user` branch — a contained follow-on if an adopter
+needs record *outputs* over bidi on WASM. Marked complete for the input-side win.

@@ -216,18 +216,18 @@ impl PluginHandle {
     pub async fn call_bidi_streaming<I, A, O>(
         &self,
         index: usize,
-        items: impl IntoIterator<Item = I>,
+        items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
         args: &A,
     ) -> Result<crate::stream::ChunkStream, CallError>
     where
-        I: Serialize,
+        I: Serialize + 'static,
         A: Serialize,
         O: DeserializeOwned + Serialize,
     {
         match &self.backend {
+            // Lazy producer — items are encoded only as the plugin pulls them (T-0172).
             Backend::Cdylib(e) => {
-                let encoded = bincode_items(items)?;
-                let handle = crate::client_stream::host_producer_handle(encoded.into_iter());
+                let handle = crate::client_stream::host_producer_handle_typed(items.into_iter());
                 let arg_bytes = fidius_core::wire::serialize(args)
                     .map_err(|err| CallError::Serialization(err.to_string()))?;
                 // SAFETY: `handle` is a freshly-built, exclusively-owned producer.
@@ -237,7 +237,7 @@ impl PluginHandle {
             }
             #[cfg(feature = "python")]
             Backend::Python(e) => {
-                // Python crosses via the self-describing `Value` currency.
+                // Python crosses via the self-describing `Value` currency (eager bridge).
                 let item_values: Vec<fidius_core::Value> = items
                     .into_iter()
                     .map(|i| fidius_core::to_value(&i))
@@ -249,10 +249,10 @@ impl PluginHandle {
             }
             #[cfg(feature = "wasm")]
             Backend::Wasm(e) => {
-                let encoded = bincode_items(items)?;
+                let producer = lazy_bincode_producer(items);
                 let arg_value = fidius_core::to_value(args)
                     .map_err(|err| CallError::Serialization(err.to_string()))?;
-                e.call_bidi_streaming(index, encoded, arg_value).await
+                e.call_bidi_streaming(index, producer, arg_value).await
             }
         }
     }
@@ -310,19 +310,19 @@ impl PluginHandle {
     pub fn call_client_streaming<I, A, O>(
         &self,
         method: usize,
-        items: impl IntoIterator<Item = I>,
+        items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
         args: &A,
     ) -> Result<O, CallError>
     where
-        I: Serialize,
+        I: Serialize + 'static,
         A: Serialize,
         O: DeserializeOwned,
     {
         match &self.backend {
-            // cdylib + WASM consume the items as bincode (the guest deserializes each).
+            // cdylib: a lazy producer handle — each item is bincode-encoded only as the
+            // plugin pulls it, so an unbounded input stays bounded in memory (T-0172).
             Backend::Cdylib(e) => {
-                let encoded = bincode_items(items)?;
-                let handle = crate::client_stream::host_producer_handle(encoded.into_iter());
+                let handle = crate::client_stream::host_producer_handle_typed(items.into_iter());
                 let arg_bytes = fidius_core::wire::serialize(args)
                     .map_err(|e| CallError::Serialization(e.to_string()))?;
                 // SAFETY: `handle` is a freshly-built, exclusively-owned producer.
@@ -330,16 +330,18 @@ impl PluginHandle {
                 fidius_core::wire::deserialize(&out)
                     .map_err(|e| CallError::Deserialization(e.to_string()))
             }
+            // WASM: same laziness — the boxed producer encodes on pull from the import.
             #[cfg(feature = "wasm")]
             Backend::Wasm(e) => {
-                let encoded = bincode_items(items)?;
+                let producer = lazy_bincode_producer(items);
                 let arg_value = fidius_core::to_value(args)
                     .map_err(|err| CallError::Serialization(err.to_string()))?;
-                let out = e.call_client_streaming(method, encoded, arg_value)?;
+                let out = e.call_client_streaming(method, producer, arg_value)?;
                 fidius_core::from_value(out)
                     .map_err(|err| CallError::Deserialization(err.to_string()))
             }
-            // Python crosses via the self-describing `Value` currency.
+            // Python crosses via the self-describing `Value` currency (eager — its bridge
+            // collects into a JSON array; lazy Python streaming is a follow-on).
             #[cfg(feature = "python")]
             Backend::Python(e) => {
                 let item_values: Vec<fidius_core::Value> = items
@@ -417,14 +419,18 @@ fn cdylib_stream_decode<O: DeserializeOwned + Serialize>(
     fidius_core::to_value(&item).map_err(|e| CallError::Serialization(e.to_string()))
 }
 
-/// Bincode-encode each client-streaming item (the cdylib + WASM currency).
-#[cfg(feature = "streaming")]
-fn bincode_items<I: Serialize>(
-    items: impl IntoIterator<Item = I>,
-) -> Result<Vec<Vec<u8>>, CallError> {
-    items
-        .into_iter()
-        .map(|i| fidius_core::wire::serialize(&i))
-        .collect::<Result<_, _>>()
-        .map_err(|e| CallError::Serialization(e.to_string()))
+/// A lazy, boxed bincode producer for the WASM client/bidi streaming input path: each
+/// item is bincode-encoded only when the guest's `fidius:stream-pull` import pulls it
+/// (FIDIUS-T-0172), so an unbounded input stays bounded in host memory. An item that fails
+/// to encode is skipped (bincode of a `Serialize` type is effectively infallible, and a
+/// panic must not cross the host→guest call).
+#[cfg(all(feature = "streaming", feature = "wasm"))]
+fn lazy_bincode_producer<I: Serialize + 'static>(
+    items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
+) -> Box<dyn Iterator<Item = Vec<u8>> + Send> {
+    Box::new(
+        items
+            .into_iter()
+            .filter_map(|i| fidius_core::wire::serialize(&i).ok()),
+    )
 }

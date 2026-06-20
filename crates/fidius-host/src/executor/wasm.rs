@@ -640,12 +640,14 @@ impl WasmComponentExecutor {
     pub fn call_client_streaming(
         &self,
         method: usize,
-        producer: Vec<Vec<u8>>,
+        producer: Box<dyn Iterator<Item = Vec<u8>> + Send>,
         args: Value,
     ) -> Result<Value, CallError> {
         let m = self.method(method, false)?.clone();
         self.with_store(|store, instance| {
-            store.data_mut().client_stream = Some(Box::new(producer.into_iter()));
+            // Lazy: `producer` encodes each item only when the guest's import pulls it
+            // (FIDIUS-T-0172), so an unbounded input stays bounded in host memory.
+            store.data_mut().client_stream = Some(producer);
             let func = self.func(store, instance, &m.name)?;
             let func_ty = func.ty(&*store);
             let param_types: Vec<wasmtime::component::Type> =
@@ -694,7 +696,7 @@ impl WasmComponentExecutor {
     pub async fn call_bidi_streaming(
         &self,
         method: usize,
-        producer: Vec<Vec<u8>>,
+        producer: Box<dyn Iterator<Item = Vec<u8>> + Send>,
         args: Value,
     ) -> Result<crate::stream::ChunkStream, CallError> {
         self.stream_with_producer(method, args, Some(producer))
@@ -932,7 +934,7 @@ impl WasmComponentExecutor {
         &self,
         method: usize,
         args: Value,
-        producer: Option<Vec<Vec<u8>>>,
+        producer: Option<Box<dyn Iterator<Item = Vec<u8>> + Send>>,
     ) -> Result<crate::stream::ChunkStream, CallError> {
         let m = self.method(method, false)?.clone();
         if !m.streaming {
@@ -942,10 +944,10 @@ impl WasmComponentExecutor {
             });
         }
         let (mut store, instance) = self.instantiate()?;
-        // Bidirectional: seed the input producer the output resource pulls through. The
-        // store moves to the pump thread, so the producer lives for the whole stream.
-        if let Some(items) = producer {
-            store.data_mut().client_stream = Some(Box::new(items.into_iter()));
+        // Bidirectional: seed the input producer the output resource pulls through (lazy,
+        // FIDIUS-T-0172). The store moves to the pump thread, so it lives for the stream.
+        if let Some(producer) = producer {
+            store.data_mut().client_stream = Some(producer);
         }
         // FIDIUS-A-0006 / CI.3: a stream takes its store by value (the pump owns it
         // for the stream's lifetime), so it can't share the unary persistent store —

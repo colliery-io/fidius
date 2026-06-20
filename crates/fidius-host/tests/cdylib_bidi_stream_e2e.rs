@@ -84,3 +84,24 @@ async fn cdylib_bidi_drop_cancels_the_chain() {
     assert_eq!((first, second), (2, 4));
     drop(stream); // cancels — exercises the output handle's drop_fn → frees the input
 }
+
+#[tokio::test]
+async fn cdylib_bidi_pulls_lazily_from_an_unbounded_input() {
+    // FIDIUS-T-0172: the host producer is lazy — each input item is bincode-encoded only
+    // when the plugin pulls it. So an UNBOUNDED input (0, 1, 2, …) flows with bounded
+    // memory; eager-collecting would hang/OOM here. Take 3 outputs, then drop.
+    let desc = PluginHandle::find_in_process_descriptor("Doubler").unwrap();
+    let handle = PluginHandle::from_descriptor(desc).unwrap();
+
+    let mut stream = handle
+        .call_bidi_streaming::<u64, (), u64>(0, 0u64.., &())
+        .await
+        .expect("call_bidi_streaming over an unbounded input");
+
+    let mut got = Vec::new();
+    for _ in 0..3 {
+        got.push(from_value::<u64>(stream.next().await.expect("item").expect("ok")).unwrap());
+    }
+    assert_eq!(got, vec![0, 2, 4]);
+    drop(stream); // tears down the chain — the infinite tail is never produced
+}

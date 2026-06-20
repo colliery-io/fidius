@@ -22,14 +22,24 @@
 
 use std::ffi::c_void;
 
-use fidius_core::status::{STATUS_BUFFER_TOO_SMALL, STATUS_OK, STATUS_STREAM_END};
+use fidius_core::status::{
+    STATUS_BUFFER_TOO_SMALL, STATUS_OK, STATUS_SERIALIZATION_ERROR, STATUS_STREAM_END,
+};
 use fidius_core::stream_ffi::FidiusStreamHandle;
 
-/// Boxed producer state: an iterator of pre-encoded items plus a held-back
-/// `pending` item, so a `BUFFER_TOO_SMALL` retry re-delivers the same item
-/// instead of dropping it (mirrors `StreamState`).
+/// One pull from the producer: `Some(Ok)` = the next item's bytes, `Some(Err)` = an
+/// encode failure, `None` = end of stream. A boxed closure so the *typed* item iterator
+/// stays generic at the call site (and is encoded **lazily**, one item per pull) without
+/// monomorphizing the `extern "C"` callback.
+type NextEncoded = Box<dyn FnMut() -> Option<Result<Vec<u8>, ()>> + Send>;
+
+/// Boxed producer state: a lazy item source plus a held-back `pending` item, so a
+/// `BUFFER_TOO_SMALL` retry re-delivers the same item instead of dropping it (mirrors
+/// `StreamState`). The source is pulled — and, for the typed path, **encoded** — only
+/// when the guest asks for the next item, so an unbounded input stays bounded in memory
+/// (FIDIUS-T-0172).
 struct ProducerState {
-    items: Box<dyn Iterator<Item = Vec<u8>> + Send>,
+    next_encoded: NextEncoded,
     pending: Option<Vec<u8>>,
 }
 
@@ -42,8 +52,9 @@ unsafe extern "C" fn producer_next(
 ) -> i32 {
     let st = &mut *((*h).state as *mut ProducerState);
     if st.pending.is_none() {
-        match st.items.next() {
-            Some(bytes) => st.pending = Some(bytes),
+        match (st.next_encoded)() {
+            Some(Ok(bytes)) => st.pending = Some(bytes),
+            Some(Err(())) => return STATUS_SERIALIZATION_ERROR,
             None => return STATUS_STREAM_END,
         }
     }
@@ -65,21 +76,41 @@ unsafe extern "C" fn producer_drop(h: *mut FidiusStreamHandle) {
     drop(Box::from_raw(h));
 }
 
-/// Build a `FidiusStreamHandle` the guest can pull, from an iterator of
-/// bincode-encoded items. The returned handle is owned by the guest consumer,
-/// which frees it via `drop_fn`. The host hands the raw pointer to a
-/// client-streaming method call.
-pub fn host_producer_handle(
-    items: impl Iterator<Item = Vec<u8>> + Send + 'static,
-) -> *mut FidiusStreamHandle {
+fn build_handle(next_encoded: NextEncoded) -> *mut FidiusStreamHandle {
     let st = Box::into_raw(Box::new(ProducerState {
-        items: Box::new(items),
+        next_encoded,
         pending: None,
     }));
     Box::into_raw(Box::new(FidiusStreamHandle {
         next: producer_next,
         drop_fn: producer_drop,
         state: st as *mut c_void,
+    }))
+}
+
+/// Build a `FidiusStreamHandle` the guest can pull, from an iterator of
+/// **pre-encoded** items (raw path). The returned handle is owned by the guest consumer,
+/// which frees it via `drop_fn`.
+pub fn host_producer_handle(
+    items: impl Iterator<Item = Vec<u8>> + Send + 'static,
+) -> *mut FidiusStreamHandle {
+    let mut items = items;
+    build_handle(Box::new(move || items.next().map(Ok)))
+}
+
+/// Like [`host_producer_handle`] but takes a **typed** item iterator and bincode-encodes
+/// each item **lazily** — only when the guest pulls it (FIDIUS-T-0172). This is the path
+/// the typed `PluginHandle::call_client_streaming` / `call_bidi_streaming` use, so an
+/// unbounded input iterator flows with bounded host memory. An item that fails to encode
+/// surfaces as a serialization error to the guest call (no panic across the FFI).
+pub fn host_producer_handle_typed<I: serde::Serialize + 'static>(
+    items: impl Iterator<Item = I> + Send + 'static,
+) -> *mut FidiusStreamHandle {
+    let mut items = items;
+    build_handle(Box::new(move || {
+        items
+            .next()
+            .map(|i| fidius_core::wire::serialize(&i).map_err(|_| ()))
     }))
 }
 
