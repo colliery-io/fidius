@@ -14,6 +14,8 @@
 
 pub mod arch;
 pub mod arena;
+#[cfg(feature = "streaming")]
+pub mod client_stream;
 pub mod error;
 pub mod executor;
 pub mod handle;

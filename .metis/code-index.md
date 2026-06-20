@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T16:30:17Z | 142 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T17:58:51Z | 142 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -290,15 +290,15 @@
 -  `extract_doc_line` function L228-242 — `(attr: &syn::Attribute) -> Option<String>` — agree byte-for-byte.
 -  `rust_type_to_python` function L246-313 — `(ty: &Type) -> String` — Map a Rust type to its Python type-hint counterpart.
 -  `is_u8` function L315-320 — `(ty: &Type) -> bool` — agree byte-for-byte.
--  `render_python_stub` function L322-393 — `(trait_name: &str, methods: &[MethodSpec]) -> String` — agree byte-for-byte.
--  `tests` module L396-537 — `-` — agree byte-for-byte.
--  `parse_methods` function L399-411 — `(src: &str) -> (String, Vec<MethodSpec>)` — agree byte-for-byte.
--  `primitive_type_mapping` function L414-429 — `()` — agree byte-for-byte.
--  `vec_u8_maps_to_bytes_even_without_wire_raw` function L432-442 — `()` — agree byte-for-byte.
--  `wire_raw_signatures_are_bytes` function L445-459 — `()` — agree byte-for-byte.
--  `unknown_types_get_todo_marker` function L462-472 — `()` — agree byte-for-byte.
--  `rendered_stub_hash_matches_macro` function L475-507 — `()` — agree byte-for-byte.
--  `picks_named_trait_when_multiple_present` function L510-536 — `()` — agree byte-for-byte.
+-  `render_python_stub` function L322-394 — `(trait_name: &str, methods: &[MethodSpec]) -> String` — agree byte-for-byte.
+-  `tests` module L397-539 — `-` — agree byte-for-byte.
+-  `parse_methods` function L400-412 — `(src: &str) -> (String, Vec<MethodSpec>)` — agree byte-for-byte.
+-  `primitive_type_mapping` function L415-430 — `()` — agree byte-for-byte.
+-  `vec_u8_maps_to_bytes_even_without_wire_raw` function L433-443 — `()` — agree byte-for-byte.
+-  `wire_raw_signatures_are_bytes` function L446-460 — `()` — agree byte-for-byte.
+-  `unknown_types_get_todo_marker` function L463-473 — `()` — agree byte-for-byte.
+-  `rendered_stub_hash_matches_macro` function L476-509 — `()` — agree byte-for-byte.
+-  `picks_named_trait_when_multiple_present` function L512-538 — `()` — agree byte-for-byte.
 
 ### crates/fidius-cli/tests
 
@@ -533,15 +533,16 @@
 
 - pub `fnv1a` function L28-37 — `(bytes: &[u8]) -> u64` — Compute the FNV-1a 64-bit hash of a byte slice.
 - pub `interface_hash` function L47-52 — `(signatures: &[&str]) -> u64` — Compute the interface hash from a set of method signatures.
-- pub `signature_string` function L80-97 — `( name: &str, arg_types: &[String], ret: &str, wire_raw: bool, streaming: bool, ...` — Build the canonical signature string for one method.
+- pub `signature_string` function L80-102 — `( name: &str, arg_types: &[String], ret: &str, wire_raw: bool, streaming: bool, ...` — Build the canonical signature string for one method.
 -  `FNV_OFFSET_BASIS` variable L22 — `: u64` — FNV-1a 64-bit offset basis.
 -  `FNV_PRIME` variable L25 — `: u64` — FNV-1a 64-bit prime.
--  `tests` module L100-148 — `-` — plugins compiled against a different interface.
--  `empty_input` function L104-108 — `()` — plugins compiled against a different interface.
--  `known_vector` function L111-117 — `()` — plugins compiled against a different interface.
--  `order_independence` function L120-130 — `()` — plugins compiled against a different interface.
--  `sensitivity` function L133-137 — `()` — plugins compiled against a different interface.
--  `different_signatures_differ` function L140-147 — `()` — plugins compiled against a different interface.
+-  `tests` module L105-177 — `-` — plugins compiled against a different interface.
+-  `empty_input` function L109-113 — `()` — plugins compiled against a different interface.
+-  `known_vector` function L116-122 — `()` — plugins compiled against a different interface.
+-  `order_independence` function L125-135 — `()` — plugins compiled against a different interface.
+-  `sensitivity` function L138-142 — `()` — plugins compiled against a different interface.
+-  `streaming_markers_are_distinct` function L145-166 — `()` — plugins compiled against a different interface.
+-  `different_signatures_differ` function L169-176 — `()` — plugins compiled against a different interface.
 
 #### crates/fidius-guest/src/http.rs
 
@@ -597,11 +598,23 @@
 
 #### crates/fidius-guest/src/stream_ffi.rs
 
-- pub `FidiusStreamHandle` struct L50-59 — `{ next: unsafe extern "C" fn(*mut FidiusStreamHandle, *mut u8, u32, *mut u32) ->...` — Per-stream handle returned by a cdylib streaming method's init shim.
-- pub `NextStatus` enum L63-73 — `Item | End | TooSmall | SerErr` — Outcome of [`StreamState::next_into`] — mapped to FFI status codes by the
-- pub `StreamState` struct L81-85 — `{ stream: crate::stream_marker::Stream<T>, pending: Option<T> }` — Guest-side driver for an arena-style cdylib stream (FIDIUS-T-0138).
-- pub `new` function L89-94 — `(stream: crate::stream_marker::Stream<T>) -> Self` — Wrap a producer stream.
-- pub `next_into` function L99-120 — `(&mut self, buf: &mut [u8]) -> NextStatus` — Pull the next item (if needed) and serialize it **directly into `buf`** —
+- pub `FidiusStreamHandle` struct L52-61 — `{ next: unsafe extern "C" fn(*mut FidiusStreamHandle, *mut u8, u32, *mut u32) ->...` — Per-stream handle returned by a cdylib streaming method's init shim.
+- pub `NextStatus` enum L65-75 — `Item | End | TooSmall | SerErr` — Outcome of [`StreamState::next_into`] — mapped to FFI status codes by the
+- pub `StreamState` struct L83-87 — `{ stream: crate::stream_marker::Stream<T>, pending: Option<T> }` — Guest-side driver for an arena-style cdylib stream (FIDIUS-T-0138).
+- pub `new` function L91-96 — `(stream: crate::stream_marker::Stream<T>) -> Self` — Wrap a producer stream.
+- pub `next_into` function L101-122 — `(&mut self, buf: &mut [u8]) -> NextStatus` — Pull the next item (if needed) and serialize it **directly into `buf`** —
+- pub `HostStream` struct L131-136 — `{ handle: *mut FidiusStreamHandle, cap: usize, _marker: PhantomData<T> }` — Guest-side **consumer** of a host-produced stream — the client-streaming
+- pub `from_handle` function L145-151 — `(handle: *mut FidiusStreamHandle) -> Self` — Wrap a host-provided handle.
+-  `pull` function L153-174 — `(&mut self) -> Option<T>` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `Item` type L178 — `= T` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `next` function L179-181 — `(&mut self) -> Option<T>` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `drop` function L185-188 — `(&mut self)` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `host_stream_tests` module L192-245 — `-` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `MockProducer` struct L195-198 — `{ items: Vec<u64>, idx: usize }` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `mock_next` function L200-219 — `( h: *mut FidiusStreamHandle, buf: *mut u8, cap: u32, out_len: *mut u32, ) -> i3...` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `mock_drop` function L221-224 — `(h: *mut FidiusStreamHandle)` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `mock_handle` function L226-233 — `(items: Vec<u64>) -> *mut FidiusStreamHandle` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
+-  `host_stream_consumes_all_items_then_drops_cleanly` function L236-244 — `()` — caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
 
 #### crates/fidius-guest/src/stream_marker.rs
 
@@ -1553,36 +1566,36 @@
 - pub `BufferStrategyAttr` enum L43-46 — `PluginAllocated | Arena` — Discriminants match `fidius_core::descriptor::BufferStrategyKind` — values
 - pub `MetaKvAttr` struct L125-128 — `{ key: String, value: String }` — A static metadata key/value pair parsed from a `#[method_meta(...)]`
 - pub `InterfaceIR` struct L132-140 — `{ trait_name: Ident, attrs: InterfaceAttrs, methods: Vec<MethodIR>, trait_metas:...` — Full IR for a parsed interface trait.
-- pub `MethodIR` struct L145-180 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
-- pub `is_required` function L184-186 — `(&self) -> bool` — Whether this is a required (non-optional) method.
-- pub `parse_interface` function L479-572 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
+- pub `MethodIR` struct L145-185 — `{ name: Ident, arg_types: Vec<Type>, arg_names: Vec<Ident>, return_type: Option<...` — IR for a single trait method.
+- pub `is_required` function L189-191 — `(&self) -> bool` — Whether this is a required (non-optional) method.
+- pub `parse_interface` function L492-594 — `(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<InterfaceIR>` — Parse an `ItemTrait` into an `InterfaceIR`.
 -  `InterfaceAttrs` type L48-120 — `impl Parse for InterfaceAttrs` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 -  `parse` function L49-119 — `(input: ParseStream) -> syn::Result<Self>` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `MethodIR` type L182-187 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_meta_attrs` function L193-237 — `(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>>` — Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]`
--  `parse_optional_attr` function L240-258 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
--  `parse_wire_attr` function L263-280 — `(attrs: &[Attribute]) -> syn::Result<bool>` — Parse a `#[wire(raw)]` attribute, if present.
--  `is_vec_u8` function L283-310 — `(ty: &Type) -> bool` — Return `true` if the given type is `Vec<u8>`.
--  `result_ok_type` function L313-329 — `(ty: &Type) -> Option<&Type>` — Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
--  `validate_raw_method_signature` function L334-371 — `( method: &TraitItemFn, arg_types: &[Type], return_type: Option<&Type>, ) -> syn...` — Validate that a method flagged `#[wire(raw)]` has a supported signature:
--  `stream_item_type` function L378-396 — `(ty: &Type) -> Option<Type>` — Return the per-item type `T` if `ty` is a `Stream<T>` (i.e.
--  `build_signature_string` function L408-435 — `( method: &TraitItemFn, wire_raw: bool, stream_item: Option<&Type>, ) -> String` — Build the canonical signature string for a method.
--  `extract_arg_names` function L438-455 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
--  `extract_arg_types` function L458-468 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
--  `extract_return_type` function L471-476 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
--  `tests` module L575-763 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `parse_test_trait` function L579-587 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `basic_trait_parsing` function L590-607 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `optional_method_parsing` function L610-623 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `async_method_detection` function L626-636 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `rejects_mut_self` function L639-655 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `signature_string_format` function L658-668 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `interface_attrs_parsing` function L671-677 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `interface_attrs_with_crate_path` function L680-693 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `detects_server_streaming_return` function L696-715 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `streaming_and_unary_hash_differently` function L718-732 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `bare_stream_marker_is_detected` function L735-742 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
--  `rejects_stream_in_argument_position` function L745-762 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `MethodIR` type L187-192 — `= MethodIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_meta_attrs` function L198-242 — `(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>>` — Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]`
+-  `parse_optional_attr` function L245-263 — `(attrs: &[Attribute]) -> syn::Result<Option<u32>>` — Parse an `#[optional(since = N)]` attribute, if present.
+-  `parse_wire_attr` function L268-285 — `(attrs: &[Attribute]) -> syn::Result<bool>` — Parse a `#[wire(raw)]` attribute, if present.
+-  `is_vec_u8` function L288-315 — `(ty: &Type) -> bool` — Return `true` if the given type is `Vec<u8>`.
+-  `result_ok_type` function L318-334 — `(ty: &Type) -> Option<&Type>` — Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
+-  `validate_raw_method_signature` function L339-376 — `( method: &TraitItemFn, arg_types: &[Type], return_type: Option<&Type>, ) -> syn...` — Validate that a method flagged `#[wire(raw)]` has a supported signature:
+-  `stream_item_type` function L383-401 — `(ty: &Type) -> Option<Type>` — Return the per-item type `T` if `ty` is a `Stream<T>` (i.e.
+-  `build_signature_string` function L413-448 — `( method: &TraitItemFn, wire_raw: bool, stream_item: Option<&Type>, client_strea...` — Build the canonical signature string for a method.
+-  `extract_arg_names` function L451-468 — `(method: &TraitItemFn) -> Vec<Ident>` — Extract argument names from a method signature (excluding `self`).
+-  `extract_arg_types` function L471-481 — `(method: &TraitItemFn) -> Vec<Type>` — Extract argument types from a method signature (excluding `self`).
+-  `extract_return_type` function L484-489 — `(method: &TraitItemFn) -> Option<Type>` — Extract the return type (unwrapped from `-> Type`).
+-  `tests` module L597-788 — `-` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `parse_test_trait` function L601-609 — `(tokens: proc_macro2::TokenStream) -> InterfaceIR` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `basic_trait_parsing` function L612-629 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `optional_method_parsing` function L632-645 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `async_method_detection` function L648-658 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `rejects_mut_self` function L661-677 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `signature_string_format` function L680-690 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `interface_attrs_parsing` function L693-699 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `interface_attrs_with_crate_path` function L702-715 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `detects_server_streaming_return` function L718-737 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `streaming_and_unary_hash_differently` function L740-754 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `bare_stream_marker_is_detected` function L757-764 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
+-  `client_streaming_is_recognized_but_not_yet_wired` function L767-787 — `()` — Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 
 #### crates/fidius-macro/src/lib.rs
 
