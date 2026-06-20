@@ -66,6 +66,13 @@ It works on **all three backends**: cdylib (a host callback the plugin pulls), W
 iterator the method receives). Drop = cancel; backpressure inverts (the plugin's
 consumption rate parks the host).
 
+> **Python convention — the stream argument comes first.** In a Python plugin, the
+> host-fed stream iterator is passed as the method's **first positional argument**; any
+> non-stream args follow. So write `def load(rows, mode):`, not `def load(mode, rows):`.
+> (Rust cdylib/WASM honor the stream's declared position anywhere in the signature; only
+> Python pins it first. It's a positional contract — the same shape duck-typed Python
+> already relies on.) This applies to client-streaming and bidirectional methods.
+
 ## Bidirectional: `Stream<T>` in *both* arg and return
 
 A method can take `Stream<In>` **and** return `Stream<Out>` (FIDIUS-I-0032 / ADR-0010) —
