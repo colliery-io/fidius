@@ -240,6 +240,50 @@ impl EgressPolicy for ApiEgress {
 `crates/fidius-host/tests/wasm_egress_e2e.rs` exercises allow/deny/fail-closed
 against a real `wasi:http` guest with policies like this.)
 
+### The guest side: `fidius_guest::http`
+
+The policy is half the loop; the connector is the other half. A connector written
+with the fidius macros makes its outbound call through **`fidius_guest::http`** —
+no hand-written WIT, no raw `wasi:http` bindings:
+
+```rust
+#[plugin_impl(Source, crate = "fidius_guest")]
+impl Source for MySource {
+    fn read(&self, cfg: Config) -> fidius_guest::Stream<Record> {
+        // Brokered by the host EgressPolicy. Err == denied / blocked / unreachable.
+        let resp = fidius_guest::http::get(&cfg.url).expect("fetch");
+        // … parse resp.text() / resp.body into records …
+    }
+}
+```
+
+Declaring `capabilities = ["http"]` in `package.toml` is all the extra wiring:
+`#[plugin_impl]` auto-exports the component and `fidius_guest::http` contributes
+the `wasi:http` import — the two `wit_bindgen::generate!` compose into one
+component automatically, with no macro change. The module is `wasm32-wasip2`-only;
+a native/cdylib connector uses a normal HTTP client directly (it already has the
+host's authority). *Unify the contract, not the capabilities* — the trust tiers
+legitimately differ.
+
+### Version compatibility (the contract)
+
+`fidius_guest::http` pins **one** `wasi:http` version for the whole ecosystem
+(vendored at `crates/fidius-guest/wit`, matched to the host's
+`wasmtime-wasi-http`; see ADR *WASM guest wasi:http — pinned client contract*).
+The rule a distributed connector can rely on:
+
+> A wasm plugin built against **fidius-guest X** runs on any **fidius-host ≥ X**
+> within the same `wasi:http` line. Upgrading the host (newer wasmtime) does not
+> break existing connectors — WASI 0.2 is a stable line, so a newer host satisfies
+> an older import. A `wasi:http` **major** bump (0.2→0.3) is a breaking change
+> shipped only in a fidius **major** release.
+
+fidius treats the guest's `wasi:http` version as a *published ABI*: it moves
+rarely and deliberately, never to chase a wasmtime patch. The macro-authored
+connector E2E (`crates/fidius-host/tests/macro_egress_e2e.rs`) is the drift guard
+— if the guest's pinned version ever diverges from the host's, that test fails to
+instantiate (red in CI) before it can ship.
+
 ### A note on `env` vs credential injection
 
 Injecting a secret in the hook only keeps it from the guest **if that guest can't
