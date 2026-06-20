@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T15:14:28Z | 138 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T16:30:17Z | 142 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -87,6 +87,7 @@
 │   │       ├── python_plugin_e2e.rs
 │   │       ├── python_routing.rs
 │   │       ├── python_streaming_e2e.rs
+│   │       ├── records_stream_wasm.rs
 │   │       ├── records_wasm.rs
 │   │       ├── wasm_egress_e2e.rs
 │   │       ├── wasm_executor.rs
@@ -148,7 +149,8 @@
 │   │   ├── 01_load_and_call.rs
 │   │   ├── 02_configure.rs
 │   │   ├── 03_streaming.rs
-│   │   └── 04_pipeline.rs
+│   │   ├── 04_pipeline.rs
+│   │   └── 05_record_stream.rs
 │   └── src/
 │       └── lib.rs
 ├── python/
@@ -205,6 +207,10 @@
         │   ├── build.rs
         │   └── src/
         │       ├── geom.rs
+        │       └── lib.rs
+        ├── records-stream/
+        │   ├── build.rs
+        │   └── src/
         │       └── lib.rs
         ├── ticker/
         │   └── src/
@@ -539,25 +545,26 @@
 
 #### crates/fidius-guest/src/http.rs
 
-- pub `Request` struct L57-66 — `{ method: String, url: String, headers: Vec<(String, String)>, body: Vec<u8> }` — An outbound request.
-- pub `get` function L70-77 — `(url: impl Into<String>) -> Self` — A GET request for `url`.
-- pub `post` function L80-87 — `(url: impl Into<String>, body: impl Into<Vec<u8>>) -> Self` — A POST request for `url` with `body`.
-- pub `header` function L90-93 — `(mut self, name: impl Into<String>, value: impl Into<String>) -> Self` — Add a header (builder style).
-- pub `Response` struct L98-105 — `{ status: u16, headers: Vec<(String, String)>, body: Vec<u8> }` — A response.
-- pub `is_success` function L109-111 — `(&self) -> bool` — `true` for a 2xx status.
-- pub `text` function L114-116 — `(&self) -> String` — The body as UTF-8 (lossy).
-- pub `HttpError` struct L123-126 — `{ message: String }` — A failed request.
-- pub `get` function L145-147 — `(url: &str) -> Result<Response, HttpError>` — GET `url`.
-- pub `post` function L150-152 — `(url: &str, body: &[u8]) -> Result<Response, HttpError>` — POST `body` to `url`.
-- pub `send` function L156-252 — `(req: Request) -> Result<Response, HttpError>` — Send an arbitrary [`Request`], blocking until the response is read.
+- pub `Request` struct L57-71 — `{ method: String, url: String, headers: Vec<(String, String)>, body: Vec<u8>, ti...` — An outbound request.
+- pub `get` function L75-83 — `(url: impl Into<String>) -> Self` — A GET request for `url`.
+- pub `post` function L86-94 — `(url: impl Into<String>, body: impl Into<Vec<u8>>) -> Self` — A POST request for `url` with `body`.
+- pub `header` function L97-100 — `(mut self, name: impl Into<String>, value: impl Into<String>) -> Self` — Add a header (builder style).
+- pub `timeout` function L104-107 — `(mut self, dur: core::time::Duration) -> Self` — Set a request timeout (builder style).
+- pub `Response` struct L112-119 — `{ status: u16, headers: Vec<(String, String)>, body: Vec<u8> }` — A response.
+- pub `is_success` function L123-125 — `(&self) -> bool` — `true` for a 2xx status.
+- pub `text` function L128-130 — `(&self) -> String` — The body as UTF-8 (lossy).
+- pub `HttpError` struct L137-140 — `{ message: String }` — A failed request.
+- pub `get` function L159-161 — `(url: &str) -> Result<Response, HttpError>` — GET `url`.
+- pub `post` function L164-166 — `(url: &str, body: &[u8]) -> Result<Response, HttpError>` — POST `body` to `url`.
+- pub `send` function L170-277 — `(req: Request) -> Result<Response, HttpError>` — Send an arbitrary [`Request`], blocking until the response is read.
 -  `bindings` module L40-46 — `-` — ```
--  `Request` type L68-94 — `= Request` — ```
--  `Response` type L107-117 — `= Response` — ```
--  `HttpError` type L128-134 — `= HttpError` — ```
--  `new` function L129-133 — `(msg: impl Into<String>) -> Self` — ```
--  `HttpError` type L136-140 — `= HttpError` — ```
--  `fmt` function L137-139 — `(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result` — ```
--  `HttpError` type L142 — `= HttpError` — ```
+-  `Request` type L73-108 — `= Request` — ```
+-  `Response` type L121-131 — `= Response` — ```
+-  `HttpError` type L142-148 — `= HttpError` — ```
+-  `new` function L143-147 — `(msg: impl Into<String>) -> Self` — ```
+-  `HttpError` type L150-154 — `= HttpError` — ```
+-  `fmt` function L151-153 — `(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result` — ```
+-  `HttpError` type L156 — `= HttpError` — ```
 
 #### crates/fidius-guest/src/lib.rs
 
@@ -699,7 +706,7 @@
 -  `Error` type L437 — `= ValueError` — records, options, and variants.
 -  `serialize_field` function L438-445 — `(&mut self, key: &'static str, value: &T) -> Result<(), ValueError>` — records, options, and variants.
 -  `end` function L446-451 — `(self) -> Result<Value, ValueError>` — records, options, and variants.
--  `Value` type L458-578 — `= Value` — records, options, and variants.
+-  `Value` type L458-621 — `= Value` — records, options, and variants.
 -  `Error` type L459 — `= ValueError` — records, options, and variants.
 -  `deserialize_any` function L461-499 — `(self, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
 -  `deserialize_option` function L501-510 — `(self, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
@@ -707,78 +714,80 @@
 -  `deserialize_newtype_struct` function L539-548 — `( self, _name: &'static str, visitor: V, ) -> Result<V::Value, ValueError>` — records, options, and variants.
 -  `deserialize_unit_struct` function L550-559 — `( self, _name: &'static str, visitor: V, ) -> Result<V::Value, ValueError>` — records, options, and variants.
 -  `deserialize_unit` function L561-571 — `(self, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
--  `Value` type L580-598 — `= Value` — records, options, and variants.
--  `kind` function L581-597 — `(&self) -> &'static str` — records, options, and variants.
--  `SeqAccess` struct L600-602 — `{ iter: std::vec::IntoIter<Value> }` — records, options, and variants.
--  `SeqAccess` type L603-617 — `= SeqAccess` — records, options, and variants.
--  `Error` type L604 — `= ValueError` — records, options, and variants.
--  `next_element_seed` function L605-613 — `(&mut self, seed: T) -> Result<Option<T::Value>, ValueError>` — records, options, and variants.
--  `size_hint` function L614-616 — `(&self) -> Option<usize>` — records, options, and variants.
--  `RecordAccess` struct L619-622 — `{ iter: std::vec::IntoIter<(String, Value)>, value: Option<Value> }` — records, options, and variants.
--  `RecordAccess` type L623-650 — `= RecordAccess` — records, options, and variants.
--  `Error` type L624 — `= ValueError` — records, options, and variants.
--  `next_key_seed` function L625-636 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
--  `next_value_seed` function L637-646 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
--  `size_hint` function L647-649 — `(&self) -> Option<usize>` — records, options, and variants.
--  `MapAccess` struct L652-655 — `{ iter: std::vec::IntoIter<(Value, Value)>, value: Option<Value> }` — records, options, and variants.
--  `MapAccess` type L656-683 — `= MapAccess` — records, options, and variants.
--  `Error` type L657 — `= ValueError` — records, options, and variants.
--  `next_key_seed` function L658-669 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
--  `next_value_seed` function L670-679 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
--  `size_hint` function L680-682 — `(&self) -> Option<usize>` — records, options, and variants.
--  `SingletonMapAccess` struct L687-690 — `{ key: Option<String>, value: Option<Value> }` — Presents a `Value::Variant` as a single-entry map for `deserialize_any`
--  `SingletonMapAccess` type L691-712 — `= SingletonMapAccess` — records, options, and variants.
--  `Error` type L692 — `= ValueError` — records, options, and variants.
--  `next_key_seed` function L693-701 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
--  `next_value_seed` function L702-711 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
--  `EnumAccess` struct L714-717 — `{ name: String, value: Value }` — records, options, and variants.
--  `EnumAccess` type L718-728 — `= EnumAccess` — records, options, and variants.
--  `Error` type L719 — `= ValueError` — records, options, and variants.
--  `Variant` type L720 — `= VariantAccess` — records, options, and variants.
--  `variant_seed` function L721-727 — `(self, seed: V) -> Result<(V::Value, VariantAccess), ValueError>` — records, options, and variants.
--  `VariantAccess` struct L730-732 — `{ value: Value }` — records, options, and variants.
--  `VariantAccess` type L733-783 — `= VariantAccess` — records, options, and variants.
--  `Error` type L734 — `= ValueError` — records, options, and variants.
--  `unit_variant` function L735-743 — `(self) -> Result<(), ValueError>` — records, options, and variants.
--  `newtype_variant_seed` function L744-749 — `(self, seed: T) -> Result<T::Value, ValueError>` — records, options, and variants.
--  `tuple_variant` function L750-763 — `(self, _len: usize, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
--  `struct_variant` function L764-782 — `( self, _fields: &'static [&'static str], visitor: V, ) -> Result<V::Value, Valu...` — records, options, and variants.
--  `tests` module L786-898 — `-` — records, options, and variants.
--  `round_trip` function L790-797 — `(value: T)` — records, options, and variants.
--  `Greeting` struct L800-804 — `{ name: String, times: u32, loud: bool }` — records, options, and variants.
--  `Wrapper` struct L807 — `-` — records, options, and variants.
--  `Shape` enum L810-815 — `Unit | Newtype | Tuple | Struct` — records, options, and variants.
--  `primitives` function L818-828 — `()` — records, options, and variants.
--  `collections` function L831-837 — `()` — records, options, and variants.
--  `structs_and_maps` function L840-858 — `()` — records, options, and variants.
--  `enums` function L861-866 — `()` — records, options, and variants.
--  `nested` function L869-879 — `()` — records, options, and variants.
--  `Outer` struct L871-874 — `{ shapes: Vec<Shape>, tag: Option<String> }` — records, options, and variants.
--  `struct_shape_is_record` function L882-897 — `()` — records, options, and variants.
--  `Value` type L902-957 — `impl Serialize for Value` — records, options, and variants.
--  `serialize` function L903-956 — `(&self, serializer: S) -> Result<S::Ok, S::Error>` — records, options, and variants.
--  `Value` type L959-1050 — `= Value` — records, options, and variants.
--  `deserialize` function L960-1049 — `(deserializer: D) -> Result<Value, D::Error>` — records, options, and variants.
--  `ValueVisitor` struct L964 — `-` — records, options, and variants.
--  `ValueVisitor` type L965-1047 — `= ValueVisitor` — records, options, and variants.
--  `Value` type L966 — `= Value` — records, options, and variants.
--  `expecting` function L967-969 — `(&self, f: &mut fmt::Formatter) -> fmt::Result` — records, options, and variants.
--  `visit_bool` function L970-972 — `(self, v: bool) -> Result<Value, E>` — records, options, and variants.
--  `visit_i64` function L973-975 — `(self, v: i64) -> Result<Value, E>` — records, options, and variants.
--  `visit_i128` function L976-983 — `(self, v: i128) -> Result<Value, E>` — records, options, and variants.
--  `visit_u64` function L984-986 — `(self, v: u64) -> Result<Value, E>` — records, options, and variants.
--  `visit_u128` function L987-994 — `(self, v: u128) -> Result<Value, E>` — records, options, and variants.
--  `visit_f64` function L995-997 — `(self, v: f64) -> Result<Value, E>` — records, options, and variants.
--  `visit_char` function L998-1000 — `(self, v: char) -> Result<Value, E>` — records, options, and variants.
--  `visit_str` function L1001-1003 — `(self, v: &str) -> Result<Value, E>` — records, options, and variants.
--  `visit_string` function L1004-1006 — `(self, v: String) -> Result<Value, E>` — records, options, and variants.
--  `visit_bytes` function L1007-1009 — `(self, v: &[u8]) -> Result<Value, E>` — records, options, and variants.
--  `visit_byte_buf` function L1010-1012 — `(self, v: Vec<u8>) -> Result<Value, E>` — records, options, and variants.
--  `visit_unit` function L1013-1015 — `(self) -> Result<Value, E>` — records, options, and variants.
--  `visit_none` function L1016-1018 — `(self) -> Result<Value, E>` — records, options, and variants.
--  `visit_some` function L1019-1026 — `(self, deserializer: D) -> Result<Value, D::Error>` — records, options, and variants.
--  `visit_seq` function L1027-1036 — `(self, mut seq: A) -> Result<Value, A::Error>` — records, options, and variants.
--  `visit_map` function L1037-1046 — `(self, mut map: A) -> Result<Value, A::Error>` — records, options, and variants.
+-  `deserialize_map` function L573-614 — `(self, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `Value` type L623-641 — `= Value` — records, options, and variants.
+-  `kind` function L624-640 — `(&self) -> &'static str` — records, options, and variants.
+-  `SeqAccess` struct L643-645 — `{ iter: std::vec::IntoIter<Value> }` — records, options, and variants.
+-  `SeqAccess` type L646-660 — `= SeqAccess` — records, options, and variants.
+-  `Error` type L647 — `= ValueError` — records, options, and variants.
+-  `next_element_seed` function L648-656 — `(&mut self, seed: T) -> Result<Option<T::Value>, ValueError>` — records, options, and variants.
+-  `size_hint` function L657-659 — `(&self) -> Option<usize>` — records, options, and variants.
+-  `RecordAccess` struct L662-665 — `{ iter: std::vec::IntoIter<(String, Value)>, value: Option<Value> }` — records, options, and variants.
+-  `RecordAccess` type L666-693 — `= RecordAccess` — records, options, and variants.
+-  `Error` type L667 — `= ValueError` — records, options, and variants.
+-  `next_key_seed` function L668-679 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
+-  `next_value_seed` function L680-689 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `size_hint` function L690-692 — `(&self) -> Option<usize>` — records, options, and variants.
+-  `MapAccess` struct L695-698 — `{ iter: std::vec::IntoIter<(Value, Value)>, value: Option<Value> }` — records, options, and variants.
+-  `MapAccess` type L699-726 — `= MapAccess` — records, options, and variants.
+-  `Error` type L700 — `= ValueError` — records, options, and variants.
+-  `next_key_seed` function L701-712 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
+-  `next_value_seed` function L713-722 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `size_hint` function L723-725 — `(&self) -> Option<usize>` — records, options, and variants.
+-  `SingletonMapAccess` struct L730-733 — `{ key: Option<String>, value: Option<Value> }` — Presents a `Value::Variant` as a single-entry map for `deserialize_any`
+-  `SingletonMapAccess` type L734-755 — `= SingletonMapAccess` — records, options, and variants.
+-  `Error` type L735 — `= ValueError` — records, options, and variants.
+-  `next_key_seed` function L736-744 — `(&mut self, seed: K) -> Result<Option<K::Value>, ValueError>` — records, options, and variants.
+-  `next_value_seed` function L745-754 — `(&mut self, seed: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `EnumAccess` struct L757-760 — `{ name: String, value: Value }` — records, options, and variants.
+-  `EnumAccess` type L761-771 — `= EnumAccess` — records, options, and variants.
+-  `Error` type L762 — `= ValueError` — records, options, and variants.
+-  `Variant` type L763 — `= VariantAccess` — records, options, and variants.
+-  `variant_seed` function L764-770 — `(self, seed: V) -> Result<(V::Value, VariantAccess), ValueError>` — records, options, and variants.
+-  `VariantAccess` struct L773-775 — `{ value: Value }` — records, options, and variants.
+-  `VariantAccess` type L776-826 — `= VariantAccess` — records, options, and variants.
+-  `Error` type L777 — `= ValueError` — records, options, and variants.
+-  `unit_variant` function L778-786 — `(self) -> Result<(), ValueError>` — records, options, and variants.
+-  `newtype_variant_seed` function L787-792 — `(self, seed: T) -> Result<T::Value, ValueError>` — records, options, and variants.
+-  `tuple_variant` function L793-806 — `(self, _len: usize, visitor: V) -> Result<V::Value, ValueError>` — records, options, and variants.
+-  `struct_variant` function L807-825 — `( self, _fields: &'static [&'static str], visitor: V, ) -> Result<V::Value, Valu...` — records, options, and variants.
+-  `tests` module L829-962 — `-` — records, options, and variants.
+-  `round_trip` function L833-840 — `(value: T)` — records, options, and variants.
+-  `map_deserializes_from_a_list_of_pairs` function L843-861 — `()` — records, options, and variants.
+-  `Greeting` struct L864-868 — `{ name: String, times: u32, loud: bool }` — records, options, and variants.
+-  `Wrapper` struct L871 — `-` — records, options, and variants.
+-  `Shape` enum L874-879 — `Unit | Newtype | Tuple | Struct` — records, options, and variants.
+-  `primitives` function L882-892 — `()` — records, options, and variants.
+-  `collections` function L895-901 — `()` — records, options, and variants.
+-  `structs_and_maps` function L904-922 — `()` — records, options, and variants.
+-  `enums` function L925-930 — `()` — records, options, and variants.
+-  `nested` function L933-943 — `()` — records, options, and variants.
+-  `Outer` struct L935-938 — `{ shapes: Vec<Shape>, tag: Option<String> }` — records, options, and variants.
+-  `struct_shape_is_record` function L946-961 — `()` — records, options, and variants.
+-  `Value` type L966-1021 — `impl Serialize for Value` — records, options, and variants.
+-  `serialize` function L967-1020 — `(&self, serializer: S) -> Result<S::Ok, S::Error>` — records, options, and variants.
+-  `Value` type L1023-1114 — `= Value` — records, options, and variants.
+-  `deserialize` function L1024-1113 — `(deserializer: D) -> Result<Value, D::Error>` — records, options, and variants.
+-  `ValueVisitor` struct L1028 — `-` — records, options, and variants.
+-  `ValueVisitor` type L1029-1111 — `= ValueVisitor` — records, options, and variants.
+-  `Value` type L1030 — `= Value` — records, options, and variants.
+-  `expecting` function L1031-1033 — `(&self, f: &mut fmt::Formatter) -> fmt::Result` — records, options, and variants.
+-  `visit_bool` function L1034-1036 — `(self, v: bool) -> Result<Value, E>` — records, options, and variants.
+-  `visit_i64` function L1037-1039 — `(self, v: i64) -> Result<Value, E>` — records, options, and variants.
+-  `visit_i128` function L1040-1047 — `(self, v: i128) -> Result<Value, E>` — records, options, and variants.
+-  `visit_u64` function L1048-1050 — `(self, v: u64) -> Result<Value, E>` — records, options, and variants.
+-  `visit_u128` function L1051-1058 — `(self, v: u128) -> Result<Value, E>` — records, options, and variants.
+-  `visit_f64` function L1059-1061 — `(self, v: f64) -> Result<Value, E>` — records, options, and variants.
+-  `visit_char` function L1062-1064 — `(self, v: char) -> Result<Value, E>` — records, options, and variants.
+-  `visit_str` function L1065-1067 — `(self, v: &str) -> Result<Value, E>` — records, options, and variants.
+-  `visit_string` function L1068-1070 — `(self, v: String) -> Result<Value, E>` — records, options, and variants.
+-  `visit_bytes` function L1071-1073 — `(self, v: &[u8]) -> Result<Value, E>` — records, options, and variants.
+-  `visit_byte_buf` function L1074-1076 — `(self, v: Vec<u8>) -> Result<Value, E>` — records, options, and variants.
+-  `visit_unit` function L1077-1079 — `(self) -> Result<Value, E>` — records, options, and variants.
+-  `visit_none` function L1080-1082 — `(self) -> Result<Value, E>` — records, options, and variants.
+-  `visit_some` function L1083-1090 — `(self, deserializer: D) -> Result<Value, D::Error>` — records, options, and variants.
+-  `visit_seq` function L1091-1100 — `(self, mut seq: A) -> Result<Value, A::Error>` — records, options, and variants.
+-  `visit_map` function L1101-1110 — `(self, mut map: A) -> Result<Value, A::Error>` — records, options, and variants.
 
 #### crates/fidius-guest/src/wasm_descriptor.rs
 
@@ -1092,8 +1101,8 @@
 - pub `from_cwasm_with_egress` function L487-510 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
 - pub `configure` function L578-602 — `(&mut self, cfg: &[u8]) -> Result<(), CallError>` — Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
 - pub `interface_hash` function L696-712 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
-- pub `validate_component` function L1092-1100 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
-- pub `precompile_component` function L1106-1114 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+- pub `validate_component` function L1193-1201 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L1207-1215 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
 -  `EgressDenied` type L62-69 — `= EgressDenied` — from the package manifest's allow-list.
 -  `EgressHooks` struct L94-96 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
 -  `EgressHooks` type L98-118 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
@@ -1120,31 +1129,32 @@
 -  `info` function L716-718 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
 -  `method_count` function L720-722 — `(&self) -> u32` — from the package manifest's allow-list.
 -  `call_raw` function L724-755 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L758-791 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `call` function L759-790 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
--  `STREAM_CHANNEL_CAP` variable L797 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
--  `WasmComponentExecutor` type L801-928 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `call_streaming` function L802-927 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
--  `plugin_error_from_val` function L932-958 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
--  `to_kebab` function L963-978 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
--  `kebab_to_snake` function L981-983 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
--  `kebab_to_pascal` function L986-996 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
--  `value_to_val` function L998-1041 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
--  `val_to_value` function L1044-1082 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
--  `ssrf_tests` module L1117-1155 — `-` — from the package manifest's allow-list.
--  `ip` function L1121-1123 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
--  `blocks_internal_and_metadata_targets` function L1126-1142 — `()` — from the package manifest's allow-list.
--  `allows_public_targets` function L1145-1154 — `()` — from the package manifest's allow-list.
--  `fs_capability_tests` module L1158-1197 — `-` — from the package manifest's allow-list.
--  `msg` function L1161-1166 — `(r: Result<(), CallError>) -> String` — from the package manifest's allow-list.
--  `path_scoped_fs_grants_are_accepted` function L1169-1174 — `()` — from the package manifest's allow-list.
--  `bare_filesystem_is_rejected` function L1177-1181 — `()` — from the package manifest's allow-list.
--  `fs_grant_without_a_path_is_rejected` function L1184-1187 — `()` — from the package manifest's allow-list.
--  `build_wasi_ctx_with_an_fs_grant_does_not_panic` function L1190-1196 — `()` — from the package manifest's allow-list.
--  `wasi_http_version_tests` module L1200-1235 — `-` — from the package manifest's allow-list.
--  `host_matched_version_is_compatible` function L1204-1210 — `()` — from the package manifest's allow-list.
--  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1213-1225 — `()` — from the package manifest's allow-list.
--  `no_wasi_http_import_is_fine` function L1228-1234 — `()` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L758-803 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call` function L759-802 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
+-  `STREAM_CHANNEL_CAP` variable L809 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
+-  `WasmComponentExecutor` type L813-940 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call_streaming` function L814-939 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
+-  `plugin_error_from_val` function L944-970 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
+-  `to_kebab` function L975-990 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
+-  `kebab_to_snake` function L993-995 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
+-  `kebab_to_pascal` function L998-1008 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
+-  `value_to_val` function L1010-1058 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
+-  `value_to_val_typed` function L1065-1142 — `(v: &Value, ty: &wasmtime::component::Type) -> Result<Val, CallError>` — Type-directed lowering for the **argument** path.
+-  `val_to_value` function L1145-1183 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
+-  `ssrf_tests` module L1218-1256 — `-` — from the package manifest's allow-list.
+-  `ip` function L1222-1224 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
+-  `blocks_internal_and_metadata_targets` function L1227-1243 — `()` — from the package manifest's allow-list.
+-  `allows_public_targets` function L1246-1255 — `()` — from the package manifest's allow-list.
+-  `fs_capability_tests` module L1259-1298 — `-` — from the package manifest's allow-list.
+-  `msg` function L1262-1267 — `(r: Result<(), CallError>) -> String` — from the package manifest's allow-list.
+-  `path_scoped_fs_grants_are_accepted` function L1270-1275 — `()` — from the package manifest's allow-list.
+-  `bare_filesystem_is_rejected` function L1278-1282 — `()` — from the package manifest's allow-list.
+-  `fs_grant_without_a_path_is_rejected` function L1285-1288 — `()` — from the package manifest's allow-list.
+-  `build_wasi_ctx_with_an_fs_grant_does_not_panic` function L1291-1297 — `()` — from the package manifest's allow-list.
+-  `wasi_http_version_tests` module L1301-1336 — `-` — from the package manifest's allow-list.
+-  `host_matched_version_is_compatible` function L1305-1311 — `()` — from the package manifest's allow-list.
+-  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1314-1326 — `()` — from the package manifest's allow-list.
+-  `no_wasi_http_import_is_fine` function L1329-1335 — `()` — from the package manifest's allow-list.
 
 ### crates/fidius-host/tests
 
@@ -1259,20 +1269,23 @@
 
 #### crates/fidius-host/tests/macro_egress_e2e.rs
 
-- pub `Fetcher` interface L40-42 — `{ fn fetch() }` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `macro_fetcher_component` function L45-59 — `() -> &'static [u8]` — Build the macro-fetcher component once.
--  `BYTES` variable L46 — `: OnceLock<Vec<u8>>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `mock_http_once` function L62-80 — `(body: &'static str) -> (String, std::thread::JoinHandle<()>)` — One-shot loopback mock HTTP server serving a single request with `body`.
--  `AllowAll` struct L82 — `-` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `AllowAll` type L83-87 — `impl EgressPolicy for AllowAll` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `authorize` function L84-86 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `DenyAll` struct L89 — `-` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `DenyAll` type L90-94 — `impl EgressPolicy for DenyAll` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `authorize` function L91-93 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `stage_pkg` function L97-108 — `(root: &std::path::Path)` — Stage the macro-fetcher as a `runtime = "wasm"` package declaring `http`.
--  `macro_connector_egress_allowed` function L111-129 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `macro_connector_egress_denied` function L132-154 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
--  `macro_connector_no_policy_fails_closed` function L157-173 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+- pub `Fetcher` interface L40-43 — `{ fn fetch(), fn fetch_timeout() }` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_fetcher_component` function L46-60 — `() -> &'static [u8]` — Build the macro-fetcher component once.
+-  `BYTES` variable L47 — `: OnceLock<Vec<u8>>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `mock_http_once` function L63-81 — `(body: &'static str) -> (String, std::thread::JoinHandle<()>)` — One-shot loopback mock HTTP server serving a single request with `body`.
+-  `mock_http_slow` function L85-100 — `() -> (String, std::thread::JoinHandle<()>)` — A loopback server that accepts the connection but **stalls** ~2s before
+-  `AllowAll` struct L102 — `-` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `AllowAll` type L103-107 — `impl EgressPolicy for AllowAll` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `authorize` function L104-106 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `DenyAll` struct L109 — `-` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `DenyAll` type L110-114 — `impl EgressPolicy for DenyAll` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `authorize` function L111-113 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `stage_pkg` function L117-128 — `(root: &std::path::Path)` — Stage the macro-fetcher as a `runtime = "wasm"` package declaring `http`.
+-  `macro_connector_egress_allowed` function L131-149 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_connector_egress_denied` function L152-174 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_connector_no_policy_fails_closed` function L177-193 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_connector_times_out_on_slow_upstream` function L196-226 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_connector_timeout_allows_a_fast_response` function L229-249 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
 
 #### crates/fidius-host/tests/macro_wasm.rs
 
@@ -1370,16 +1383,28 @@
 -  `huge_stream_is_bounded_and_cancellable` function L133-159 — `()` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
 -  `composition_pump_into_sink` function L162-186 — `()` — - the `fidius-test` composition harness (`pump`) wires the stream to a sink.
 
+#### crates/fidius-host/tests/records_stream_wasm.rs
+
+- pub `Row` struct L34-37 — `{ id: u32, label: String }` — lifting the prior "streaming items must be primitives/String" restriction.
+- pub `Source` interface L41-43 — `{ fn rows() }` — lifting the prior "streaming items must be primitives/String" restriction.
+-  `component` function L45-59 — `() -> &'static [u8]` — lifting the prior "streaming items must be primitives/String" restriction.
+-  `BYTES` variable L46 — `: OnceLock<Vec<u8>>` — lifting the prior "streaming items must be primitives/String" restriction.
+-  `stage_pkg` function L61-83 — `(root: &std::path::Path)` — lifting the prior "streaming items must be primitives/String" restriction.
+-  `row` function L85-90 — `(id: u32) -> Row` — lifting the prior "streaming items must be primitives/String" restriction.
+-  `streams_typed_records` function L93-116 — `()` — lifting the prior "streaming items must be primitives/String" restriction.
+-  `record_stream_is_bounded_and_cancellable` function L119-144 — `()` — lifting the prior "streaming items must be primitives/String" restriction.
+
 #### crates/fidius-host/tests/records_wasm.rs
 
 - pub `Point` struct L38-41 — `{ x: i32, y: i32 }` — exercising the kebab↔snake/Pascal name normalization end to end.
 - pub `Shape` enum L44-49 — `Circle | Rect | Triangle | Dot` — exercising the kebab↔snake/Pascal name normalization end to end.
-- pub `Geo` interface L52-55 — `{ fn midpoint(), fn describe() }` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `records_greeter_component` function L57-71 — `() -> &'static [u8]` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `BYTES` variable L58 — `: OnceLock<Vec<u8>>` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `stage_pkg` function L73-99 — `(root: &std::path::Path)` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `record_in_record_out_round_trips` function L102-118 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `variant_in_round_trips_all_cases` function L121-149 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+- pub `Geo` interface L52-60 — `{ fn midpoint(), fn describe(), fn tally() }` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `records_greeter_component` function L62-76 — `() -> &'static [u8]` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `BYTES` variable L63 — `: OnceLock<Vec<u8>>` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `stage_pkg` function L78-104 — `(root: &std::path::Path)` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `record_in_record_out_round_trips` function L107-123 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `variant_in_round_trips_all_cases` function L126-154 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `maps_and_tuples_round_trip` function L157-179 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
 
 #### crates/fidius-host/tests/wasm_egress_e2e.rs
 
@@ -1499,15 +1524,16 @@
 -  `is_result_type` function L91-102 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
 -  `PluginImplAttrs` type L122-177 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
 -  `parse` function L123-176 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `generate_wasm_adapter` function L346-640 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], config: Opt...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
--  `collect_user_idents` function L644-689 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
--  `gen_type` function L694-720 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
--  `wasm_first_generic` function L722-731 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `wasm_unsupported` function L737-747 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
--  `generate_shims` function L751-1064 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L1070-1092 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L1095-1221 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L1224-1235 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+-  `generate_wasm_adapter` function L346-671 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], config: Opt...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
+-  `collect_user_idents` function L675-720 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
+-  `gen_type` function L725-765 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
+-  `wasm_first_generic` function L767-776 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `wasm_two_generics` function L778-793 — `(seg: &syn::PathSegment) -> Option<(&Type, &Type)>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `wasm_unsupported` function L799-809 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
+-  `generate_shims` function L813-1126 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
+-  `generate_vtable_static` function L1132-1154 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L1157-1283 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L1286-1297 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### crates/fidius-macro/src/interface.rs
 
@@ -1752,10 +1778,12 @@
 
 #### crates/fidius-python/src/error.rs
 
-- pub `pyerr_to_plugin_error` function L40-69 — `(err: PyErr) -> PluginError` — Convert a `PyErr` into a `PluginError`, preserving class name, message,
--  `format_traceback` function L74-79 — `(py: Python<'_>, tb: Bound<'_, PyTraceback>) -> PyResult<String>` — Format a Python traceback into a plain string by calling
--  `tests` module L82-105 — `-` — plugin code can raise typed errors without their fields being flattened.
--  `maps_value_error_to_plugin_error` function L86-104 — `()` — plugin code can raise typed errors without their fields being flattened.
+- pub `pyerr_to_plugin_error` function L40-94 — `(err: PyErr) -> PluginError` — Convert a `PyErr` into a `PluginError`, preserving class name, message,
+-  `format_traceback` function L99-104 — `(py: Python<'_>, tb: Bound<'_, PyTraceback>) -> PyResult<String>` — Format a Python traceback into a plain string by calling
+-  `is_fidius_plugin_error` function L109-114 — `(py: Python<'_>, value: &Bound<'_, PyAny>) -> bool` — Is `value` an instance of `fidius.PluginError` (the SDK's typed error)? Falls
+-  `json_dumps` function L118-123 — `(py: Python<'_>, obj: &Bound<'_, PyAny>) -> Option<String>` — Serialize a Python object to a JSON string via `json.dumps`.
+-  `tests` module L126-149 — `-` — plugin code can raise typed errors without their fields being flattened.
+-  `maps_value_error_to_plugin_error` function L130-148 — `()` — plugin code can raise typed errors without their fields being flattened.
 
 #### crates/fidius-python/src/handle.rs
 
@@ -1843,10 +1871,10 @@
 -  `DoubleIn` struct L194-197 — `{ name: String, count: i64 }` — independently.
 -  `DoubleOut` struct L199-202 — `{ name: String, twice: i64 }` — independently.
 -  `raw_call_round_trip_2mb` function L221-231 — `()` — independently.
--  `plugin_error_round_trips_with_code_and_details` function L234-260 — `()` — independently.
--  `interface_hash_mismatch_is_rejected` function L263-273 — `()` — independently.
--  `wire_mode_mismatch_typed_called_as_raw_errors` function L276-281 — `()` — independently.
--  `out_of_range_method_index_errors` function L284-288 — `()` — independently.
+-  `plugin_error_round_trips_with_code_and_details` function L234-257 — `()` — independently.
+-  `interface_hash_mismatch_is_rejected` function L260-270 — `()` — independently.
+-  `wire_mode_mismatch_typed_called_as_raw_errors` function L273-278 — `()` — independently.
+-  `out_of_range_method_index_errors` function L281-285 — `()` — independently.
 
 #### crates/fidius-python/tests/smoke.rs
 
@@ -1932,22 +1960,23 @@
 - pub `Generated` struct L33-45 — `{ interface_name: String, iface_kebab: String, user_types: Vec<String>, wit: Str...` — The product of generating from a plugin crate's source.
 - pub `generate` function L50-55 — `(src: &str) -> Result<Generated, String>` — Generate WIT + conversions from a crate's source string (`lib.rs`).
 - pub `generate_from_path` function L60-68 — `(lib_rs: &std::path::Path) -> Result<Generated, String>` — Like [`generate`], but reads `lib_rs` and follows external `mod m;` files
-- pub `conv_expr` function L352-379 — `(access: &str, ty: &Type, known: &BTreeSet<String>) -> String` — Conversion expression for a field/payload `access` of type `ty`.
-- pub `contains_user_type` function L383-398 — `(ty: &Type, known: &BTreeSet<String>) -> bool` — Whether `ty` is, or contains (through `Vec`/`Option`/`Box`), a user type in
+- pub `conv_expr` function L352-397 — `(access: &str, ty: &Type, known: &BTreeSet<String>) -> String` — Conversion expression for a field/payload `access` of type `ty`.
+- pub `contains_user_type` function L401-421 — `(ty: &Type, known: &BTreeSet<String>) -> bool` — Whether `ty` is, or contains (through `Vec`/`Option`/`Box`), a user type in
 -  `Collected` struct L73-77 — `{ structs: Vec<(Vec<String>, syn::ItemStruct)>, enums: Vec<(Vec<String>, syn::It...` — `#[derive(WitType)]` types (tagged with their Rust module path) + the
 -  `collect` function L81-127 — `( items: &[Item], mod_path: &[String], dir: Option<&std::path::Path>, acc: &mut ...` — Recursively gather items, descending into inline `mod m { ..
 -  `assemble` function L130-207 — `(acc: Collected) -> Result<Generated, String>` — Build the `.wit` + conversions from the collected items.
 -  `author_path` function L210-216 — `(mod_path: &[String], name: &str) -> String` — `crate::<mod::path>::<Name>` — the author-side path for a type at `mod_path`.
 -  `render_conversions` function L222-344 — `( iface_kebab: &str, structs: &[(Vec<String>, syn::ItemStruct)], enums: &[(Vec<S...` — Render `From` impls (both directions) between each user type and its
--  `single_generic` function L400-409 — `(seg: &syn::PathSegment) -> Option<&Type>` — the `fidius wit` CLI, which read the source files.
--  `has_attr` function L412-420 — `(attrs: &[syn::Attribute], name: &str) -> bool` — Does `attrs` contain `#[<name>(...)]` / `#[<path>::<name>]` (last segment match)?
--  `has_derive` function L423-445 — `(attrs: &[syn::Attribute], name: &str) -> bool` — Does `attrs` contain a `#[derive(...
--  `tests` module L448-521 — `-` — the `fidius wit` CLI, which read the source files.
--  `SRC` variable L451-464 — `: &str` — the `fidius wit` CLI, which read the source files.
--  `generates_wit_with_records_variants_and_funcs` function L467-483 — `()` — the `fidius wit` CLI, which read the source files.
--  `generates_conversions_both_ways` function L486-499 — `()` — the `fidius wit` CLI, which read the source files.
--  `primitive_only_interface_has_no_conversions` function L502-511 — `()` — the `fidius wit` CLI, which read the source files.
--  `unsupported_type_errors` function L514-520 — `()` — the `fidius wit` CLI, which read the source files.
+-  `single_generic` function L423-432 — `(seg: &syn::PathSegment) -> Option<&Type>` — the `fidius wit` CLI, which read the source files.
+-  `two_generics` function L434-449 — `(seg: &syn::PathSegment) -> Option<(&Type, &Type)>` — the `fidius wit` CLI, which read the source files.
+-  `has_attr` function L452-460 — `(attrs: &[syn::Attribute], name: &str) -> bool` — Does `attrs` contain `#[<name>(...)]` / `#[<path>::<name>]` (last segment match)?
+-  `has_derive` function L463-485 — `(attrs: &[syn::Attribute], name: &str) -> bool` — Does `attrs` contain a `#[derive(...
+-  `tests` module L488-563 — `-` — the `fidius wit` CLI, which read the source files.
+-  `SRC` variable L491-504 — `: &str` — the `fidius wit` CLI, which read the source files.
+-  `generates_wit_with_records_variants_and_funcs` function L507-523 — `()` — the `fidius wit` CLI, which read the source files.
+-  `generates_conversions_both_ways` function L526-539 — `()` — the `fidius wit` CLI, which read the source files.
+-  `primitive_only_interface_has_no_conversions` function L542-551 — `()` — the `fidius wit` CLI, which read the source files.
+-  `unsupported_type_errors` function L554-562 — `()` — the `fidius wit` CLI, which read the source files.
 
 #### crates/fidius-wit/src/lib.rs
 
@@ -1955,33 +1984,35 @@
 - pub `result_ok_type` function L53-62 — `(ty: &Type) -> Option<&Type>` — Extract the `T` from `Result<T, _>`, if `ty` is a `Result`.
 - pub `WitMethod` struct L65-78 — `{ name: String, params: Vec<(String, String)>, ret: Option<String>, stream_item:...` — One method projected to WIT (already-mapped strings).
 - pub `stream_item_type` function L83-92 — `(ty: &Type) -> Option<&Type>` — If `ty` is `fidius::Stream<T>` (final path segment `Stream`, exactly one type
-- pub `wit_type_with` function L97-155 — `(ty: &Type, known: &BTreeSet<String>) -> Result<String, String>` — Map a Rust argument/return type to its WIT spelling, where `known` holds the
-- pub `rust_type_to_wit` function L159-161 — `(ty: &Type) -> Result<String, String>` — Primitive/std-only mapping (no user types) — the form `fidius-macro` uses for
-- pub `return_to_wit_with` function L166-188 — `( ret: Option<&Type>, known: &BTreeSet<String>, ) -> Result<Option<String>, Stri...` — Map a method's return type to an optional WIT return, with user types in
-- pub `return_to_wit` function L191-193 — `(ret: Option<&Type>) -> Result<Option<String>, String>` — Primitive/std-only return mapping (no user types).
-- pub `struct_to_record` function L198-215 — `(item: &ItemStruct, known: &BTreeSet<String>) -> Result<String, String>` — Render a `record <name> { ...
-- pub `enum_to_wit` function L225-268 — `( item: &ItemEnum, known: &BTreeSet<String>, ) -> Result<(Vec<String>, String), ...` — Render a Rust enum to WIT: a `variant <name> { ...
-- pub `render_wit_full` function L274-328 — `(iface_kebab: &str, type_defs: &[String], methods: &[WitMethod]) -> String` — Render a complete `.wit` document: package + interface (the `plugin-error`
-- pub `render_wit` function L332-334 — `(iface_kebab: &str, methods: &[WitMethod]) -> String` — Convenience: render a WIT document with no user type defs (the primitives-only
+- pub `wit_type_with` function L97-176 — `(ty: &Type, known: &BTreeSet<String>) -> Result<String, String>` — Map a Rust argument/return type to its WIT spelling, where `known` holds the
+- pub `rust_type_to_wit` function L180-182 — `(ty: &Type) -> Result<String, String>` — Primitive/std-only mapping (no user types) — the form `fidius-macro` uses for
+- pub `return_to_wit_with` function L187-209 — `( ret: Option<&Type>, known: &BTreeSet<String>, ) -> Result<Option<String>, Stri...` — Map a method's return type to an optional WIT return, with user types in
+- pub `return_to_wit` function L212-214 — `(ret: Option<&Type>) -> Result<Option<String>, String>` — Primitive/std-only return mapping (no user types).
+- pub `struct_to_record` function L219-236 — `(item: &ItemStruct, known: &BTreeSet<String>) -> Result<String, String>` — Render a `record <name> { ...
+- pub `enum_to_wit` function L246-289 — `( item: &ItemEnum, known: &BTreeSet<String>, ) -> Result<(Vec<String>, String), ...` — Render a Rust enum to WIT: a `variant <name> { ...
+- pub `render_wit_full` function L295-349 — `(iface_kebab: &str, type_defs: &[String], methods: &[WitMethod]) -> String` — Render a complete `.wit` document: package + interface (the `plugin-error`
+- pub `render_wit` function L353-355 — `(iface_kebab: &str, methods: &[WitMethod]) -> String` — Convenience: render a WIT document with no user type defs (the primitives-only
 -  `generate` module L30 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
--  `is_unit` function L338-340 — `(ty: &Type) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
--  `path_is` function L342-348 — `(p: &syn::TypePath, name: &str) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
--  `single_generic` function L350-352 — `(seg: &'a syn::PathSegment, what: &str) -> Result<&'a Type, String>` — helper, and the `fidius wit` CLI can all share one implementation.
--  `first_generic` function L354-363 — `(seg: &syn::PathSegment) -> Option<&Type>` — helper, and the `fidius wit` CLI can all share one implementation.
--  `tests` module L366-518 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
--  `known` function L369-371 — `(names: &[&str]) -> BTreeSet<String>` — helper, and the `fidius wit` CLI can all share one implementation.
--  `wit` function L372-374 — `(s: &str) -> String` — helper, and the `fidius wit` CLI can all share one implementation.
--  `primitives_strings_containers` function L377-385 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `returns` function L388-399 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `user_types_need_the_known_set` function L402-415 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `struct_renders_to_record` function L418-424 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `struct_with_nested_user_type` function L427-432 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `enum_renders_to_variant` function L435-444 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `struct_variant_synthesizes_a_record` function L447-456 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `multifield_tuple_variant_is_rejected` function L459-462 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `full_document_places_type_defs_before_funcs` function L465-488 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `streaming_method_renders_a_resource` function L491-506 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `stream_item_type_detects_marker` function L509-517 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `is_unit` function L359-361 — `(ty: &Type) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `path_is` function L363-369 — `(p: &syn::TypePath, name: &str) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `single_generic` function L371-373 — `(seg: &'a syn::PathSegment, what: &str) -> Result<&'a Type, String>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `first_generic` function L375-384 — `(seg: &syn::PathSegment) -> Option<&Type>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `two_generics` function L387-402 — `(seg: &'a syn::PathSegment, what: &str) -> Result<(&'a Type, &'a Type), String>` — Extract the first two type arguments (e.g.
+-  `tests` module L405-580 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `known` function L408-410 — `(names: &[&str]) -> BTreeSet<String>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `wit` function L411-413 — `(s: &str) -> String` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `primitives_strings_containers` function L416-424 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `maps_tuples_and_nesting` function L427-447 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `returns` function L450-461 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `user_types_need_the_known_set` function L464-477 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_renders_to_record` function L480-486 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_with_nested_user_type` function L489-494 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `enum_renders_to_variant` function L497-506 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_variant_synthesizes_a_record` function L509-518 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `multifield_tuple_variant_is_rejected` function L521-524 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `full_document_places_type_defs_before_funcs` function L527-550 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `streaming_method_renders_a_resource` function L553-568 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `stream_item_type_detects_marker` function L571-579 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
 
 ### examples/examples
 
@@ -2025,6 +2056,15 @@
 -  `Labeler` type L37-41 — `impl Transformer for Labeler` — Run: `cargo run -p fidius-examples --example 04_pipeline`
 -  `transform` function L38-40 — `(&self, value: u64) -> String` — Run: `cargo run -p fidius-examples --example 04_pipeline`
 -  `main` function L46-73 — `()` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+
+#### examples/examples/05_record_stream.rs
+
+- pub `Event` struct L21-25 — `{ id: u32, tags: HashMap<String, String> }` — Run: `cargo run -p fidius-examples --example 05_record_stream`
+- pub `Source` interface L28-30 — `{ fn events() }` — Run: `cargo run -p fidius-examples --example 05_record_stream`
+- pub `Feed` struct L32 — `-` — Run: `cargo run -p fidius-examples --example 05_record_stream`
+-  `Feed` type L35-44 — `impl Source for Feed` — Run: `cargo run -p fidius-examples --example 05_record_stream`
+-  `events` function L36-43 — `(&self, count: u32) -> Stream<Event>` — Run: `cargo run -p fidius-examples --example 05_record_stream`
+-  `main` function L49-70 — `()` — Run: `cargo run -p fidius-examples --example 05_record_stream`
 
 ### python/fidius
 
@@ -2196,10 +2236,11 @@
 
 #### tests/wasm-fixtures/macro-fetcher/src/lib.rs
 
-- pub `Fetcher` interface L13-16 — `{ fn fetch() }`
-- pub `MyFetcher` struct L18 — `-`
--  `MyFetcher` type L21-28 — `impl Fetcher for MyFetcher`
--  `fetch` function L22-27 — `(&self, url: String) -> String`
+- pub `Fetcher` interface L13-19 — `{ fn fetch(), fn fetch_timeout() }`
+- pub `MyFetcher` struct L21 — `-`
+-  `MyFetcher` type L24-40 — `impl Fetcher for MyFetcher`
+-  `fetch` function L25-30 — `(&self, url: String) -> String`
+-  `fetch_timeout` function L32-39 — `(&self, url: String) -> String`
 
 ### tests/wasm-fixtures/macro-fs/src
 
@@ -2256,11 +2297,32 @@
 
 - pub `geom` module L11 — `-`
 - pub `Shape` enum L15-20 — `Circle | Rect | Triangle | Dot`
-- pub `Geo` interface L23-26 — `{ fn midpoint(), fn describe() }`
-- pub `MyGeo` struct L28 — `-`
--  `MyGeo` type L31-47 — `impl Geo for MyGeo`
--  `midpoint` function L32-37 — `(&self, a: Point, b: Point) -> Point`
--  `describe` function L39-46 — `(&self, s: Shape) -> String`
+- pub `Geo` interface L23-32 — `{ fn midpoint(), fn describe(), fn tally() }`
+- pub `MyGeo` struct L34 — `-`
+-  `MyGeo` type L37-62 — `impl Geo for MyGeo`
+-  `midpoint` function L38-43 — `(&self, a: Point, b: Point) -> Point`
+-  `describe` function L45-52 — `(&self, s: Shape) -> String`
+-  `tally` function L54-61 — `( &self, counts: std::collections::HashMap<String, u32>, bump: (i32, i32), ) -> ...`
+
+### tests/wasm-fixtures/records-stream
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/records-stream/build.rs
+
+-  `main` function L6-8 — `()`
+
+### tests/wasm-fixtures/records-stream/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/records-stream/src/lib.rs
+
+- pub `Row` struct L10-13 — `{ id: u32, label: String }`
+- pub `Source` interface L16-18 — `{ fn rows() }`
+- pub `MySource` struct L20 — `-`
+-  `MySource` type L23-30 — `impl Source for MySource`
+-  `rows` function L24-29 — `(&self, count: u32) -> fidius_guest::Stream<Row>`
 
 ### tests/wasm-fixtures/ticker/src
 

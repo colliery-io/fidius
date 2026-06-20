@@ -4,14 +4,14 @@ level: initiative
 title: "Client-streaming — Stream&lt;T&gt; in argument position (host produces, plugin pulls)"
 short_code: "FIDIUS-I-0030"
 created_at: 2026-06-20T14:44:31.831323+00:00
-updated_at: 2026-06-20T14:47:19.406612+00:00
+updated_at: 2026-06-20T16:45:30.916353+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/design"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -23,7 +23,7 @@ initiative_id: client-streaming-stream-lt-t-gt-in
 
 *This template includes sections for various types of initiatives. Delete sections that don't apply to your specific use case.*
 
-> **Status: specced, not scheduled.** Design of record: [[FIDIUS-A-0007]]. Implementation plan to execute when an adopter needs plugin-controlled consumption; stays in design until then.
+> **Status: IN PLAY (active).** Design of record: [[FIDIUS-A-0007]]. Decomposed into CS2.1–CS2.5 (T-0161–T-0165), executed in dependency order.
 
 ## Context **[REQUIRED]**
 
