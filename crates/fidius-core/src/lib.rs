@@ -27,6 +27,11 @@ pub use fidius_guest::{
     wasm_descriptor, wire,
 };
 
+/// Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028) —
+/// present only in `wasm32-wasip2` builds.
+#[cfg(target_family = "wasm")]
+pub use fidius_guest::http;
+
 pub use descriptor::*;
 pub use error::PluginError;
 pub use status::*;
