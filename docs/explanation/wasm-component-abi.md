@@ -88,6 +88,21 @@ Notes:
   component's own type information (wasmtime exposes them), and uses those to
   drive the `Value → Val` lowering (e.g. a `u32` param vs `s64`, or a tuple vs a list).
 
+### Not supported at the boundary
+
+A few Component-Model shapes have no `fidius_core::Value` representation and are **not
+supported** in a plugin interface today (FIDIUS-T-0158):
+
+- **`flags`** (a named bit-set) and **`resource`** (an opaque handle) — fidius interfaces
+  are authored in Rust and don't surface these, so there is no `Value` mapping. ⚠️ If a
+  component *does* return one, `val_to_value` currently has no arm for it and falls through
+  to a debug-string (`Value::String("Flags(..)")`) — i.e. it is **not** round-trippable.
+  Don't put `flags`/`resource` in an interface. (fidius's own *streaming* resources are an
+  internal mechanism — see [streaming](streaming.md) — and are not user-facing types.)
+- **Reference / borrowed arguments** (`&str`, `&[u8]`, …) — rejected by `#[plugin_impl]`;
+  take **owned** types (`String`, `Vec<u8>`). Data is copied across the sandbox boundary
+  regardless, so a borrow would save nothing.
+
 ## User-defined types — records & variants (FIDIUS-I-0023)
 
 A plugin author's own `struct`/`enum` types in an interface map to WIT
