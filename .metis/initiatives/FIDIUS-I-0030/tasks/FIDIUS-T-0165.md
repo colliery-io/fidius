@@ -4,14 +4,14 @@ level: task
 title: "CS2.5 — host call_client_streaming + flip compile-fail + docs"
 short_code: "FIDIUS-T-0165"
 created_at: 2026-06-20T16:44:17.518435+00:00
-updated_at: 2026-06-20T16:44:17.518435+00:00
+updated_at: 2026-06-20T19:25:58.036809+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Host API + close-out: `PluginHandle::call_client_streaming<I, O>(method, produce
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

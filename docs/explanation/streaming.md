@@ -46,9 +46,26 @@ impl Source for MySource {
 }
 ```
 
-`Stream<T>` in argument position is rejected — streaming is a property of the
-*return*, not the input. (Streaming *input* would be a different feature; today a
-plugin that consumes a sequence takes a `Vec<T>` — "chunked unary".)
+## Client-streaming: `Stream<T>` in argument position
+
+The dual also works (FIDIUS-I-0030 / ADR-0007): a `Stream<T>` **argument** is a
+*client-streaming* method — the **host produces** the items and the plugin **pulls**
+them, so a writer/sink can control its own consumption (batch, look-ahead,
+backpressure) rather than the host pushing one call per item.
+
+```rust
+#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]
+pub trait Sink: Send + Sync {
+    fn load(&self, rows: fidius::Stream<Row>) -> Summary; // host produces `rows`
+}
+```
+
+The host feeds it with `PluginHandle::call_client_streaming(method, items, &args)`.
+It works on **all three backends**: cdylib (a host callback the plugin pulls), WASM
+(the `fidius:stream-pull` import, composed like wasi:http), and Python (a host-fed
+iterator the method receives). Drop = cancel; backpressure inverts (the plugin's
+consumption rate parks the host). *Bidirectional* (`Stream` in both arg and return)
+is a separate, later decision (see ADR-0007).
 
 ## The host side: `ChunkStream`
 

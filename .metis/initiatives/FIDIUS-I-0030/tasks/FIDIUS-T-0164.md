@@ -4,14 +4,14 @@ level: task
 title: "CS2.4 — Python host-backed generator + E2E"
 short_code: "FIDIUS-T-0164"
 created_at: 2026-06-20T16:44:16.659202+00:00
-updated_at: 2026-06-20T19:10:07.586461+00:00
+updated_at: 2026-06-20T19:25:50.137431+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Python client-streaming: the plugin method receives a **host-backed generator/it
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -135,4 +137,14 @@ Python client-streaming: the plugin method receives a **host-backed generator/it
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit e7b82ad).** Python client-streaming works end to end. `HostFedStream`
+`#[pyclass]` (fidius-python) is an iterator yielding the host's items (value_to_pyobject
+per item, `None`→StopIteration); `call_client_streaming_json` passes it as the method's
+**first positional** arg (non-stream args follow). `Pyo3Executor::call_client_streaming`
+pivots Value items → JSON. The typed `PluginHandle::call_client_streaming` was
+restructured: cdylib/WASM encode items as bincode, Python as `Value`s; the Python arm is
+now live. New `py-client-stream` fixture (`def load(rows): return sum(rows)`) +
+`python_client_stream_e2e`: host produces [1..=5] → 15. Default 68 + python (12) + lint
+green. **Client-streaming now works on cdylib, WASM, and Python — all E2E-proven.**
+Limitation: the Python stream arg must be the first positional (general position is a
+follow-on). Only CS2.5 (docs) remains.
