@@ -7,7 +7,7 @@ created_at: 2026-06-20T16:42:53.095067+00:00
 updated_at: 2026-06-20T16:42:53.095067+00:00
 parent: 
 blocked_by: []
-archived: false
+archived: true
 
 tags:
   - "#task"
@@ -64,6 +64,8 @@ initiative_id: NULL
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -134,4 +136,6 @@ initiative_id: NULL
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DELIVERED via [[FIDIUS-I-0032]]** (ADR-0010, synchronous lazy-pull). This backlog
+placeholder was promoted into initiative FIDIUS-I-0032 and implemented across cdylib, WASM,
+and Python (tasks BD.1–BD.5, all completed + E2E-proven). Superseded — see I-0032.

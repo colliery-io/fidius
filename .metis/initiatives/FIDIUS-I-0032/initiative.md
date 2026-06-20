@@ -4,14 +4,14 @@ level: initiative
 title: "Bidirectional streaming — Stream in both arg and return (synchronous lazy-pull)"
 short_code: "FIDIUS-I-0032"
 created_at: 2026-06-20T22:20:06.272365+00:00
-updated_at: 2026-06-20T22:20:06.272365+00:00
+updated_at: 2026-06-20T23:00:19.598202+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

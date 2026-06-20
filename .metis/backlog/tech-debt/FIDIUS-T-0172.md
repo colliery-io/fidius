@@ -1,38 +1,44 @@
 ---
-id: bd-5-docs-transform-connector
+id: lazy-host-producer-for-client-bidi
 level: task
-title: "BD.5 — docs + transform-connector example + un-defer"
-short_code: "FIDIUS-T-0170"
-created_at: 2026-06-20T22:21:14.773097+00:00
-updated_at: 2026-06-20T22:59:54.545597+00:00
-parent: FIDIUS-I-0032
+title: "Lazy host producer for client/bidi streaming (stop eager-collecting input)"
+short_code: "FIDIUS-T-0172"
+created_at: 2026-06-20T23:08:01.642265+00:00
+updated_at: 2026-06-20T23:08:01.642265+00:00
+parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/completed"
+  - "#phase/backlog"
+  - "#tech-debt"
 
 
 exit_criteria_met: false
-initiative_id: FIDIUS-I-0032
+initiative_id: NULL
 ---
 
-# BD.5 — docs + transform-connector example + un-defer
+# Lazy host producer for client/bidi streaming (stop eager-collecting input)
 
 *This template includes sections for various types of tasks. Delete sections that don't apply to your specific use case.*
 
 ## Parent Initiative **[CONDITIONAL: Assigned Task]**
 
-[[FIDIUS-I-0032]]
+[[Parent Initiative]]
 
 ## Objective **[REQUIRED]**
 
-Close-out docs: add a **bidirectional** section to `docs/explanation/streaming.md` (the
-synchronous lazy-pull model, the re-entrancy invariant, drop=cancel, rate-coupling
-caveat), cross-reference ADR-0010, and note the user-typed-stream-item follow-on. Ship a
-transform-connector **example** (a plugin that consumes a stream and emits a transformed
-one, driven host-side). Confirm ADR-0010 → decided. Depends on BD.2/BD.3/BD.4.
+`PluginHandle::call_client_streaming` / `call_bidi_streaming` eager-collect the input items
+into a `Vec<Vec<u8>>` (`bincode_items`) before the call — so the **host side** of a
+client-/bidi-streaming transform materializes the whole input in memory, the exact
+unbounded-buffering hazard ADR-0007 warned about (the plugin-side *pull* is lazy via
+`from_fn` / generators; only host production is eager). This task makes the host producer
+**lazy**: encode each item only when the plugin pulls it, so an unbounded/large input
+stream flows with bounded memory. Likely shape: thread the item iterator (not a collected
+`Vec`) into `host_producer_handle` with `IntoIter: Send + 'static` bounds (cdylib/WASM
+encode on pull); add a lazy/infinite-input E2E (plugin takes N of an unbounded producer,
+no hang). Affects client-streaming (FIDIUS-I-0030) and bidirectional (FIDIUS-I-0032).
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -67,10 +73,6 @@ one, driven host-side). Confirm ADR-0010 → decided. Depends on BD.2/BD.3/BD.4.
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
-
-## Acceptance Criteria
-
-## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -141,17 +143,4 @@ one, driven host-side). Confirm ADR-0010 → decided. Depends on BD.2/BD.3/BD.4.
 
 ## Status Updates **[REQUIRED]**
 
-**DONE (commit afeb3dd).** Closes the bidirectional arc.
-- `streaming.md`: a "Bidirectional" section — the synchronous lazy-pull model (output
-  pulls input on demand, re-entrant, no deadlock), `call_bidi_streaming`, the per-backend
-  composition, drop-cancel, and limitations (primitive items, eager host producer, no
-  concurrent two-pump). Replaced the old "separate, later decision" note.
-- `examples/06_bidi_transform`: a runnable in-process bidi transform — host produces
-  [1..=5], the plugin doubles lazily → [2,4,6,8,10]. Verified with `cargo run`. README row added.
-- Facade: re-exported the `stream_marker` module (the macro shim references
-  `<crate>::stream_marker::Stream`) — **this also fixed client-streaming authored against
-  the `fidius` facade**, a latent gap surfaced by the example.
-- ADR-0010 is `decided`. Default 71 + lint green.
-
-**The bidirectional streaming initiative (FIDIUS-I-0032) is complete — cdylib, WASM, and
-Python, all E2E-proven, host API + docs + example shipped.**
+*To be added during implementation*

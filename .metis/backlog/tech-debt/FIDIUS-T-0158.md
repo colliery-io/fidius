@@ -134,4 +134,10 @@ Cover the remaining WASM `Value`↔`Val` boundary gaps: `Val::Flags` and `Val::R
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**2026-06-20 — decision: document, don't fix (yet).** The user opted to make the limitation
+visible rather than implement support. Added a "Not supported at the boundary" subsection to
+`docs/explanation/wasm-component-abi.md` documenting that `flags`/`resource` have no `Value`
+mapping (and currently fall through to a non-round-trippable debug-string), and that
+reference/borrowed args are rejected (take owned types). The awareness gap is closed; this
+task stays **backlogged** for the actual support work (or a future "fail-loud" rejection of
+the silent stringification) if an adopter ever needs it.

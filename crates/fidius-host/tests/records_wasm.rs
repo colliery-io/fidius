@@ -48,6 +48,13 @@ pub enum Shape {
     Dot,
 }
 
+// FIDIUS-T-0160: a record with a tuple field.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Span {
+    pub label: String,
+    pub range: (u32, u32),
+}
+
 #[fidius_macro::plugin_interface(version = 1, buffer = PluginAllocated, crate = "fidius_core")]
 pub trait Geo: Send + Sync {
     fn midpoint(&self, a: Point, b: Point) -> Point;
@@ -57,6 +64,7 @@ pub trait Geo: Send + Sync {
         counts: std::collections::HashMap<String, u32>,
         bump: (i32, i32),
     ) -> std::collections::HashMap<String, u32>;
+    fn span_width(&self, s: Span) -> u32;
 }
 
 fn records_greeter_component() -> &'static [u8] {
@@ -176,4 +184,29 @@ fn maps_and_tuples_round_trip() {
     assert_eq!(out.get("a"), Some(&6));
     assert_eq!(out.get("b"), Some(&15));
     assert_eq!(out.len(), 2);
+}
+
+#[test]
+fn tuple_nested_in_record_arg() {
+    // FIDIUS-T-0160: a record-with-tuple-field arg. `Span.range` is a `tuple<u32,u32>`
+    // *inside* a record — the host must lower it via the type-directed record path
+    // (`value_to_val_typed`'s `Type::Record` arm), or wasmtime rejects `Val::List` where
+    // a `tuple<>` field is expected.
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_pkg(tmp.path());
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("records-greeter-pkg", &__fidius_Geo::Geo_WASM_DESCRIPTOR)
+        .unwrap();
+
+    // span_width (method 3): width = range.1 - range.0 = 10 - 3 = 7.
+    let span = Span {
+        label: "x".to_string(),
+        range: (3, 10),
+    };
+    let width: u32 = handle.call_method(3, &(span,)).unwrap();
+    assert_eq!(width, 7);
 }

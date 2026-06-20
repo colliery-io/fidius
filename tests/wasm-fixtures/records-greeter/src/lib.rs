@@ -19,6 +19,14 @@ pub enum Shape {
     Dot,
 }
 
+// FIDIUS-T-0160: a record with a *tuple field* — `range` lowers to WIT `tuple<u32,u32>`
+// inside the record, which needs the type-directed record path in `value_to_val_typed`.
+#[derive(WitType, Clone)]
+pub struct Span {
+    pub label: String,
+    pub range: (u32, u32),
+}
+
 #[plugin_interface(version = 1, buffer = PluginAllocated, crate = "fidius_guest")]
 pub trait Geo: Send + Sync {
     fn midpoint(&self, a: Point, b: Point) -> Point;
@@ -29,6 +37,8 @@ pub trait Geo: Send + Sync {
         counts: std::collections::HashMap<String, u32>,
         bump: (i32, i32),
     ) -> std::collections::HashMap<String, u32>;
+    // FIDIUS-T-0160: a record-with-tuple-field arg → exercises the typed record path.
+    fn span_width(&self, s: Span) -> u32;
 }
 
 pub struct MyGeo;
@@ -58,5 +68,9 @@ impl Geo for MyGeo {
     ) -> std::collections::HashMap<String, u32> {
         let add = (bump.0 + bump.1) as u32;
         counts.into_iter().map(|(k, v)| (k, v + add)).collect()
+    }
+
+    fn span_width(&self, s: Span) -> u32 {
+        s.range.1 - s.range.0
     }
 }

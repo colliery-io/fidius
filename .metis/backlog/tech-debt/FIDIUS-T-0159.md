@@ -134,4 +134,9 @@ The vendored `wasi:http` WIT pin (currently 0.2.6) + the `HOST_WASI_HTTP` consta
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**2026-06-20 — decision: skip / leave as-is.** The correctness hazard is already covered by
+the `fidius-guest` pin drift tripwire + the macro-egress E2E (a mismatched pin fails loudly
+in CI — you can't ship one), so automation would buy only convenience for an infrequent
+maintainer-only chore. Not worth building. Left in backlog in case it ever becomes a
+recurring annoyance; revisit then (cheapest option would be sharpening the tripwire's
+failure message to name the exact line to bump).

@@ -1259,7 +1259,34 @@ fn value_to_val_typed(v: &Value, ty: &wasmtime::component::Type) -> Result<Val, 
             )?)))),
             _ => value_to_val(v),
         },
-        // Records, primitives, variants, results: structural lowering is unambiguous.
+        // Record: thread each field's declared type through, so a tuple (or map, or
+        // nested record) inside a record field lowers correctly — `Value::List` alone
+        // can't distinguish a tuple from a list, so the structural path would mis-lower a
+        // tuple-valued field as `Val::List` and wasmtime would reject it (FIDIUS-T-0160).
+        Type::Record(rt) => match v {
+            Value::Record(fields) => {
+                // Value field names are serde (snake/Pascal); WIT fields are kebab.
+                let mut by_kebab: std::collections::HashMap<String, &Value> =
+                    fields.iter().map(|(k, val)| (to_kebab(k), val)).collect();
+                let lowered = rt
+                    .fields()
+                    .map(|f| {
+                        let val = by_kebab.remove(f.name).ok_or_else(|| {
+                            CallError::Serialization(format!(
+                                "record value is missing field '{}' (for a WIT record)",
+                                f.name
+                            ))
+                        })?;
+                        Ok::<_, CallError>((f.name.to_string(), value_to_val_typed(val, &f.ty)?))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Val::Record(lowered))
+            }
+            other => Err(CallError::Serialization(format!(
+                "expected a record value (got {other:?}) for a WIT record {{ … }}"
+            ))),
+        },
+        // Primitives, variants, results: structural lowering is unambiguous.
         _ => value_to_val(v),
     }
 }
