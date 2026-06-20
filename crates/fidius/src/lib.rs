@@ -127,6 +127,10 @@ pub use fidius_core::hash::{fnv1a, interface_hash};
 /// server-streaming method. See [`fidius_core::stream_marker::Stream`].
 pub use fidius_core::stream_marker::Stream;
 
+/// The neutral value model + (de)serialization helpers host consumers use to
+/// decode `ChunkStream` items and dynamic `Value`s.
+pub use fidius_core::value::{from_value, to_value, Value, ValueError};
+
 #[cfg(feature = "async")]
 pub use fidius_core::async_runtime;
 

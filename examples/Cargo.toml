@@ -1,0 +1,14 @@
+# Runnable host-side composition examples (`cargo run -p fidius-examples --example <name>`).
+# Each example is a self-contained host program: it defines an interface + an
+# in-process plugin and drives it through the PluginHost/PluginHandle API.
+[package]
+name = "fidius-examples"
+version = "0.5.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+fidius = { path = "../crates/fidius", features = ["streaming", "async"] }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"

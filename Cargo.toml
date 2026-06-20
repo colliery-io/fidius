@@ -10,6 +10,7 @@ members = [
     "crates/fidius",
     "crates/fidius-test",
     "crates/fidius-python",
+    "examples",
 ]
 exclude = ["tests/test-plugin-smoke"]
 resolver = "2"
