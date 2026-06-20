@@ -4,14 +4,14 @@ level: task
 title: "BD.3 — WASM import(input)+resource(output) co-occurrence + codegen + E2E"
 short_code: "FIDIUS-T-0168"
 created_at: 2026-06-20T22:21:12.310037+00:00
-updated_at: 2026-06-20T22:21:12.310037+00:00
+updated_at: 2026-06-20T22:43:40.832758+00:00
 parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -70,6 +70,8 @@ shape where shared).
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

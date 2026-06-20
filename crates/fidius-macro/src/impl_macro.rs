@@ -399,22 +399,6 @@ fn generate_wasm_adapter(
     let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
     let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
 
-    // Bidirectional (FIDIUS-I-0032): `Stream<T>` in BOTH argument and return position.
-    // cdylib is wired (BD.2); the WASM import(input)+resource(output) co-occurrence is
-    // BD.3. Until then a bidi method would hit the server-streaming resource branch and
-    // mis-handle the input stream arg — fail clean (wasm-gated, so native cdylib builds
-    // of the same plugin are unaffected).
-    if let Some(m) = methods
-        .iter()
-        .find(|m| m.stream_item.is_some() && m.client_stream_item.is_some())
-    {
-        return wasm_unsupported(
-            m.name,
-            "bidirectional streaming (`Stream<T>` in both argument and return position) is \
-             not yet wired for the WASM backend (FIDIUS-I-0032 BD.3); it works on cdylib today",
-        );
-    }
-
     // Collect candidate user types (non-primitive path idents in signatures;
     // `#[derive(WitType)]` records/variants). Reject reference args (owned only,
     // v1). Then validate every type maps to WIT — a structurally-unsupported
@@ -515,7 +499,67 @@ fn generate_wasm_adapter(
             let arg_names = &m.arg_names;
             let arg_types = &m.arg_types;
 
-            if let Some(item) = m.stream_item {
+            if let (Some(out_item), Some(in_item)) = (m.stream_item, m.client_stream_item) {
+                // Bidirectional (FIDIUS-I-0032 / ADR-0010): input via the
+                // `fidius:stream-pull` import (CS2.3), output as an exported resource
+                // (WS). The method takes the NON-stream args as WIT params, builds the
+                // input `Stream<In>` from `WasmHostStream`, calls the user method to get
+                // a lazy `Stream<Out>`, and returns it as the output resource. Pulling the
+                // resource re-enters the import — the synchronous lazy-pull composition.
+                // Checked BEFORE the server-only branch (bidi sets `stream_item` too).
+                let res_pascal =
+                    kebab_to_pascal(&format!("{}-stream", to_kebab_case(&mname.to_string())));
+                let res_ident = format_ident!("{}", res_pascal);
+                let guest_trait = format_ident!("Guest{}", res_pascal);
+                let state_ident = format_ident!("__Fidius{}", res_pascal);
+                let stream_ty = m
+                    .ret_type
+                    .expect("a bidirectional method returns Stream<Out>");
+                let stream_idx = arg_types
+                    .iter()
+                    .position(|t| crate::wit::stream_item_type(t).is_some())
+                    .expect("a bidirectional method has a `Stream<In>` argument");
+                let stream_arg_name = &arg_names[stream_idx];
+                let ns_names: Vec<&Ident> = arg_names
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, n)| n)
+                    .collect();
+                let ns_types: Vec<&Type> = arg_types
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, t)| *t)
+                    .collect();
+                resource_defs.push(quote! {
+                    struct #state_ident {
+                        stream: ::core::cell::RefCell<#stream_ty>,
+                    }
+                    impl exports::fidius::#pkg_seg::#pkg_seg::#guest_trait for #state_ident {
+                        fn next(&self) -> ::core::result::Result<
+                            ::core::option::Option<#out_item>,
+                            exports::fidius::#pkg_seg::#pkg_seg::PluginError,
+                        > {
+                            ::core::result::Result::Ok(self.stream.borrow_mut().next_item())
+                        }
+                    }
+                });
+                guest_items.push(quote! {
+                    type #res_ident = #state_ident;
+                    fn #mname(#(#ns_names: #ns_types),*)
+                        -> exports::fidius::#pkg_seg::#pkg_seg::#res_ident {
+                        // Input `Stream` from the host's `fidius:stream-pull` import.
+                        let #stream_arg_name = #crate_path::stream_marker::Stream::from_iter(
+                            #crate_path::client_stream::WasmHostStream::<#in_item>::new()
+                        );
+                        let __s = #dispatch_self.#mname(#(#arg_names),*);
+                        exports::fidius::#pkg_seg::#pkg_seg::#res_ident::new(
+                            #state_ident { stream: ::core::cell::RefCell::new(__s) }
+                        )
+                    }
+                });
+            } else if let Some(item) = m.stream_item {
                 // Server-streaming → a wit-bindgen exported resource. Resource
                 // `<m>-stream` → Pascal `<M>Stream`, trait `Guest<M>Stream`.
                 let res_pascal =

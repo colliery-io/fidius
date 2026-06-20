@@ -1,0 +1,25 @@
+# Standalone WASM author fixture (FIDIUS-I-0032 / ADR-0010): a BIDIRECTIONAL plugin —
+# imports fidius:stream-pull (input) AND exports a streaming resource (output).
+[workspace]
+
+[package]
+name = "bidi-stream"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

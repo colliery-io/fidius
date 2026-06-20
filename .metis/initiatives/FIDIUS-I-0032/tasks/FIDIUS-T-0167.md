@@ -4,14 +4,14 @@ level: task
 title: "BD.2 — cdylib BidiStreamFn shape + shim + host call path + re-entrancy + E2E"
 short_code: "FIDIUS-T-0167"
 created_at: 2026-06-20T22:21:10.899033+00:00
-updated_at: 2026-06-20T22:32:43.210903+00:00
+updated_at: 2026-06-20T22:43:13.337063+00:00
 parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -72,6 +72,8 @@ output pull). Depends on BD.1.
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -144,4 +146,23 @@ output pull). Depends on BD.1.
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit e8c4909).** cdylib bidirectional works end to end. Key realization: the
+bidi vtable slot is the **existing `ClientStreamFn` shape** — `(instance, input_handle,
+args, *out, *out_len)` — only the out-bytes *meaning* differs (a stream-handle pointer,
+not a value). So no new vtable type was needed.
+- macro: the bidi shim (checked BEFORE the server-only branch, since bidi sets
+  `stream_item` too) composes client-streaming's input (`HostStream::from_handle` →
+  `Stream<In>`) with server-streaming's output (`StreamState<Out>` + `next`/`drop` →
+  `FidiusStreamHandle` returned via `out_ptr`). Removed the BD.1 blanket reject; kept a
+  wasm-only guard (BD.3); the native compile-fail was deleted (cdylib bidi compiles now).
+- host: extracted the server-streaming pump into a shared `pump_stream_handle`; added
+  `call_bidi_streaming_raw` (ClientStreamFn init → output handle → pump) + the typed async
+  `PluginHandle::call_bidi_streaming<I,A,O>` (cdylib wired; WASM/Python gated).
+- E2E `cdylib_bidi_stream_e2e`: a `Doubler` (lazy `from_fn` pulling input per output)
+  doubles [1..=5] → [2,4,6,8,10] — the re-entrancy proof (output.next pulls input.next on
+  the pump thread) — plus a drop-cancel test (pull 2 of 100, drop, no hang/leak).
+- Default 69 + server/client-streaming regression (pump refactor) + lint green.
+
+**Note (inherited from client-streaming):** the host producer eager-collects input items
+(`bincode_items`) — host-side production isn't lazy yet. Plugin-side pull IS lazy
+(`from_fn`). A lazy host producer is a shared follow-on. Next: BD.3 (WASM bidi).

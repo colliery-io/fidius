@@ -685,6 +685,22 @@ impl WasmComponentExecutor {
         })
     }
 
+    /// Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): the host produces `producer`
+    /// (the plugin's `Stream<In>` argument, pulled via the `fidius:stream-pull` import)
+    /// and consumes the plugin's `Stream<Out>` output resource as a `ChunkStream`. Pulling
+    /// the output drives the plugin, which pulls input on demand. `args` are the
+    /// non-stream args (as a `Value`).
+    #[cfg(feature = "streaming")]
+    pub async fn call_bidi_streaming(
+        &self,
+        method: usize,
+        producer: Vec<Vec<u8>>,
+        args: Value,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
+        self.stream_with_producer(method, args, Some(producer))
+            .await
+    }
+
     /// Run `f` with a `(store, instance)`: the persistent configured store if
     /// configured (FIDIUS-A-0006 / CI.3), else a fresh per-call one (isolation).
     fn with_store<R>(
@@ -901,6 +917,23 @@ impl crate::stream::StreamExecutor for WasmComponentExecutor {
         method: usize,
         args: Value,
     ) -> Result<crate::stream::ChunkStream, CallError> {
+        self.stream_with_producer(method, args, None).await
+    }
+}
+
+impl WasmComponentExecutor {
+    /// Shared server-streaming / bidirectional output pump. `producer = Some(items)`
+    /// sets the client-streaming **input** producer in the (pump-owned) store before the
+    /// export call, so the output resource's `next()` re-enters the
+    /// `fidius:stream-pull` import on demand — the bidirectional synchronous lazy-pull
+    /// composition (FIDIUS-I-0032 / ADR-0010). `None` = plain server-streaming (WS).
+    #[cfg(feature = "streaming")]
+    async fn stream_with_producer(
+        &self,
+        method: usize,
+        args: Value,
+        producer: Option<Vec<Vec<u8>>>,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
         let m = self.method(method, false)?.clone();
         if !m.streaming {
             return Err(CallError::Backend {
@@ -909,6 +942,11 @@ impl crate::stream::StreamExecutor for WasmComponentExecutor {
             });
         }
         let (mut store, instance) = self.instantiate()?;
+        // Bidirectional: seed the input producer the output resource pulls through. The
+        // store moves to the pump thread, so the producer lives for the whole stream.
+        if let Some(items) = producer {
+            store.data_mut().client_stream = Some(Box::new(items.into_iter()));
+        }
         // FIDIUS-A-0006 / CI.3: a stream takes its store by value (the pump owns it
         // for the stream's lifetime), so it can't share the unary persistent store —
         // it just needs the same config set in its own memory first. Bind config

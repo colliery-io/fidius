@@ -242,11 +242,12 @@ impl PluginHandle {
                     .into(),
             }),
             #[cfg(feature = "wasm")]
-            Backend::Wasm(_) => Err(CallError::Backend {
-                runtime: "wasm".into(),
-                message: "bidirectional streaming is not yet wired for WASM (FIDIUS-I-0032 BD.3)"
-                    .into(),
-            }),
+            Backend::Wasm(e) => {
+                let encoded = bincode_items(items)?;
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                e.call_bidi_streaming(index, encoded, arg_value).await
+            }
         }
     }
 
