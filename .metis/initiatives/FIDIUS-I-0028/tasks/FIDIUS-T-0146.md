@@ -135,4 +135,19 @@ initiative_id: FIDIUS-I-0028
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (committed 0e27111):**
+- Docs — `docs/explanation/wasm-capabilities.md` gained a guest-side how-to
+  (`fidius_guest::http` in `read()`; `capabilities=["http"]` is the only extra
+  wiring) + the published compatibility contract (plugin built vs fidius-guest X
+  runs on host ≥ X within the wasi:http line; host-forward safe; 0.2→0.3 = major).
+- Drift tripwire — `crates/fidius-guest/tests/wasi_http_pin.rs` asserts the
+  vendored pin (`wasi:http/outgoing-handler@0.2.6`). The `macro_egress_e2e` E2E is
+  the runtime guard (instantiation fails if guest/host versions diverge).
+
+**REMAINING (scoped follow-on, needs a decision):** the *proactive* fail-loud
+version check at load (ADR-0005 item 4) — reframe a host-behind-plugin wasi:http
+mismatch as a fidius-framed error. Today such a mismatch still surfaces (a wasmtime
+instantiate error → `LoadError::WasmLoad`, non-silent), and the tripwire + E2E
+guard the internal drift risk. A proactive reframe needs component-import
+introspection + a deliberately-mismatched fixture to test it. Left undone pending
+sign-off on whether it's worth the surface now or a later task.

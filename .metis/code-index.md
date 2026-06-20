@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T01:09:11Z | 138 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T01:27:05Z | 143 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -30,19 +30,22 @@
 │   │   └── tests/
 │   │       └── layout_and_roundtrip.rs
 │   ├── fidius-guest/
-│   │   └── src/
-│   │       ├── descriptor.rs
-│   │       ├── error.rs
-│   │       ├── frame.rs
-│   │       ├── hash.rs
-│   │       ├── lib.rs
-│   │       ├── python_descriptor.rs
-│   │       ├── status.rs
-│   │       ├── stream_ffi.rs
-│   │       ├── stream_marker.rs
-│   │       ├── value.rs
-│   │       ├── wasm_descriptor.rs
-│   │       └── wire.rs
+│   │   ├── src/
+│   │   │   ├── descriptor.rs
+│   │   │   ├── error.rs
+│   │   │   ├── frame.rs
+│   │   │   ├── hash.rs
+│   │   │   ├── http.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── python_descriptor.rs
+│   │   │   ├── status.rs
+│   │   │   ├── stream_ffi.rs
+│   │   │   ├── stream_marker.rs
+│   │   │   ├── value.rs
+│   │   │   ├── wasm_descriptor.rs
+│   │   │   └── wire.rs
+│   │   └── tests/
+│   │       └── wasi_http_pin.rs
 │   ├── fidius-host/
 │   │   ├── benches/
 │   │   │   └── backends.rs
@@ -68,6 +71,7 @@
 │   │       ├── cdylib_streaming_e2e.rs
 │   │       ├── e2e.rs
 │   │       ├── integration.rs
+│   │       ├── macro_egress_e2e.rs
 │   │       ├── macro_wasm.rs
 │   │       ├── macro_wasm_streaming.rs
 │   │       ├── package_e2e.rs
@@ -203,6 +207,9 @@
 │       │   └── greeter.js
 │       ├── greeter-py/
 │       │   └── app.py
+│       ├── macro-fetcher/
+│       │   └── src/
+│       │       └── lib.rs
 │       ├── macro-greeter/
 │       │   └── src/
 │       │       └── lib.rs
@@ -225,9 +232,12 @@
     ├── guest/
     │   └── src/
     │       └── lib.rs
-    └── host/
+    ├── host/
+    │   └── src/
+    │       └── main.rs
+    └── twogen/
         └── src/
-            └── main.rs
+            └── lib.rs
 ```
 
 ## Modules
@@ -552,19 +562,42 @@
 -  `sensitivity` function L133-137 — `()` — plugins compiled against a different interface.
 -  `different_signatures_differ` function L140-147 — `()` — plugins compiled against a different interface.
 
+#### crates/fidius-guest/src/http.rs
+
+- pub `Request` struct L57-66 — `{ method: String, url: String, headers: Vec<(String, String)>, body: Vec<u8> }` — An outbound request.
+- pub `get` function L70-77 — `(url: impl Into<String>) -> Self` — A GET request for `url`.
+- pub `post` function L80-87 — `(url: impl Into<String>, body: impl Into<Vec<u8>>) -> Self` — A POST request for `url` with `body`.
+- pub `header` function L90-93 — `(mut self, name: impl Into<String>, value: impl Into<String>) -> Self` — Add a header (builder style).
+- pub `Response` struct L98-105 — `{ status: u16, headers: Vec<(String, String)>, body: Vec<u8> }` — A response.
+- pub `is_success` function L109-111 — `(&self) -> bool` — `true` for a 2xx status.
+- pub `text` function L114-116 — `(&self) -> String` — The body as UTF-8 (lossy).
+- pub `HttpError` struct L123-126 — `{ message: String }` — A failed request.
+- pub `get` function L145-147 — `(url: &str) -> Result<Response, HttpError>` — GET `url`.
+- pub `post` function L150-152 — `(url: &str, body: &[u8]) -> Result<Response, HttpError>` — POST `body` to `url`.
+- pub `send` function L156-252 — `(req: Request) -> Result<Response, HttpError>` — Send an arbitrary [`Request`], blocking until the response is read.
+-  `bindings` module L40-46 — `-` — ```
+-  `Request` type L68-94 — `= Request` — ```
+-  `Response` type L107-117 — `= Response` — ```
+-  `HttpError` type L128-134 — `= HttpError` — ```
+-  `new` function L129-133 — `(msg: impl Into<String>) -> Self` — ```
+-  `HttpError` type L136-140 — `= HttpError` — ```
+-  `fmt` function L137-139 — `(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result` — ```
+-  `HttpError` type L142 — `= HttpError` — ```
+
 #### crates/fidius-guest/src/lib.rs
 
 - pub `descriptor` module L32 — `-` — `fidius-guest` — the wasm-buildable subset of the Fidius shared types.
 - pub `error` module L33 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
 - pub `frame` module L34 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
 - pub `hash` module L35 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `python_descriptor` module L36 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `status` module L37 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `stream_ffi` module L38 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `stream_marker` module L39 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `value` module L40 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `wasm_descriptor` module L41 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `wire` module L42 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `http` module L39 — `-` — Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028).
+- pub `python_descriptor` module L40 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `status` module L41 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `stream_ffi` module L42 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `stream_marker` module L43 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `value` module L44 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `wasm_descriptor` module L45 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `wire` module L46 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
 
 #### crates/fidius-guest/src/python_descriptor.rs
 
@@ -784,6 +817,15 @@
 - pub `deserialize` function L40-42 — `(bytes: &[u8]) -> Result<T, WireError>` — Deserialize a value from bincode bytes received across the FFI boundary.
 - pub `serialized_size` function L47-49 — `(val: &T) -> Result<u64, WireError>` — The exact serialized size of `val` in bytes, without allocating.
 - pub `serialize_into` function L54-56 — `(buf: &mut [u8], val: &T) -> Result<(), WireError>` — Serialize `val` directly into a caller-provided buffer — no intermediate
+
+### crates/fidius-guest/tests
+
+> *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-guest/tests/wasi_http_pin.rs
+
+-  `PINNED` variable L24 — `: &str` — Drift tripwire (FIDIUS-A-0005).
+-  `vendored_wasi_http_version_is_pinned` function L27-35 — `()` — `crates/fidius-guest/wit/` and update `PINNED` here in the same change.
 
 ### crates/fidius-host/benches
 
@@ -1154,6 +1196,23 @@
 -  `trait_and_method_metadata_readable_through_handle` function L259-285 — `()` — capability / info assertions where the Client abstracts them away.
 -  `has_capability_returns_false_for_high_bits` function L288-302 — `()` — capability / info assertions where the Client abstracts them away.
 -  `discover_surfaces_wasm_package_with_wasm_runtime` function L308-347 — `()` — Routing reserves the WASM seat (FIDIUS-I-0021 Phase 1): a `runtime = "wasm"`
+
+#### crates/fidius-host/tests/macro_egress_e2e.rs
+
+- pub `Fetcher` interface L40-42 — `{ fn fetch() }` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_fetcher_component` function L45-59 — `() -> &'static [u8]` — Build the macro-fetcher component once.
+-  `BYTES` variable L46 — `: OnceLock<Vec<u8>>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `mock_http_once` function L62-80 — `(body: &'static str) -> (String, std::thread::JoinHandle<()>)` — One-shot loopback mock HTTP server serving a single request with `body`.
+-  `AllowAll` struct L82 — `-` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `AllowAll` type L83-87 — `impl EgressPolicy for AllowAll` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `authorize` function L84-86 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `DenyAll` struct L89 — `-` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `DenyAll` type L90-94 — `impl EgressPolicy for DenyAll` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `authorize` function L91-93 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `stage_pkg` function L97-108 — `(root: &std::path::Path)` — Stage the macro-fetcher as a `runtime = "wasm"` package declaring `http`.
+-  `macro_connector_egress_allowed` function L111-129 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_connector_egress_denied` function L132-154 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
+-  `macro_connector_no_policy_fails_closed` function L157-173 — `()` — wasi:http `generate!` compose, and that the result rides the two-key gate.
 
 #### crates/fidius-host/tests/macro_wasm.rs
 
@@ -2200,6 +2259,17 @@
 - pub `probe_env` method L27-29 — `def probe_env(self) -> bool`
 - pub `fidius_interface_hash` method L31-33 — `def fidius_interface_hash(self) -> int`
 
+### tests/wasm-fixtures/macro-fetcher/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/macro-fetcher/src/lib.rs
+
+- pub `Fetcher` interface L13-16 — `{ fn fetch() }`
+- pub `MyFetcher` struct L18 — `-`
+-  `MyFetcher` type L21-28 — `impl Fetcher for MyFetcher`
+-  `fetch` function L22-27 — `(&self, url: String) -> String`
+
 ### tests/wasm-fixtures/macro-greeter/src
 
 > *Semantic summary to be generated by AI agent.*
@@ -2310,4 +2380,17 @@
 -  `bench` function L33-42 — `(iters: u32, mut f: F) -> f64` — Run: cargo run --release -- <path-to-guest.wasm>
 -  `round_trip` function L46-68 — `( store: &mut Store<()>, memory: &wasmtime::Memory, alloc: &TypedFunc<u32, u32>,...` — One raw-wire round trip on a warm instance: write `input` into guest memory
 -  `main` function L70-164 — `()` — Run: cargo run --release -- <path-to-guest.wasm>
+
+### wasm-spike/twogen/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### wasm-spike/twogen/src/lib.rs
+
+- pub `Impl` struct L12 — `-`
+- pub `touch` function L29-32 — `() -> u32` — Touch a wasi:http type so the import is retained (not DCE'd).
+-  `exp` module L6-19 — `-`
+-  `Impl` type L13-17 — `impl Guest for Impl`
+-  `ping` function L14-16 — `() -> u32`
+-  `client` module L22-33 — `-`
 

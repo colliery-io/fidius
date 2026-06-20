@@ -269,6 +269,53 @@ fn is_blocked_ip(ip: &IpAddr) -> bool {
     }
 }
 
+/// The `wasi:http` version this host provides — matched to `wasmtime-wasi-http`
+/// and the vendored guest WIT (FIDIUS-A-0005). Bump together with a wasmtime
+/// upgrade; the `fidius-guest` pin tripwire + the macro-egress E2E guard the match.
+const HOST_WASI_HTTP: (u32, u32, u32) = (0, 2, 6);
+
+/// Scan a component's import names for a `wasi:http` version this host can't
+/// satisfy, returning a clear, actionable message if so (FIDIUS-A-0005, fail
+/// loud — the same discipline as the `ABI_VERSION` check, on a new axis).
+///
+/// Compatible iff the import is on the host's `major.minor` line and the host's
+/// patch is `>=` the plugin's (WASI 0.2 is forward-compatible: a newer host
+/// satisfies an older import, never the reverse). A host *behind* the plugin, or
+/// a different line (`0.2`→`0.3`), is rejected up front instead of surfacing as a
+/// cryptic instantiate trap. Pulled out as a free fn so it unit-tests without a
+/// real component.
+fn wasi_http_incompatibility<'a>(import_names: impl Iterator<Item = &'a str>) -> Option<String> {
+    let (hmaj, hmin, hpat) = HOST_WASI_HTTP;
+    for name in import_names {
+        let Some(rest) = name.strip_prefix("wasi:http/") else {
+            continue;
+        };
+        let Some(ver) = rest.split('@').nth(1) else {
+            continue;
+        };
+        let parts: Vec<&str> = ver.split('.').collect();
+        if parts.len() != 3 {
+            continue;
+        }
+        let (Ok(maj), Ok(min), Ok(pat)) = (
+            parts[0].parse::<u32>(),
+            parts[1].parse::<u32>(),
+            parts[2].parse::<u32>(),
+        ) else {
+            continue;
+        };
+        if maj == hmaj && min == hmin && pat <= hpat {
+            return None; // a compatible wasi:http import — nothing to flag
+        }
+        return Some(format!(
+            "plugin requires wasi:http {maj}.{min}.{pat}, but this host provides \
+             {hmaj}.{hmin}.{hpat} — upgrade the host (newer wasmtime) or rebuild the \
+             plugin against an older fidius-guest"
+        ));
+    }
+    None
+}
+
 // wasmtime-wasi 45: `IoView` was merged into `WasiView`, whose `ctx` returns a
 // `WasiCtxView<'_>` borrowing both the ctx and the resource table.
 impl WasiView for HostState {
@@ -413,6 +460,20 @@ impl WasmComponentExecutor {
         egress: Option<Arc<dyn EgressPolicy>>,
         info: PluginInfo,
     ) -> Result<Self, CallError> {
+        // Fail loud on a wasi:http version the host can't satisfy (FIDIUS-A-0005),
+        // ahead of the cryptic wasmtime instantiate error.
+        let import_names: Vec<String> = component
+            .component_type()
+            .imports(&engine)
+            .map(|(name, _)| name.to_string())
+            .collect();
+        if let Some(message) = wasi_http_incompatibility(import_names.iter().map(String::as_str)) {
+            return Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message,
+            });
+        }
+
         let mut linker: Linker<HostState> = Linker::new(&engine);
         // WASI present, zero grants (the deny-all/allow-list `WasiCtx` is built
         // fresh per call in `instantiate`).
@@ -950,5 +1011,43 @@ mod ssrf_tests {
         ] {
             assert!(!is_blocked_ip(&ip(s)), "{s} must be allowed");
         }
+    }
+}
+
+#[cfg(test)]
+mod wasi_http_version_tests {
+    use super::*;
+
+    #[test]
+    fn host_matched_version_is_compatible() {
+        // 0.2.6 (the pin) and any older patch on the same line load fine.
+        assert!(wasi_http_incompatibility(["wasi:http/types@0.2.6"].into_iter()).is_none());
+        assert!(
+            wasi_http_incompatibility(["wasi:http/outgoing-handler@0.2.0"].into_iter()).is_none()
+        );
+    }
+
+    #[test]
+    fn newer_minor_or_patch_is_rejected_with_a_clear_message() {
+        // Patch ahead of the host (the exact `wasi` crate 0.2.12 skew that broke
+        // the fetcher) — and a different line — must fail loud, naming versions.
+        for bad in ["wasi:http/types@0.2.12", "wasi:http/types@0.3.0"] {
+            let msg = wasi_http_incompatibility([bad].into_iter())
+                .unwrap_or_else(|| panic!("{bad} should be rejected"));
+            assert!(msg.contains("plugin requires wasi:http"), "{msg}");
+            assert!(
+                msg.contains("0.2.6"),
+                "message names the host version: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_wasi_http_import_is_fine() {
+        // A plugin that never imports wasi:http isn't gated on it.
+        assert!(wasi_http_incompatibility(
+            ["wasi:cli/environment@0.2.6", "wasi:io/streams@0.2.6"].into_iter()
+        )
+        .is_none());
     }
 }
