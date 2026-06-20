@@ -62,6 +62,7 @@ plugin.
 | Capability          | Grants                                                        |
 | ------------------- | ------------------------------------------------------------- |
 | `env:VAR_NAME`      | Read **one** named host env var (e.g. `env:LOG_LEVEL`). Bare `env` is **rejected** — see below |
+| `fs:ro:<path>` / `fs:rw:<path>` | Read-only / read-write access to **one** directory (e.g. `fs:ro:/etc/certs`). Bare `fs` is **rejected** — see below |
 | `args`              | Read process arguments                                        |
 | `stdout` / `stderr` | Write to the host's standard out / error                      |
 | `stdin`             | Read the host's standard input                                |
@@ -89,14 +90,25 @@ recognize (a typo, or an unsupported one) is rejected at load with a clear error
 rather than silently granting nothing. This is verified by the
 `unknown_capability_rejected_at_load` test.
 
-### Filesystem is never grantable
+### Filesystem is per-directory, never whole-FS
 
-There is deliberately **no** `filesystem` capability. v1 never grants filesystem
-access — there are no preopens, ever, and `"filesystem"` in a manifest is an
-unknown-capability error. A plugin that needs to work with file *contents* should
-receive them as method arguments (bytes), not reach into the host filesystem.
-Granular, path-scoped filesystem grants are a possible future addition; the
-current posture is "no filesystem, full stop."
+Filesystem access is **path-scoped** (FIDIUS-A-0008): you grant exactly one
+directory, read-only or read-write:
+
+```toml
+capabilities = ["fs:ro:/etc/myapp/certs", "fs:rw:/var/lib/myapp/cache"]
+```
+
+The host **preopens** that directory; WASI's capability model then scopes the guest
+to it — there is no path-traversal escape and no ambient filesystem. `fs:ro:` grants
+read-only (the guest physically cannot write); `fs:rw:` grants read + write. A
+non-existent granted directory is skipped, so the guest's `open()` fails with a
+normal error rather than crashing the host.
+
+Bare `fs` / `filesystem` (the **whole** filesystem — every file and secret) is
+**rejected at load**, exactly like bare `env`. Deny-all remains the default: with no
+`fs:*` grant, the guest has no filesystem at all. The host decides which paths to
+grant — fidius ships the mechanism (preopens), not a path policy.
 
 ### Raw sockets (`network`/`sockets`) are coarse — prefer `http`
 

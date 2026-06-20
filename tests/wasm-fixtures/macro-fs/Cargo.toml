@@ -1,0 +1,27 @@
+# Standalone — kept out of the parent fidius workspace. WASM-only author crate:
+# a fidius plugin that does real `std::fs` I/O inside the sandbox, to exercise the
+# path-scoped filesystem capability (FIDIUS-A-0008). std::fs on wasm32-wasip2 maps
+# to wasi:filesystem, which the host links and a `fs:ro:`/`fs:rw:` grant preopens.
+[workspace]
+
+[package]
+name = "macro-fs"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

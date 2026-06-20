@@ -137,10 +137,12 @@ impl WasiHttpView for HostState {
     }
 }
 
-/// Capabilities the host knows how to grant. **Filesystem is intentionally
-/// absent** — it is never granted in v1 (no preopens, ever). `clocks`/`random`
-/// are always available in WASI and are accepted as no-ops so manifests can
-/// declare intent without error.
+/// Capabilities the host knows how to grant. Filesystem is absent here because
+/// it is grantable ONLY in the scoped form `fs:ro:<path>` / `fs:rw:<path>`
+/// (FIDIUS-A-0008) — a path-scoped preopen, never the whole filesystem; handled
+/// in `validate_capabilities`/`build_wasi_ctx`. `clocks`/`random` are always
+/// available in WASI and are accepted as no-ops so manifests can declare intent
+/// without error.
 const KNOWN_CAPABILITIES: &[&str] = &[
     "args", "stdout", "stderr", "stdin", "network", "sockets", "clocks", "random",
     // FIDIUS-I-0027: declares the guest *wants* brokered outbound HTTP. Actual
