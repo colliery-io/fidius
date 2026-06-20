@@ -364,6 +364,11 @@ pub struct WasmComponentExecutor {
     /// dispatch on it instead of a fresh per-call store. `None` = zero-config
     /// (per-call instantiation, the isolation default).
     configured: Option<std::sync::Mutex<ConfiguredStore>>,
+    /// The config bytes (FIDIUS-A-0006 / CI.3), retained so a *streaming* call can
+    /// `fidius-configure` the store it owns for the stream's lifetime (a stream
+    /// takes its store by value, so it can't share the unary persistent store — it
+    /// just needs the same config set in its own memory first).
+    config_bytes: Option<Vec<u8>>,
 }
 
 /// A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
@@ -518,6 +523,7 @@ impl WasmComponentExecutor {
             egress,
             info,
             configured: None,
+            config_bytes: None,
         })
     }
 
@@ -547,6 +553,7 @@ impl WasmComponentExecutor {
                 message: e.to_string(),
             })?;
         self.configured = Some(std::sync::Mutex::new(ConfiguredStore { store, instance }));
+        self.config_bytes = Some(cfg.to_vec());
         Ok(())
     }
 
@@ -760,24 +767,32 @@ impl crate::stream::StreamExecutor for WasmComponentExecutor {
                 message: format!("method '{}' is not a server-streaming method", m.name),
             });
         }
-        // FIDIUS-A-0006 / CI.3: streaming dispatches on a fresh per-call store (a
-        // stream borrows its store for the stream's lifetime), so it can't share
-        // the configured instance's persistent store. Configured + streaming is a
-        // documented follow-on; fail clearly rather than instantiate an unconfigured
-        // store (whose OnceLock instance would be empty).
-        if self.configured.is_some() {
-            return Err(CallError::Backend {
-                runtime: "wasm".into(),
-                message: format!(
-                    "method '{}': server-streaming on a configured WASM instance is not yet \
-                     supported (the stream needs its own store); use a unary method, or a \
-                     zero-config streaming plugin",
-                    m.name
-                ),
-            });
-        }
-
         let (mut store, instance) = self.instantiate()?;
+        // FIDIUS-A-0006 / CI.3: a stream takes its store by value (the pump owns it
+        // for the stream's lifetime), so it can't share the unary persistent store —
+        // it just needs the same config set in its own memory first. Bind config
+        // into this store (once, at stream start) before the streaming export reads it.
+        if let Some(cfg) = &self.config_bytes {
+            let cfunc = self.func(&mut store, &instance, "fidius-configure")?;
+            let typed = cfunc
+                .typed::<(Vec<u8>,), ()>(&store)
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: format!("fidius-configure signature: {e}"),
+                })?;
+            typed
+                .call(&mut store, (cfg.clone(),))
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: e.to_string(),
+                })?;
+            typed
+                .post_return(&mut store)
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: e.to_string(),
+                })?;
+        }
         let params: Vec<Val> = match args {
             Value::List(items) => items.iter().map(value_to_val).collect::<Result<_, _>>()?,
             Value::Unit => Vec::new(),

@@ -1,0 +1,21 @@
+# Standalone. WASM-only (FIDIUS-I-0029 / CI.3): a CONFIGURED *streaming* plugin —
+# config bound once via fidius-configure, then a server-streaming method reads it.
+[workspace]
+[package]
+name = "macro-configured-stream"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[lib]
+crate-type = ["cdylib"]
+[features]
+host = []
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+serde = { version = "1", features = ["derive"] }
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

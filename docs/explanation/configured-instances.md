@@ -90,14 +90,23 @@ is retained; subsequent method calls dispatch on it without re-sending config.
 - **Python** — the plugin module exports `__fidius_configure__(config) -> instance`;
   the host binds methods on the returned object instead of module-level functions.
 
+A **configured streaming** connector composes (the host binds config into the
+store the stream will own, once, before the stream starts):
+
+```rust
+#[plugin_impl(Source, config = Config)]
+impl Source for MySource {
+    fn read(&self, count: u32) -> fidius_guest::Stream<u64> { /* uses self.cfg */ }
+}
+// host: load_wasm_configured(.., &Config { .. })?; then call_streaming(READ, ..)
+```
+
 ## Limitations (0.5.0)
 
-- **WASM streaming + config**: a server-streaming method on a *configured* WASM
-  instance returns a clear error (a stream borrows its own store for its lifetime,
-  which can't share the configured instance's persistent store). Use a unary method,
-  or a zero-config streaming plugin. A follow-on lifts this.
-- **WASM streaming of user-typed records** is a separate, pre-existing limit
-  (streaming items must be primitives/`String`), independent of configuration.
+- **WASM streaming of user-typed records**: streaming *items* must be primitives or
+  `String` (e.g. `Stream<u64>`, or `Stream<String>` of JSON) — `Stream<MyRecord>`
+  with a `#[derive(WitType)]` item isn't supported on wasm yet. This is independent
+  of configuration; a REST connector can stream JSON `String` records today.
 
 ## See also
 
