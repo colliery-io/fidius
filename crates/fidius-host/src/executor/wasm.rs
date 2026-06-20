@@ -125,6 +125,10 @@ struct HostState {
     table: ResourceTable,
     http_ctx: WasiHttpCtx,
     hooks: EgressHooks,
+    /// Client-streaming producer (FIDIUS-I-0030 CS2.3): the host sets this before
+    /// a client-streaming call; the guest's `fidius:stream-pull/pull.next` import
+    /// pulls bincode items from it. `None` outside such a call.
+    client_stream: Option<Box<dyn Iterator<Item = Vec<u8>> + Send>>,
 }
 
 impl WasiHttpView for HostState {
@@ -552,6 +556,33 @@ impl WasmComponentExecutor {
                 message: e.to_string(),
             })?;
         }
+        // Client-streaming (FIDIUS-I-0030 CS2.3): provide the `fidius:stream-pull`
+        // import the guest pulls its `Stream<T>` argument through. Always linked
+        // (harmless for components that don't import it); backed per call by
+        // `HostState::client_stream`.
+        linker
+            .instance("fidius:stream-pull/pull")
+            .and_then(|mut pull| {
+                pull.func_wrap(
+                    "next",
+                    |mut store: wasmtime::StoreContextMut<'_, HostState>,
+                     (): ()|
+                     -> wasmtime::Result<(Option<Vec<u8>>,)> {
+                        let item = store
+                            .data_mut()
+                            .client_stream
+                            .as_mut()
+                            .and_then(|p| p.next());
+                        Ok((item,))
+                    },
+                )?;
+                Ok(())
+            })
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+
         let instance_pre = linker
             .instantiate_pre(component)
             .map_err(|e| CallError::Backend {
@@ -601,6 +632,59 @@ impl WasmComponentExecutor {
         Ok(())
     }
 
+    /// Client-streaming (FIDIUS-I-0030 CS2.3): call a method whose `Stream<T>`
+    /// argument is fed by the host. `producer` is the bincode-encoded items the
+    /// guest pulls via the `fidius:stream-pull` import; `args` are the non-stream
+    /// args (tuple-packed into a `Value`); returns the method's result as a `Value`.
+    #[cfg(feature = "streaming")]
+    pub fn call_client_streaming(
+        &self,
+        method: usize,
+        producer: Vec<Vec<u8>>,
+        args: Value,
+    ) -> Result<Value, CallError> {
+        let m = self.method(method, false)?.clone();
+        self.with_store(|store, instance| {
+            store.data_mut().client_stream = Some(Box::new(producer.into_iter()));
+            let func = self.func(store, instance, &m.name)?;
+            let func_ty = func.ty(&*store);
+            let param_types: Vec<wasmtime::component::Type> =
+                func_ty.params().map(|(_name, t)| t).collect();
+            let params: Vec<Val> = match &args {
+                Value::List(items) => items
+                    .iter()
+                    .zip(param_types.iter())
+                    .map(|(v, t)| value_to_val_typed(v, t))
+                    .collect::<Result<_, _>>()?,
+                Value::Unit => Vec::new(),
+                single => {
+                    let t = param_types.first().ok_or_else(|| {
+                        CallError::Serialization(
+                            "client-streaming method takes no non-stream params but an \
+                             argument was supplied"
+                                .into(),
+                        )
+                    })?;
+                    vec![value_to_val_typed(single, t)?]
+                }
+            };
+            let mut out = [Val::Bool(false)];
+            func.call(&mut *store, &params, &mut out)
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: e.to_string(),
+                })?;
+            store.data_mut().client_stream = None;
+            if let Val::Result(Err(payload)) = &out[0] {
+                return Err(plugin_error_from_val(payload.as_deref()));
+            }
+            Ok(match &out[0] {
+                Val::Result(Ok(inner)) => inner.as_deref().map(val_to_value).unwrap_or(Value::Unit),
+                other => val_to_value(other),
+            })
+        })
+    }
+
     /// Run `f` with a `(store, instance)`: the persistent configured store if
     /// configured (FIDIUS-A-0006 / CI.3), else a fresh per-call one (isolation).
     fn with_store<R>(
@@ -631,6 +715,7 @@ impl WasmComponentExecutor {
             hooks: EgressHooks {
                 policy: self.egress.clone(),
             },
+            client_stream: None,
         };
         let mut store = Store::new(&self.engine, host);
         let instance =
