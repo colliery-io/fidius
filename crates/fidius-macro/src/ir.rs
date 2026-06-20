@@ -424,7 +424,14 @@ fn build_signature_string(
         .iter()
         .filter_map(|arg| match arg {
             FnArg::Receiver(_) => None,
-            FnArg::Typed(pat_type) => Some(pat_type.ty.to_token_stream().to_string()),
+            // Client-streaming: hash the item type `T`, not the `Stream<T>` wrapper —
+            // its crate path differs host (`fidius_core`) vs guest (`fidius_guest`),
+            // matching how a server-streaming return hashes its item (the `<stream`
+            // marker keeps it distinct from a unary `T` arg).
+            FnArg::Typed(pat_type) => Some(match stream_item_type(&pat_type.ty) {
+                Some(item) => item.to_token_stream().to_string(),
+                None => pat_type.ty.to_token_stream().to_string(),
+            }),
         })
         .collect();
 

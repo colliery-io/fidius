@@ -245,7 +245,57 @@ impl PluginHandle {
             #[cfg(feature = "wasm")]
             Backend::Wasm(_) => Err(CallError::Backend {
                 runtime: "wasm".into(),
-                message: "client-streaming is not yet wired for WASM (FIDIUS-I-0030 CS2.3)".into(),
+                message: "use the typed `call_client_streaming` for the WASM backend".into(),
+            }),
+        }
+    }
+
+    /// Typed client-streaming (FIDIUS-I-0030): the host produces `items` (the
+    /// `Stream<T>` argument); the plugin pulls + consumes them and returns `O`.
+    /// `args` are the method's non-stream arguments (a tuple). Wired for cdylib
+    /// (in-process producer handle) and WASM (the `fidius:stream-pull` import);
+    /// Python is CS2.4. The safe wrapper over the per-backend mechanisms.
+    #[cfg(feature = "streaming")]
+    pub fn call_client_streaming<I, A, O>(
+        &self,
+        method: usize,
+        items: impl IntoIterator<Item = I>,
+        args: &A,
+    ) -> Result<O, CallError>
+    where
+        I: Serialize,
+        A: Serialize,
+        O: DeserializeOwned,
+    {
+        // Each item crosses as bincode; the guest deserializes it into the item type.
+        let encoded: Vec<Vec<u8>> = items
+            .into_iter()
+            .map(|i| fidius_core::wire::serialize(&i))
+            .collect::<Result<_, _>>()
+            .map_err(|e| CallError::Serialization(e.to_string()))?;
+        match &self.backend {
+            Backend::Cdylib(e) => {
+                let handle = crate::client_stream::host_producer_handle(encoded.into_iter());
+                let arg_bytes = fidius_core::wire::serialize(args)
+                    .map_err(|e| CallError::Serialization(e.to_string()))?;
+                // SAFETY: `handle` is a freshly-built, exclusively-owned producer.
+                let out = unsafe { e.call_client_streaming_raw(method, handle, &arg_bytes) }?;
+                fidius_core::wire::deserialize(&out)
+                    .map_err(|e| CallError::Deserialization(e.to_string()))
+            }
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(e) => {
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let out = e.call_client_streaming(method, encoded, arg_value)?;
+                fidius_core::from_value(out)
+                    .map_err(|err| CallError::Deserialization(err.to_string()))
+            }
+            #[cfg(feature = "python")]
+            Backend::Python(_) => Err(CallError::Backend {
+                runtime: "python".into(),
+                message: "client-streaming is not yet wired for Python (FIDIUS-I-0030 CS2.4)"
+                    .into(),
             }),
         }
     }

@@ -561,7 +561,7 @@ impl WasmComponentExecutor {
         // (harmless for components that don't import it); backed per call by
         // `HostState::client_stream`.
         linker
-            .instance("fidius:stream-pull/pull")
+            .instance("fidius:stream-pull/pull@0.1.0")
             .and_then(|mut pull| {
                 pull.func_wrap(
                     "next",

@@ -1,0 +1,25 @@
+# Standalone WASM author fixture (FIDIUS-I-0030 CS2.3): a client-streaming plugin
+# whose `Stream<T>` argument is fed by the host via the fidius:stream-pull import.
+[workspace]
+
+[package]
+name = "client-stream"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

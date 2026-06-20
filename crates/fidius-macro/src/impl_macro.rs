@@ -399,16 +399,6 @@ fn generate_wasm_adapter(
     let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
     let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
 
-    // Client-streaming (FIDIUS-I-0030) is wired for cdylib (CS2.2) but not yet for
-    // WASM (CS2.3). On a wasm build of such a plugin, fail loud + clear.
-    if let Some(m) = methods.iter().find(|m| m.client_stream_item.is_some()) {
-        return wasm_unsupported(
-            m.name,
-            "client-streaming (`Stream<T>` in argument position) is not yet supported on the \
-             WASM backend (FIDIUS-I-0030 CS2.3); it works on the cdylib backend today",
-        );
-    }
-
     // Collect candidate user types (non-primitive path idents in signatures;
     // `#[derive(WitType)]` records/variants). Reject reference args (owned only,
     // v1). Then validate every type maps to WIT — a structurally-unsupported
@@ -421,6 +411,14 @@ fn generate_wasm_adapter(
                     m.name,
                     "reference arguments are not supported — take owned types (String, Vec<u8>, …)",
                 );
+            }
+            // Client-streaming: the `Stream<T>` arg isn't a WIT type — classify its
+            // ITEM type `T` (CS2.3), like a server-streaming return.
+            if let Some(item) = crate::wit::stream_item_type(ty) {
+                if m.client_stream_item.is_some() {
+                    collect_user_idents(item, &mut known);
+                    continue;
+                }
             }
             collect_user_idents(ty, &mut known);
         }
@@ -438,6 +436,16 @@ fn generate_wasm_adapter(
     }
     for m in methods {
         for ty in &m.arg_types {
+            // Client-streaming: validate the `Stream<T>` arg's item type, not the
+            // (non-WIT) `Stream<T>` wrapper.
+            if let Some(item) = crate::wit::stream_item_type(ty) {
+                if m.client_stream_item.is_some() {
+                    if let Err(e) = wit_type_with(item, &known) {
+                        return wasm_unsupported(m.name, &e);
+                    }
+                    continue;
+                }
+            }
             if let Err(e) = wit_type_with(ty, &known) {
                 return wasm_unsupported(m.name, &e);
             }
@@ -459,6 +467,11 @@ fn generate_wasm_adapter(
         for m in methods {
             let mut params = Vec::new();
             for (name, ty) in m.arg_names.iter().zip(&m.arg_types) {
+                // Client-streaming (FIDIUS-I-0030 CS2.3): the `Stream<T>` argument
+                // is pulled via the `fidius:stream-pull` import, not a WIT param.
+                if m.client_stream_item.is_some() && crate::wit::stream_item_type(ty).is_some() {
+                    continue;
+                }
                 let wt = rust_type_to_wit(ty).expect("validated above");
                 params.push((to_kebab_case(&name.to_string()), wt));
             }
@@ -519,6 +532,58 @@ fn generate_wasm_adapter(
                         )
                     }
                 });
+            } else if let Some(cs_item) = m.client_stream_item {
+                // Client-streaming (FIDIUS-I-0030 CS2.3): the guest method takes the
+                // NON-stream args as WIT params; the `Stream<T>` arg is built from
+                // the `fidius:stream-pull` import (`WasmHostStream`), then the user
+                // method is called with all args in declaration order.
+                let stream_idx = arg_types
+                    .iter()
+                    .position(|t| crate::wit::stream_item_type(t).is_some())
+                    .expect("client-streaming method has a `Stream<T>` argument");
+                let stream_arg_name = &arg_names[stream_idx];
+                let ns_names: Vec<&Ident> = arg_names
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, n)| n)
+                    .collect();
+                let ns_types: Vec<&Type> = arg_types
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, t)| *t)
+                    .collect();
+                let build_stream = quote! {
+                    let #stream_arg_name = #crate_path::stream_marker::Stream::from_iter(
+                        #crate_path::client_stream::WasmHostStream::<#cs_item>::new()
+                    );
+                };
+                let call = quote! { #dispatch_self.#mname(#(#arg_names),*) };
+                if m.returns_result {
+                    let ok = match m.ret_type.and_then(result_ok_type) {
+                        Some(t) => quote! { #t },
+                        None => quote! { () },
+                    };
+                    guest_items.push(quote! {
+                        fn #mname(#(#ns_names: #ns_types),*)
+                            -> Result<#ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
+                            #build_stream
+                            #call.map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
+                                code: __e.code, message: __e.message, details: __e.details,
+                            })
+                        }
+                    });
+                } else {
+                    match m.ret_type {
+                        Some(rt) => guest_items.push(quote! {
+                            fn #mname(#(#ns_names: #ns_types),*) -> #rt { #build_stream #call }
+                        }),
+                        None => guest_items.push(quote! {
+                            fn #mname(#(#ns_names: #ns_types),*) { #build_stream #call }
+                        }),
+                    }
+                }
             } else {
                 let call = quote! { #dispatch_self.#mname(#(#arg_names),*) };
                 if m.returns_result {
@@ -564,6 +629,15 @@ fn generate_wasm_adapter(
     }
 
     // ── User types present: consume the build.rs-generated wit/ + conversions. ──
+    // Client-streaming with `#[derive(WitType)]` user types is a follow-on; the
+    // primitives-only branch above wires it (CS2.3).
+    if let Some(m) = methods.iter().find(|m| m.client_stream_item.is_some()) {
+        return wasm_unsupported(
+            m.name,
+            "client-streaming alongside #[derive(WitType)] user types is not yet supported on \
+             WASM; use a primitive/String stream item in a user-type-free interface",
+        );
+    }
     // The Guest uses wit-bindgen's generated types; we convert at the boundary
     // via the generated `From` impls (`conv_expr` is identity for primitive-only
     // fields and `.into()`/map for user types).
