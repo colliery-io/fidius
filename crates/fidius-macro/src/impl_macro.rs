@@ -255,22 +255,6 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         ));
     }
 
-    // Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): `Stream<T>` in BOTH argument
-    // and return position. The IR + interface hash already model it (both markers); the
-    // per-backend codegen (input pull → output stream) lands in BD.2 (cdylib) / BD.3
-    // (WASM) / BD.4 (Python). Reject the whole impl with one clean error until then —
-    // emitting partial codegen would leave the descriptor referencing a stubbed shim.
-    if let Some(m) = impl_methods
-        .iter()
-        .find(|m| m.stream_item.is_some() && m.client_stream_item.is_some())
-    {
-        return Err(syn::Error::new(
-            m.name.span(),
-            "bidirectional streaming (`Stream<T>` in both argument and return position) is \
-             not yet wired — FIDIUS-I-0032 (BD.2 cdylib / BD.3 WASM / BD.4 Python)",
-        ));
-    }
-
     // Strip `#[wire(...)]` helper attrs from the re-emitted impl block so the
     // Rust compiler doesn't reject them as unknown attributes.
     let mut item_emit = item.clone();
@@ -414,6 +398,22 @@ fn generate_wasm_adapter(
     let companion = format_ident!("__fidius_{}", trait_name);
     let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
     let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
+
+    // Bidirectional (FIDIUS-I-0032): `Stream<T>` in BOTH argument and return position.
+    // cdylib is wired (BD.2); the WASM import(input)+resource(output) co-occurrence is
+    // BD.3. Until then a bidi method would hit the server-streaming resource branch and
+    // mis-handle the input stream arg — fail clean (wasm-gated, so native cdylib builds
+    // of the same plugin are unaffected).
+    if let Some(m) = methods
+        .iter()
+        .find(|m| m.stream_item.is_some() && m.client_stream_item.is_some())
+    {
+        return wasm_unsupported(
+            m.name,
+            "bidirectional streaming (`Stream<T>` in both argument and return position) is \
+             not yet wired for the WASM backend (FIDIUS-I-0032 BD.3); it works on cdylib today",
+        );
+    }
 
     // Collect candidate user types (non-primitive path idents in signatures;
     // `#[derive(WitType)]` records/variants). Reject reference args (owned only,
@@ -956,6 +956,137 @@ fn generate_shims(
                     };
                 }
             };
+
+            // Bidirectional (FIDIUS-I-0032 / ADR-0010): `Stream<In>` argument +
+            // `Stream<Out>` return. The vtable slot is a `ClientStreamFn` (it takes the
+            // host's input producer handle); the shim builds the input `Stream` from that
+            // handle (client-streaming, CS2.2), calls the method to get a lazy
+            // `Stream<Out>`, and returns an OUTPUT stream handle (server-streaming, CS.1).
+            // The host drives `output.next()`, which re-enters `input.next()` — the
+            // synchronous lazy-pull composition. Checked BEFORE the server-only branch
+            // (a bidi method has `stream_item` set too).
+            if let (Some(out_item), Some(in_item)) =
+                (method.stream_item, method.client_stream_item)
+            {
+                let out_stream_ty = method
+                    .ret_type
+                    .expect("a bidirectional method returns `-> fidius::Stream<Out>`");
+                let stream_idx = method
+                    .arg_types
+                    .iter()
+                    .position(|t| crate::wit::stream_item_type(t).is_some())
+                    .expect("a bidirectional method has a `Stream<In>` argument");
+                let stream_arg_name = &method.arg_names[stream_idx];
+                let non_stream_names: Vec<&Ident> = method
+                    .arg_names
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, n)| n)
+                    .collect();
+                let non_stream_types: Vec<&Type> = method
+                    .arg_types
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, t)| *t)
+                    .collect();
+                let next_name = format_ident!("__fidius_bnext_{}_{}", impl_ident, method_name);
+                let drop_name = format_ident!("__fidius_bdrop_{}_{}", impl_ident, method_name);
+                // The OUTPUT stream's per-item state (identical to server-streaming).
+                let state_ty = quote! { #crate_path::stream_ffi::StreamState<#out_item> };
+                return quote! {
+                    // Output-stream `next` (arena-style, server-streaming shape).
+                    #[cfg(not(target_family = "wasm"))]
+                    unsafe extern "C" fn #next_name(
+                        handle: *mut #crate_path::stream_ffi::FidiusStreamHandle,
+                        buf_ptr: *mut u8,
+                        buf_cap: u32,
+                        out_len: *mut u32,
+                    ) -> i32 {
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            let __state = unsafe { &mut *((*handle).state as *mut #state_ty) };
+                            let __buf = unsafe {
+                                ::core::slice::from_raw_parts_mut(buf_ptr, buf_cap as usize)
+                            };
+                            match __state.next_into(__buf) {
+                                #crate_path::stream_ffi::NextStatus::Item(__n) => {
+                                    unsafe { *out_len = __n as u32; }
+                                    #crate_path::status::STATUS_OK
+                                }
+                                #crate_path::stream_ffi::NextStatus::End => {
+                                    #crate_path::status::STATUS_STREAM_END
+                                }
+                                #crate_path::stream_ffi::NextStatus::TooSmall(__need) => {
+                                    unsafe { *out_len = __need as u32; }
+                                    #crate_path::status::STATUS_BUFFER_TOO_SMALL
+                                }
+                                #crate_path::stream_ffi::NextStatus::SerErr => {
+                                    #crate_path::status::STATUS_SERIALIZATION_ERROR
+                                }
+                            }
+                        }));
+                        match result {
+                            ::core::result::Result::Ok(s) => s,
+                            ::core::result::Result::Err(_) => #crate_path::status::STATUS_PANIC,
+                        }
+                    }
+
+                    #[cfg(not(target_family = "wasm"))]
+                    unsafe extern "C" fn #drop_name(
+                        handle: *mut #crate_path::stream_ffi::FidiusStreamHandle,
+                    ) {
+                        if handle.is_null() { return; }
+                        unsafe {
+                            let __h = Box::from_raw(handle);
+                            drop(Box::from_raw(__h.state as *mut #state_ty));
+                        }
+                    }
+
+                    // Init shim: `ClientStreamFn` shape — takes the input producer handle,
+                    // returns the output stream handle.
+                    #[cfg(not(target_family = "wasm"))]
+                    unsafe extern "C" fn #shim_name(
+                        instance: *mut ::core::ffi::c_void,
+                        handle: *mut #crate_path::stream_ffi::FidiusStreamHandle,
+                        in_ptr: *const u8,
+                        in_len: u32,
+                        out_ptr: *mut *mut u8,
+                        out_len: *mut u32,
+                    ) -> i32 {
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
+                            let (#(#non_stream_names,)*) = match #crate_path::wire::deserialize::<(#(#non_stream_types,)*)>(in_slice) {
+                                Ok(v) => v,
+                                Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
+                            };
+                            // Input `Stream` from the host producer handle (CS2.2).
+                            let #stream_arg_name = #crate_path::stream_marker::Stream::from_iter(
+                                unsafe { #crate_path::stream_ffi::HostStream::<#in_item>::from_handle(handle) }
+                            );
+                            // Lazy `Stream<Out>` — pulls input on demand when driven.
+                            let __stream: #out_stream_ty = (unsafe { &*(instance as *const #impl_ident) }).#method_name(#(#arg_names),*);
+                            let __state: Box<#state_ty> = Box::new(
+                                #crate_path::stream_ffi::StreamState::new(__stream),
+                            );
+                            let __state = Box::into_raw(__state) as *mut ::core::ffi::c_void;
+                            let __handle = Box::into_raw(Box::new(
+                                #crate_path::stream_ffi::FidiusStreamHandle {
+                                    next: #next_name,
+                                    drop_fn: #drop_name,
+                                    state: __state,
+                                },
+                            ));
+                            unsafe { *out_ptr = __handle as *mut u8; *out_len = 0; }
+                            #crate_path::status::STATUS_OK
+                        }));
+                        match result {
+                            ::core::result::Result::Ok(s) => s,
+                            ::core::result::Result::Err(_) => #crate_path::status::STATUS_PANIC,
+                        }
+                    }
+                };
+            }
 
             // Server-streaming (FIDIUS-I-0026 CS.1): the vtable slot holds an
             // `init` shim that returns a `FidiusStreamHandle` (via the standard

@@ -4,14 +4,14 @@ level: task
 title: "BD.1 — macro/IR: accept Stream in both arg and return + dual hash marker"
 short_code: "FIDIUS-T-0166"
 created_at: 2026-06-20T22:21:09.024837+00:00
-updated_at: 2026-06-20T22:23:33.555018+00:00
+updated_at: 2026-06-20T22:32:08.761537+00:00
 parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -70,6 +70,8 @@ client-only. Depends on CS2.1 (`<stream` marker) + ST (`!stream`).
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -142,4 +144,17 @@ client-only. Depends on CS2.1 (`<stream` marker) + ST (`!stream`).
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 144f0cd).** The foundation was largely already in place: the IR carries
+both `client_stream_item` (arg) and `stream_item` (return) independently, and
+`build_signature_string` already passes both `stream_item.is_some()` and `client_streaming`
+to the hash — so a bidi method already hashes as `...!stream<stream`, distinct from
+unary/server/client (CS2.1's `<stream` and server-streaming's `!stream` never interfered).
+Added: (1) `streaming_markers_are_distinct` now covers the bidi case (asserts the dual
+marker + pairwise-distinct hashes across all four shapes); (2) a clean early rejection in
+`generate_plugin_impl` — `Err` at the method span before any codegen, so the descriptor
+never references a stubbed shim — covering cdylib/WASM/Python until BD.2/3/4; (3) the
+`bidi_stream_not_wired` compile-fail proves the guard fires cleanly. The interface side
+needs no guard: the vtable's `ClientStreamFn` shape is valid for bidi and `generate_client`
+already skips streaming methods, so a bidi *interface* compiles (hash/descriptor valid) —
+only the *impl* shim is gated. Default 68 + lint green. Next: BD.2 lifts the cdylib gate +
+wires `BidiStreamFn` shim + host path.

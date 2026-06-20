@@ -750,13 +750,6 @@ impl CdylibExecutor {
         input_bytes: &[u8],
         decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallError>,
     ) -> Result<crate::stream::ChunkStream, CallError> {
-        use fidius_core::stream_ffi::FidiusStreamHandle;
-        use fidius_core::Value;
-
-        /// Bounded backpressure/memory window between the pump thread and the
-        /// async consumer (mirrors the Python/WASM bridges).
-        const STREAM_CHANNEL_CAP: usize = 4;
-
         if index >= self.method_count as usize {
             return Err(CallError::InvalidMethodIndex {
                 index,
@@ -798,91 +791,81 @@ impl CdylibExecutor {
             });
         }
 
-        // Send-wrap the raw handle for the pump thread (single-owner for the
-        // stream's lifetime).
-        struct SendHandle(*mut FidiusStreamHandle);
-        unsafe impl Send for SendHandle {}
-        let send_handle = SendHandle(out_ptr as *mut FidiusStreamHandle);
+        // Pump the returned handle into a `ChunkStream` (shared with the
+        // bidirectional path, which reaches the same output-stream handle).
+        Ok(pump_stream_handle(out_ptr, decode_item))
+    }
 
-        let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
-
-        std::thread::spawn(move || {
-            // Force capture of the whole `SendHandle` (which is `Send`), not the
-            // disjoint raw-pointer field (2021 edition closure capture).
-            let send_handle = send_handle;
-            let handle = send_handle.0;
-
-            // ONE reusable buffer for the whole stream (FIDIUS-T-0138): the guest
-            // writes each item into it, so there's no per-item heap alloc and no
-            // `free_buffer` FFI crossing — just one `next` call per item. Grows on
-            // demand when the guest reports BUFFER_TOO_SMALL.
-            const INITIAL_ITEM_CAP: usize = 64;
-            let mut buf = vec![0u8; INITIAL_ITEM_CAP];
-
-            loop {
-                let next = unsafe { (*handle).next };
-                let mut out_len: u32 = 0;
-                let mut status =
-                    unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
-                if status == STATUS_BUFFER_TOO_SMALL {
-                    // Guest reported the size it needs; grow + retry once. The guest
-                    // retains the serialized item across the retry, so nothing is lost.
-                    buf.resize(out_len as usize, 0);
-                    status =
-                        unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
-                }
-                match status {
-                    STATUS_OK => {
-                        let item = decode_item(&buf[..out_len as usize]);
-                        let is_err = item.is_err();
-                        if tx.blocking_send(item).is_err() {
-                            break; // consumer dropped → cancel
-                        }
-                        if is_err {
-                            break;
-                        }
-                    }
-                    STATUS_STREAM_END => break,
-                    STATUS_PLUGIN_ERROR => {
-                        let pe = if out_len > 0 {
-                            wire::deserialize::<PluginError>(&buf[..out_len as usize])
-                                .unwrap_or_else(|_| {
-                                    PluginError::new("UNKNOWN", "malformed stream error")
-                                })
-                        } else {
-                            PluginError::new("UNKNOWN", "stream error without data")
-                        };
-                        let _ = tx.blocking_send(Err(CallError::Plugin(pe)));
-                        break;
-                    }
-                    STATUS_BUFFER_TOO_SMALL => {
-                        // Still too small after the grow-and-retry — misbehaving guest.
-                        let _ = tx.blocking_send(Err(CallError::BufferTooSmall));
-                        break;
-                    }
-                    STATUS_PANIC => {
-                        let _ = tx.blocking_send(Err(CallError::Panic(
-                            "plugin panicked in stream next".into(),
-                        )));
-                        break;
-                    }
-                    code => {
-                        let _ = tx.blocking_send(Err(CallError::UnknownStatus { code }));
-                        break;
-                    }
-                }
+    /// Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): call a method whose
+    /// vtable slot is a `ClientStreamFn` returning the OUTPUT stream handle. `handle`
+    /// is the host's INPUT producer (the plugin pulls its `Stream<In>` from it);
+    /// `input_bytes` is the bincode of the non-stream args. Returns a `ChunkStream`
+    /// over the plugin's `Stream<Out>` — pulling it drives the plugin, which
+    /// re-enters `handle.next()` on demand (the synchronous lazy-pull composition).
+    ///
+    /// # Safety
+    /// `handle` must be a valid, exclusively-owned producer handle; it is consumed
+    /// by the call (the plugin's output stream frees it via its `drop_fn`).
+    #[cfg(feature = "streaming")]
+    pub unsafe fn call_bidi_streaming_raw(
+        &self,
+        index: usize,
+        handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,
+        input_bytes: &[u8],
+        decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallError>,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
+        if index >= self.method_count as usize {
+            return Err(CallError::InvalidMethodIndex {
+                index,
+                count: self.method_count,
+            });
+        }
+        // Same FFI shape as client-streaming: instance + input handle + args + out.
+        type ClientStreamFn = unsafe extern "C" fn(
+            *mut c_void,
+            *mut fidius_core::stream_ffi::FidiusStreamHandle,
+            *const u8,
+            u32,
+            *mut *mut u8,
+            *mut u32,
+        ) -> i32;
+        let init = match unsafe { *(self.vtable as *const Option<ClientStreamFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
+        };
+        let mut out_ptr: *mut u8 = std::ptr::null_mut();
+        let mut out_len: u32 = 0;
+        let status = unsafe {
+            init(
+                self.instance,
+                handle,
+                input_bytes.as_ptr(),
+                input_bytes.len() as u32,
+                &mut out_ptr,
+                &mut out_len,
+            )
+        };
+        match status {
+            STATUS_OK => {}
+            STATUS_SERIALIZATION_ERROR => {
+                return Err(CallError::Serialization(
+                    "bidi stream init: argument decode failed".into(),
+                ))
             }
-            // Run the guest destructor + free the handle (exactly once).
-            unsafe {
-                let drop_fn = (*handle).drop_fn;
-                drop_fn(handle);
+            STATUS_PANIC => {
+                return Err(CallError::Panic(
+                    "plugin panicked in bidi stream init".into(),
+                ))
             }
-        });
-
-        let body = futures::stream::unfold(rx, |mut rx| async move {
-            rx.recv().await.map(|item| (item, rx))
-        });
-        Ok(crate::stream::ChunkStream::new(body))
+            code => return Err(CallError::UnknownStatus { code }),
+        }
+        if out_ptr.is_null() {
+            return Err(CallError::Backend {
+                runtime: "cdylib".into(),
+                message: "bidi stream init returned a null output handle".into(),
+            });
+        }
+        Ok(pump_stream_handle(out_ptr, decode_item))
     }
 
     /// Check if an optional method is supported (capability bit is set).
@@ -989,4 +972,109 @@ impl PluginExecutor for CdylibExecutor {
     fn call_raw(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError> {
         self.call_method_raw(method, input)
     }
+}
+
+/// Pump a returned `FidiusStreamHandle` into a [`crate::stream::ChunkStream`] on a
+/// dedicated thread (cdylib is synchronous), into a bounded channel for
+/// backpressure. Shared by server-streaming ([`CdylibExecutor::call_streaming_raw`])
+/// and bidirectional ([`CdylibExecutor::call_bidi_streaming_raw`]) — both reach the
+/// same output-stream handle shape; only the init shim that produced it differs.
+/// Each item crosses as concrete bincode and is lifted to a `Value` by `decode_item`
+/// (FIDIUS-T-0137). One reusable buffer per stream (FIDIUS-T-0138); dropping the
+/// stream runs the guest's `drop_fn` (cancel).
+#[cfg(feature = "streaming")]
+fn pump_stream_handle(
+    out_ptr: *mut u8,
+    decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallError>,
+) -> crate::stream::ChunkStream {
+    use fidius_core::stream_ffi::FidiusStreamHandle;
+    use fidius_core::Value;
+
+    /// Bounded backpressure/memory window between the pump thread and the async
+    /// consumer (mirrors the Python/WASM bridges).
+    const STREAM_CHANNEL_CAP: usize = 4;
+
+    // Send-wrap the raw handle for the pump thread (single-owner for the
+    // stream's lifetime).
+    struct SendHandle(*mut FidiusStreamHandle);
+    unsafe impl Send for SendHandle {}
+    let send_handle = SendHandle(out_ptr as *mut FidiusStreamHandle);
+
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
+
+    std::thread::spawn(move || {
+        // Force capture of the whole `SendHandle` (which is `Send`), not the
+        // disjoint raw-pointer field (2021 edition closure capture).
+        let send_handle = send_handle;
+        let handle = send_handle.0;
+
+        // ONE reusable buffer for the whole stream (FIDIUS-T-0138): the guest
+        // writes each item into it, so there's no per-item heap alloc and no
+        // `free_buffer` FFI crossing — just one `next` call per item. Grows on
+        // demand when the guest reports BUFFER_TOO_SMALL.
+        const INITIAL_ITEM_CAP: usize = 64;
+        let mut buf = vec![0u8; INITIAL_ITEM_CAP];
+
+        loop {
+            let next = unsafe { (*handle).next };
+            let mut out_len: u32 = 0;
+            let mut status =
+                unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
+            if status == STATUS_BUFFER_TOO_SMALL {
+                // Guest reported the size it needs; grow + retry once. The guest
+                // retains the serialized item across the retry, so nothing is lost.
+                buf.resize(out_len as usize, 0);
+                status = unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
+            }
+            match status {
+                STATUS_OK => {
+                    let item = decode_item(&buf[..out_len as usize]);
+                    let is_err = item.is_err();
+                    if tx.blocking_send(item).is_err() {
+                        break; // consumer dropped → cancel
+                    }
+                    if is_err {
+                        break;
+                    }
+                }
+                STATUS_STREAM_END => break,
+                STATUS_PLUGIN_ERROR => {
+                    let pe = if out_len > 0 {
+                        wire::deserialize::<PluginError>(&buf[..out_len as usize]).unwrap_or_else(
+                            |_| PluginError::new("UNKNOWN", "malformed stream error"),
+                        )
+                    } else {
+                        PluginError::new("UNKNOWN", "stream error without data")
+                    };
+                    let _ = tx.blocking_send(Err(CallError::Plugin(pe)));
+                    break;
+                }
+                STATUS_BUFFER_TOO_SMALL => {
+                    // Still too small after the grow-and-retry — misbehaving guest.
+                    let _ = tx.blocking_send(Err(CallError::BufferTooSmall));
+                    break;
+                }
+                STATUS_PANIC => {
+                    let _ = tx.blocking_send(Err(CallError::Panic(
+                        "plugin panicked in stream next".into(),
+                    )));
+                    break;
+                }
+                code => {
+                    let _ = tx.blocking_send(Err(CallError::UnknownStatus { code }));
+                    break;
+                }
+            }
+        }
+        // Run the guest destructor + free the handle (exactly once).
+        unsafe {
+            let drop_fn = (*handle).drop_fn;
+            drop_fn(handle);
+        }
+    });
+
+    let body = futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|item| (item, rx))
+    });
+    crate::stream::ChunkStream::new(body)
 }

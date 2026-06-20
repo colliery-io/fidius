@@ -206,6 +206,50 @@ impl PluginHandle {
         }
     }
 
+    /// Start a **bidirectional** streaming call (FIDIUS-I-0032 / ADR-0010): the host
+    /// produces `items` (the plugin's `Stream<In>` argument) and consumes the plugin's
+    /// `Stream<Out>` return as the returned [`crate::stream::ChunkStream`]. Pulling the
+    /// output drives the plugin, which pulls the input on demand — the synchronous
+    /// lazy-pull composition. `args` are the non-stream arguments. `O` is the output
+    /// item type. Wired for cdylib; WASM/Python are BD.3/BD.4.
+    #[cfg(feature = "streaming")]
+    pub async fn call_bidi_streaming<I, A, O>(
+        &self,
+        index: usize,
+        items: impl IntoIterator<Item = I>,
+        args: &A,
+    ) -> Result<crate::stream::ChunkStream, CallError>
+    where
+        I: Serialize,
+        A: Serialize,
+        O: DeserializeOwned + Serialize,
+    {
+        match &self.backend {
+            Backend::Cdylib(e) => {
+                let encoded = bincode_items(items)?;
+                let handle = crate::client_stream::host_producer_handle(encoded.into_iter());
+                let arg_bytes = fidius_core::wire::serialize(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                // SAFETY: `handle` is a freshly-built, exclusively-owned producer.
+                unsafe {
+                    e.call_bidi_streaming_raw(index, handle, &arg_bytes, cdylib_stream_decode::<O>)
+                }
+            }
+            #[cfg(feature = "python")]
+            Backend::Python(_) => Err(CallError::Backend {
+                runtime: "python".into(),
+                message: "bidirectional streaming is not yet wired for Python (FIDIUS-I-0032 BD.4)"
+                    .into(),
+            }),
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(_) => Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: "bidirectional streaming is not yet wired for WASM (FIDIUS-I-0032 BD.3)"
+                    .into(),
+            }),
+        }
+    }
+
     /// Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
     pub fn call_method_raw(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError> {
         match &self.backend {
