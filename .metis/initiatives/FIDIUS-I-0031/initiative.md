@@ -4,14 +4,14 @@ level: initiative
 title: "Production-grade WASM connectors — typed-record streaming, rich WIT types, HTTP timeouts"
 short_code: "FIDIUS-I-0031"
 created_at: 2026-06-20T15:20:31.174078+00:00
-updated_at: 2026-06-20T15:20:31.174078+00:00
+updated_at: 2026-06-20T16:29:48.939262+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/discovery"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
