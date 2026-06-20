@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T13:38:03Z | 135 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T13:58:22Z | 136 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -81,6 +81,7 @@
 │   │       ├── macro_wasm.rs
 │   │       ├── macro_wasm_streaming.rs
 │   │       ├── multi_plugin_pipeline.rs
+│   │       ├── optional_methods_host.rs
 │   │       ├── package_e2e.rs
 │   │       ├── plugin_dep_graph.rs
 │   │       ├── python_plugin_e2e.rs
@@ -956,12 +957,15 @@
 - pub `LoadedLibrary` struct L28-33 — `{ library: Arc<Library>, plugins: Vec<LoadedPlugin> }` — A loaded plugin library with validated descriptors.
 - pub `LoadedPlugin` struct L36-51 — `{ info: PluginInfo, vtable: *const c_void, free_buffer: Option<unsafe extern "C"...` — A single validated plugin from a loaded library.
 - pub `load_library` function L71-124 — `(path: &Path) -> Result<LoadedLibrary, LoadError>` — Load a plugin library from a path.
-- pub `validate_against_interface` function L166-190 — `( plugin: &LoadedPlugin, expected_hash: Option<u64>, expected_strategy: Option<B...` — Validate a loaded plugin against expected interface parameters.
+- pub `validate_against_interface` function L162-186 — `( plugin: &LoadedPlugin, expected_hash: Option<u64>, expected_strategy: Option<B...` — Validate a loaded plugin against expected interface parameters.
 -  `LoadedPlugin` type L55 — `impl Send for LoadedPlugin` — Core plugin loading and descriptor validation.
 -  `LoadedPlugin` type L56 — `impl Sync for LoadedPlugin` — Core plugin loading and descriptor validation.
 -  `LoadedPlugin` type L58-65 — `= LoadedPlugin` — Core plugin loading and descriptor validation.
 -  `fmt` function L59-64 — `(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result` — Core plugin loading and descriptor validation.
--  `validate_descriptor` function L127-163 — `( desc: &PluginDescriptor, library: &Arc<Library>, ) -> Result<LoadedPlugin, Loa...` — Validate a single descriptor and copy to owned types.
+-  `validate_descriptor` function L127-159 — `( desc: &PluginDescriptor, library: &Arc<Library>, ) -> Result<LoadedPlugin, Loa...` — Validate a single descriptor and copy to owned types.
+-  `check_abi_version` function L192-200 — `(got: u32) -> Result<(), LoadError>` — Reject a plugin whose descriptor was built against a different fidius ABI.
+-  `abi_tests` module L203-217 — `-` — Core plugin loading and descriptor validation.
+-  `rejects_a_stale_abi_plugin` function L207-216 — `()` — Core plugin loading and descriptor validation.
 
 #### crates/fidius-host/src/package.rs
 
@@ -1029,11 +1033,11 @@
 - pub `find_in_process_descriptor` function L214-228 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
 - pub `call_method` function L246-266 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
 - pub `call_method_raw` function L277-288 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
-- pub `call_streaming_raw` function L647-782 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
-- pub `has_capability` function L787-792 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L795-797 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L810-842 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
-- pub `trait_metadata` function L848-869 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
+- pub `call_streaming_raw` function L651-790 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
+- pub `has_capability` function L795-800 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L803-805 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L818-850 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
+- pub `trait_metadata` function L856-877 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
 -  `FfiFn` type L45 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut *mut u8, *mut u32) -> i...` — Type alias for the PluginAllocated FFI function pointer signature.
 -  `ArenaFn` type L48-49 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut u8, u32, *mut u32, *mut...` — Type alias for the Arena FFI function pointer signature.
 -  `construct_instance` function L56-61 — `(descriptor: *const PluginDescriptor, cfg: &[u8]) -> *mut c_void` — Construct the plugin instance via the descriptor's `construct` (FIDIUS-A-0006).
@@ -1041,20 +1045,20 @@
 -  `CdylibExecutor` type L107 — `impl Sync for CdylibExecutor` — (and future WASM) backends.
 -  `CdylibExecutor` type L109-118 — `impl Drop for CdylibExecutor` — (and future WASM) backends.
 -  `drop` function L110-117 — `(&mut self)` — (and future WASM) backends.
--  `CdylibExecutor` type L120-870 — `= CdylibExecutor` — (and future WASM) backends.
+-  `CdylibExecutor` type L120-878 — `= CdylibExecutor` — (and future WASM) backends.
 -  `new` function L123-145 — `( library: Arc<Library>, vtable: *const c_void, descriptor: *const PluginDescrip...` — Create a new CdylibExecutor.
--  `call_plugin_allocated` function L292-371 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
--  `call_arena` function L377-464 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
--  `call_plugin_allocated_raw` function L469-548 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
--  `call_arena_raw` function L552-630 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
--  `STREAM_CHANNEL_CAP` variable L658 — `: usize` — Bounded backpressure/memory window between the pump thread and the
--  `SendHandle` struct L699 — `-` — (and future WASM) backends.
--  `SendHandle` type L700 — `impl Send for SendHandle` — (and future WASM) backends.
--  `INITIAL_ITEM_CAP` variable L715 — `: usize` — (and future WASM) backends.
--  `CdylibExecutor` type L872-888 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
--  `info` function L873-875 — `(&self) -> &PluginInfo` — (and future WASM) backends.
--  `method_count` function L877-879 — `(&self) -> u32` — (and future WASM) backends.
--  `call_raw` function L885-887 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
+-  `call_plugin_allocated` function L292-373 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
+-  `call_arena` function L379-466 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
+-  `call_plugin_allocated_raw` function L471-552 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
+-  `call_arena_raw` function L556-634 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
+-  `STREAM_CHANNEL_CAP` variable L662 — `: usize` — Bounded backpressure/memory window between the pump thread and the
+-  `SendHandle` struct L707 — `-` — (and future WASM) backends.
+-  `SendHandle` type L708 — `impl Send for SendHandle` — (and future WASM) backends.
+-  `INITIAL_ITEM_CAP` variable L723 — `: usize` — (and future WASM) backends.
+-  `CdylibExecutor` type L880-896 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
+-  `info` function L881-883 — `(&self) -> &PluginInfo` — (and future WASM) backends.
+-  `method_count` function L885-887 — `(&self) -> u32` — (and future WASM) backends.
+-  `call_raw` function L893-895 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
 
 #### crates/fidius-host/src/executor/python.rs
 
@@ -1293,6 +1297,14 @@
 -  `PluginSink` type L63-73 — `impl StreamSink for PluginSink` — framework's `pump` helper exists for.
 -  `accept` function L64-72 — `(&self, item: Value) -> Result<(), CallError>` — framework's `pump` helper exists for.
 -  `host_pipes_reader_stream_into_writer_plugin` function L76-97 — `()` — framework's `pump` helper exists for.
+
+#### crates/fidius-host/tests/optional_methods_host.rs
+
+- pub `Api` interface L29-31 — `{ fn base() }` — slot surfaces `NotImplemented` rather than calling a null pointer).
+- pub `Plugin` struct L33 — `-` — slot surfaces `NotImplemented` rather than calling a null pointer).
+-  `Plugin` type L36-40 — `impl Api for Plugin` — slot surfaces `NotImplemented` rather than calling a null pointer).
+-  `base` function L37-39 — `(&self) -> String` — slot surfaces `NotImplemented` rather than calling a null pointer).
+-  `calling_a_method_the_plugin_lacks_is_a_clean_error_not_a_segfault` function L45-69 — `()` — slot surfaces `NotImplemented` rather than calling a null pointer).
 
 #### crates/fidius-host/tests/package_e2e.rs
 
