@@ -34,7 +34,7 @@
     "crates/fidius-host/src/executor.rs": "f2f5d702539f76a9f468a01196cf217a670e0d5aad1ba5facb0945d7d5156fab",
     "crates/fidius-host/src/executor/cdylib.rs": "bd87229d74d4a8801ef728fc69c4ec8dc59c57df08333e20785641804f1b3fe7",
     "crates/fidius-host/src/executor/python.rs": "f5c3d22bffa4563b2f4f9dc055c009f7743690fae18debb0594a89f2d73cb72d",
-    "crates/fidius-host/src/executor/wasm.rs": "a590447141a09e6ea2695938c54c47d6e067848658a1de84b85e4df090224d21",
+    "crates/fidius-host/src/executor/wasm.rs": "f883d48977750348c8aecc0f9445b5270f082c2044b3f3fe2792254eb80560e7",
     "crates/fidius-host/src/handle.rs": "2c2b8ec36c33b1d14eee7f5622c65276aa8407b7d588ed7539c63837d42fb2fc",
     "crates/fidius-host/src/host.rs": "93f26e1fcd50c8e8cbf15b50027fb690ea62eff9aeff51caf51c2d73f335d5c1",
     "crates/fidius-host/src/lib.rs": "6df5c07f4cc6a4d372f7ff7458216b2588250b118bfbfd63b9a988009a0b6bcb",

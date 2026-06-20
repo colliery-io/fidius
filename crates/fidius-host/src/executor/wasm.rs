@@ -35,7 +35,9 @@ use fidius_core::Value;
 use wasmtime::component::{Component, InstancePre, Linker, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::add_to_linker_sync;
-use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{
+    DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
+};
 use wasmtime_wasi_http::p2::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
 use wasmtime_wasi_http::p2::types::{HostFutureIncomingResponse, OutgoingRequestConfig};
@@ -177,6 +179,32 @@ fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
             }
             continue;
         }
+        // Path-scoped filesystem (FIDIUS-A-0008): `fs:ro:<path>` / `fs:rw:<path>`
+        // preopen exactly that directory. Bare `fs`/`filesystem` (whole-FS) is
+        // rejected — like bare `env`, a coarse grant is a footgun.
+        if c == "fs" || c == "filesystem" {
+            return Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: "wasm filesystem is path-scoped; grant a directory with \
+                          'fs:ro:<path>' (read-only) or 'fs:rw:<path>' — bare \
+                          'fs'/'filesystem' (whole filesystem) is not allowed"
+                    .into(),
+            });
+        }
+        if let Some(path) = c
+            .strip_prefix("fs:ro:")
+            .or_else(|| c.strip_prefix("fs:rw:"))
+        {
+            if path.is_empty() {
+                return Err(CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: "wasm capability 'fs:ro:'/'fs:rw:' requires a path (e.g. \
+                              'fs:ro:/data')"
+                        .into(),
+                });
+            }
+            continue;
+        }
         if !KNOWN_CAPABILITIES.contains(&c.as_str()) {
             return Err(CallError::Backend {
                 runtime: "wasm".into(),
@@ -192,7 +220,8 @@ fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
 
 /// Build a `WasiCtx` from the allow-list. Starts deny-all (a fresh builder
 /// inherits nothing and has no preopens) and grants only what's listed.
-/// Filesystem is never granted.
+/// Filesystem is granted only per `fs:ro:<path>` / `fs:rw:<path>` — a path-scoped
+/// preopen, never the whole filesystem (FIDIUS-A-0008).
 fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
     let mut b = WasiCtxBuilder::new();
     for c in caps {
@@ -236,6 +265,18 @@ fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
                 if let Ok(val) = std::env::var(name) {
                     b.env(name, val);
                 }
+            }
+            // Path-scoped filesystem (FIDIUS-A-0008): preopen exactly the granted
+            // host directory at the same guest path. WASI's capability model scopes
+            // the guest to the preopen (no traversal escape). A non-existent path is
+            // skipped — the guest's open() then fails with a normal WASI error.
+            _ if c.starts_with("fs:ro:") => {
+                let path = &c["fs:ro:".len()..];
+                let _ = b.preopened_dir(path, path, DirPerms::READ, FilePerms::READ);
+            }
+            _ if c.starts_with("fs:rw:") => {
+                let path = &c["fs:rw:".len()..];
+                let _ = b.preopened_dir(path, path, DirPerms::all(), FilePerms::all());
             }
             _ => {}
         }
@@ -1107,6 +1148,48 @@ mod ssrf_tests {
         ] {
             assert!(!is_blocked_ip(&ip(s)), "{s} must be allowed");
         }
+    }
+}
+
+#[cfg(test)]
+mod fs_capability_tests {
+    use super::*;
+
+    fn msg(r: Result<(), CallError>) -> String {
+        match r {
+            Err(CallError::Backend { message, .. }) => message,
+            other => panic!("expected Backend error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn path_scoped_fs_grants_are_accepted() {
+        assert!(validate_capabilities(&["fs:ro:/data".into()]).is_ok());
+        assert!(validate_capabilities(&["fs:rw:/var/out".into()]).is_ok());
+        // Composes with other caps.
+        assert!(validate_capabilities(&["stdout".into(), "fs:rw:/tmp/x".into()]).is_ok());
+    }
+
+    #[test]
+    fn bare_filesystem_is_rejected() {
+        // Whole-FS grants are a footgun — must fail loud, like bare `env`.
+        assert!(msg(validate_capabilities(&["fs".into()])).contains("path-scoped"));
+        assert!(msg(validate_capabilities(&["filesystem".into()])).contains("path-scoped"));
+    }
+
+    #[test]
+    fn fs_grant_without_a_path_is_rejected() {
+        assert!(msg(validate_capabilities(&["fs:ro:".into()])).contains("requires a path"));
+        assert!(msg(validate_capabilities(&["fs:rw:".into()])).contains("requires a path"));
+    }
+
+    #[test]
+    fn build_wasi_ctx_with_an_fs_grant_does_not_panic() {
+        // A read-write preopen of a real temp dir builds a ctx (the guest would
+        // then see exactly that dir).
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cap = format!("fs:rw:{}", tmp.path().display());
+        let _ctx = build_wasi_ctx(&[cap]);
     }
 }
 

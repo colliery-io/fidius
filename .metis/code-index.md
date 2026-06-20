@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T13:58:22Z | 136 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T14:53:47Z | 136 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -1077,64 +1077,64 @@
 
 #### crates/fidius-host/src/executor/wasm.rs
 
-- pub `EgressDenied` struct L54-58 — `{ reason: String }` — Denial returned by an [`EgressPolicy`] to refuse an outbound request.
-- pub `new` function L62-66 — `(reason: impl Into<String>) -> Self` — A denial with a reason.
-- pub `EgressPolicy` interface L82-85 — `{ fn authorize() }` — Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP**
-- pub `WasmMethod` struct L332-340 — `{ name: String, wire_raw: bool, streaming: bool }` — A method on the WASM interface, in declaration (vtable) order.
-- pub `WasmComponentExecutor` struct L343-372 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
-- pub `from_component_bytes` function L383-391 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
-- pub `from_component_bytes_with_egress` function L396-419 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
-- pub `from_cwasm` function L427-435 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
-- pub `from_cwasm_with_egress` function L443-466 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
-- pub `configure` function L534-558 — `(&mut self, cfg: &[u8]) -> Result<(), CallError>` — Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
-- pub `interface_hash` function L652-668 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
-- pub `validate_component` function L1048-1056 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
-- pub `precompile_component` function L1062-1070 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
--  `EgressDenied` type L60-67 — `= EgressDenied` — from the package manifest's allow-list.
--  `EgressHooks` struct L92-94 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
--  `EgressHooks` type L96-116 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
--  `send_request` function L97-115 — `( &mut self, request: http::Request<HyperOutgoingBody>, config: OutgoingRequestC...` — from the package manifest's allow-list.
--  `HostState` struct L121-126 — `{ ctx: WasiCtx, table: ResourceTable, http_ctx: WasiHttpCtx, hooks: EgressHooks ...` — Per-store host state.
--  `HostState` type L128-136 — `impl WasiHttpView for HostState` — from the package manifest's allow-list.
--  `http` function L129-135 — `(&mut self) -> WasiHttpCtxView<'_>` — from the package manifest's allow-list.
--  `KNOWN_CAPABILITIES` variable L142-151 — `: &[&str]` — Capabilities the host knows how to grant.
--  `validate_capabilities` function L155-191 — `(caps: &[String]) -> Result<(), CallError>` — Reject unknown capability names early (at load) so a typo fails closed and
--  `build_wasi_ctx` function L196-244 — `(caps: &[String]) -> WasiCtx` — Build a `WasiCtx` from the allow-list.
--  `is_blocked_ip` function L251-270 — `(ip: &IpAddr) -> bool` — Baseline SSRF denylist for the raw-socket grant (FIDIUS-T-0143): an address a
--  `HOST_WASI_HTTP` variable L275 — `: (u32, u32, u32)` — The `wasi:http` version this host provides — matched to `wasmtime-wasi-http`
--  `wasi_http_incompatibility` function L287-317 — `(import_names: impl Iterator<Item = &'a str>) -> Option<String>` — Scan a component's import names for a `wasi:http` version this host can't
--  `HostState` type L321-328 — `impl WasiView for HostState` — from the package manifest's allow-list.
--  `ctx` function L322-327 — `(&mut self) -> WasiCtxView<'_>` — from the package manifest's allow-list.
--  `ConfiguredStore` struct L375-378 — `{ store: Store<HostState>, instance: wasmtime::component::Instance }` — A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
--  `WasmComponentExecutor` type L380-669 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `build` function L470-528 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
--  `with_store` function L562-577 — `( &self, f: impl FnOnce(&mut Store<HostState>, &wasmtime::component::Instance) -...` — Run `f` with a `(store, instance)`: the persistent configured store if
--  `instantiate` function L582-600 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
--  `func` function L603-630 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
--  `method` function L632-648 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L671-712 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `info` function L672-674 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
--  `method_count` function L676-678 — `(&self) -> u32` — from the package manifest's allow-list.
--  `call_raw` function L680-711 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L714-747 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `call` function L715-746 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
--  `STREAM_CHANNEL_CAP` variable L753 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
--  `WasmComponentExecutor` type L757-884 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `call_streaming` function L758-883 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
--  `plugin_error_from_val` function L888-914 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
--  `to_kebab` function L919-934 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
--  `kebab_to_snake` function L937-939 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
--  `kebab_to_pascal` function L942-952 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
--  `value_to_val` function L954-997 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
--  `val_to_value` function L1000-1038 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
--  `ssrf_tests` module L1073-1111 — `-` — from the package manifest's allow-list.
--  `ip` function L1077-1079 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
--  `blocks_internal_and_metadata_targets` function L1082-1098 — `()` — from the package manifest's allow-list.
--  `allows_public_targets` function L1101-1110 — `()` — from the package manifest's allow-list.
--  `wasi_http_version_tests` module L1114-1149 — `-` — from the package manifest's allow-list.
--  `host_matched_version_is_compatible` function L1118-1124 — `()` — from the package manifest's allow-list.
--  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1127-1139 — `()` — from the package manifest's allow-list.
--  `no_wasi_http_import_is_fine` function L1142-1148 — `()` — from the package manifest's allow-list.
+- pub `EgressDenied` struct L56-60 — `{ reason: String }` — Denial returned by an [`EgressPolicy`] to refuse an outbound request.
+- pub `new` function L64-68 — `(reason: impl Into<String>) -> Self` — A denial with a reason.
+- pub `EgressPolicy` interface L84-87 — `{ fn authorize() }` — Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP**
+- pub `WasmMethod` struct L357-365 — `{ name: String, wire_raw: bool, streaming: bool }` — A method on the WASM interface, in declaration (vtable) order.
+- pub `WasmComponentExecutor` struct L368-397 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
+- pub `from_component_bytes` function L408-416 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
+- pub `from_component_bytes_with_egress` function L421-444 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
+- pub `from_cwasm` function L452-460 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
+- pub `from_cwasm_with_egress` function L468-491 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
+- pub `configure` function L559-583 — `(&mut self, cfg: &[u8]) -> Result<(), CallError>` — Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
+- pub `interface_hash` function L677-693 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
+- pub `validate_component` function L1073-1081 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L1087-1095 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+-  `EgressDenied` type L62-69 — `= EgressDenied` — from the package manifest's allow-list.
+-  `EgressHooks` struct L94-96 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
+-  `EgressHooks` type L98-118 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
+-  `send_request` function L99-117 — `( &mut self, request: http::Request<HyperOutgoingBody>, config: OutgoingRequestC...` — from the package manifest's allow-list.
+-  `HostState` struct L123-128 — `{ ctx: WasiCtx, table: ResourceTable, http_ctx: WasiHttpCtx, hooks: EgressHooks ...` — Per-store host state.
+-  `HostState` type L130-138 — `impl WasiHttpView for HostState` — from the package manifest's allow-list.
+-  `http` function L131-137 — `(&mut self) -> WasiHttpCtxView<'_>` — from the package manifest's allow-list.
+-  `KNOWN_CAPABILITIES` variable L144-153 — `: &[&str]` — Capabilities the host knows how to grant.
+-  `validate_capabilities` function L157-216 — `(caps: &[String]) -> Result<(), CallError>` — Reject unknown capability names early (at load) so a typo fails closed and
+-  `build_wasi_ctx` function L221-269 — `(caps: &[String]) -> WasiCtx` — Build a `WasiCtx` from the allow-list.
+-  `is_blocked_ip` function L276-295 — `(ip: &IpAddr) -> bool` — Baseline SSRF denylist for the raw-socket grant (FIDIUS-T-0143): an address a
+-  `HOST_WASI_HTTP` variable L300 — `: (u32, u32, u32)` — The `wasi:http` version this host provides — matched to `wasmtime-wasi-http`
+-  `wasi_http_incompatibility` function L312-342 — `(import_names: impl Iterator<Item = &'a str>) -> Option<String>` — Scan a component's import names for a `wasi:http` version this host can't
+-  `HostState` type L346-353 — `impl WasiView for HostState` — from the package manifest's allow-list.
+-  `ctx` function L347-352 — `(&mut self) -> WasiCtxView<'_>` — from the package manifest's allow-list.
+-  `ConfiguredStore` struct L400-403 — `{ store: Store<HostState>, instance: wasmtime::component::Instance }` — A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
+-  `WasmComponentExecutor` type L405-694 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `build` function L495-553 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
+-  `with_store` function L587-602 — `( &self, f: impl FnOnce(&mut Store<HostState>, &wasmtime::component::Instance) -...` — Run `f` with a `(store, instance)`: the persistent configured store if
+-  `instantiate` function L607-625 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
+-  `func` function L628-655 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
+-  `method` function L657-673 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L696-737 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `info` function L697-699 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
+-  `method_count` function L701-703 — `(&self) -> u32` — from the package manifest's allow-list.
+-  `call_raw` function L705-736 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L739-772 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call` function L740-771 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
+-  `STREAM_CHANNEL_CAP` variable L778 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
+-  `WasmComponentExecutor` type L782-909 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call_streaming` function L783-908 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
+-  `plugin_error_from_val` function L913-939 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
+-  `to_kebab` function L944-959 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
+-  `kebab_to_snake` function L962-964 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
+-  `kebab_to_pascal` function L967-977 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
+-  `value_to_val` function L979-1022 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
+-  `val_to_value` function L1025-1063 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
+-  `ssrf_tests` module L1098-1136 — `-` — from the package manifest's allow-list.
+-  `ip` function L1102-1104 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
+-  `blocks_internal_and_metadata_targets` function L1107-1123 — `()` — from the package manifest's allow-list.
+-  `allows_public_targets` function L1126-1135 — `()` — from the package manifest's allow-list.
+-  `wasi_http_version_tests` module L1139-1174 — `-` — from the package manifest's allow-list.
+-  `host_matched_version_is_compatible` function L1143-1149 — `()` — from the package manifest's allow-list.
+-  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1152-1164 — `()` — from the package manifest's allow-list.
+-  `no_wasi_http_import_is_fine` function L1167-1173 — `()` — from the package manifest's allow-list.
 
 ### crates/fidius-host/tests
 
