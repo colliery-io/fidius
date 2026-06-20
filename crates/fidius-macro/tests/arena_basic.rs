@@ -51,6 +51,7 @@ fn arena_shim_round_trip_with_sufficient_buffer() {
     // Grab the echo fn pointer from the vtable.
     let vtable = unsafe { &*(desc.vtable as *const __fidius_EchoArena::EchoArena_VTable) };
     let echo_fn = vtable.echo;
+    let inst = unsafe { (desc.construct.unwrap())(std::ptr::null(), 0) };
 
     // Serialize the input as a 1-tuple.
     let input = ("hello".to_string(),);
@@ -63,6 +64,7 @@ fn arena_shim_round_trip_with_sufficient_buffer() {
 
     let status = unsafe {
         echo_fn(
+            inst,
             input_bytes.as_ptr(),
             input_bytes.len() as u32,
             arena.as_mut_ptr(),
@@ -88,6 +90,7 @@ fn arena_shim_returns_buffer_too_small() {
     let desc = unsafe { &**reg.descriptors };
     let vtable = unsafe { &*(desc.vtable as *const __fidius_EchoArena::EchoArena_VTable) };
     let echo_fn = vtable.echo;
+    let inst = unsafe { (desc.construct.unwrap())(std::ptr::null(), 0) };
 
     // Serialize a long input so the output exceeds a tiny arena.
     let input = ("this is a reasonably long payload".to_string(),);
@@ -100,6 +103,7 @@ fn arena_shim_returns_buffer_too_small() {
 
     let status = unsafe {
         echo_fn(
+            inst,
             input_bytes.as_ptr(),
             input_bytes.len() as u32,
             arena.as_mut_ptr(),

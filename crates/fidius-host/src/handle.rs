@@ -86,6 +86,22 @@ impl PluginHandle {
         })
     }
 
+    /// Construct a **configured** in-process plugin instance (FIDIUS-A-0006 /
+    /// CI.2): serialize `config` and bind it once at construction. The plugin's
+    /// `#[plugin_impl(Trait, config = C)]` `configure` constructor receives it;
+    /// methods then close over it without re-passing. The config crosses the
+    /// boundary exactly once, and N differently-configured instances can coexist.
+    pub fn configure_in_process<C: Serialize>(
+        desc: &'static PluginDescriptor,
+        config: &C,
+    ) -> Result<Self, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::ConfigSerialization(e.to_string()))?;
+        Ok(Self {
+            backend: Backend::Cdylib(CdylibExecutor::from_descriptor_with_config(desc, &cfg)?),
+        })
+    }
+
     /// Look up a descriptor in the current process's inventory registry by
     /// `plugin_name` (the Rust struct name passed to `#[plugin_impl]`).
     pub fn find_in_process_descriptor(

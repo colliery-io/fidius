@@ -47,14 +47,14 @@ fn registry_field_offsets() {
 
 #[test]
 fn descriptor_size_and_align() {
-    // 64-bit expected: 104 bytes total, 8-byte aligned.
-    // Grew from 80 → 104 in 0.1.0 when FIDIUS-I-0018 added method_metadata
-    // pointer (8), trait_metadata pointer (8), trait_metadata_count u32 (4),
-    // plus 4 bytes trailing alignment padding.
+    // 64-bit expected: 120 bytes total, 8-byte aligned.
+    // Grew from 80 → 104 in 0.1.0 (FIDIUS-I-0018: method/trait metadata).
+    // Grew from 104 → 120 in 0.5.0 (FIDIUS-A-0006: construct + destroy fn
+    // pointers, 8 bytes each).
     let size = size_of::<PluginDescriptor>();
     let align = align_of::<PluginDescriptor>();
     assert_eq!(align, 8, "PluginDescriptor alignment");
-    assert_eq!(size, 104, "PluginDescriptor size");
+    assert_eq!(size, 120, "PluginDescriptor size");
 }
 
 #[test]
@@ -76,7 +76,10 @@ fn descriptor_field_offsets() {
     assert_eq!(offset_of!(PluginDescriptor, method_metadata), 80);
     assert_eq!(offset_of!(PluginDescriptor, trait_metadata), 88);
     assert_eq!(offset_of!(PluginDescriptor, trait_metadata_count), 96);
-    // 4 bytes trailing padding to 104
+    // 4 bytes padding after u32 before the pointer
+    assert_eq!(offset_of!(PluginDescriptor, construct), 104);
+    assert_eq!(offset_of!(PluginDescriptor, destroy), 112);
+    // total: 120
 }
 
 // ─── Layout assertions: enums ────────────────────────────────────────────────
@@ -220,7 +223,8 @@ fn magic_bytes_value() {
 fn version_constants() {
     assert_eq!(REGISTRY_VERSION, 1);
     // ABI_VERSION = MAJOR * 10000 + MINOR * 100 when MAJOR == 0 (pre-1.0 rule).
-    // For fidius-core at 0.4.0: 0 + 400 = 400. See ADR-0002. (Pre-1.0, every
-    // minor bump is an ABI break — cdylib plugins must be recompiled.)
-    assert_eq!(ABI_VERSION, 400);
+    // For fidius-core at 0.5.0: 0 + 500 = 500. See ADR-0002. (Pre-1.0, every
+    // minor bump is an ABI break — cdylib plugins must be recompiled. 0.5.0 broke
+    // the vtable calling convention for configured instances, FIDIUS-A-0006.)
+    assert_eq!(ABI_VERSION, 500);
 }

@@ -108,6 +108,12 @@ pub use fidius_core::stream_ffi;
 pub use fidius_core::wasm_descriptor;
 pub use fidius_core::wire;
 
+/// Brokered outbound HTTP (`get`/`post`/`send`) for sandboxed WASM connectors
+/// (FIDIUS-I-0028). Present only in `wasm32-wasip2` builds; a connector's
+/// `read()` calls it and the host's `EgressPolicy` brokers the request.
+#[cfg(target_family = "wasm")]
+pub use fidius_core::http;
+
 // Also re-export key types at the crate root for convenience
 pub use fidius_core::descriptor::{
     BufferStrategyKind, PluginDescriptor, PluginRegistry, ABI_VERSION, FIDIUS_MAGIC,

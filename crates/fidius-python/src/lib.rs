@@ -34,5 +34,5 @@ pub mod value_bridge;
 pub use error::pyerr_to_plugin_error;
 pub use handle::{PythonCallError, PythonPluginHandle};
 pub use interpreter::ensure_initialized;
-pub use loader::{load_python_plugin, PythonLoadError};
+pub use loader::{load_python_plugin, load_python_plugin_configured, PythonLoadError};
 pub use stream::{PyStreamStep, PythonStream};

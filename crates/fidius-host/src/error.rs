@@ -75,6 +75,11 @@ pub enum LoadError {
     /// type-clean across feature gates.
     #[error("wasm load failed: {0}")]
     WasmLoad(String),
+
+    /// Failed to serialize a plugin's config for construction (FIDIUS-A-0006 /
+    /// CI.2). Practically never happens for a well-formed config type.
+    #[error("config serialization failed: {0}")]
+    ConfigSerialization(String),
 }
 
 /// Errors that can occur when calling a plugin method.

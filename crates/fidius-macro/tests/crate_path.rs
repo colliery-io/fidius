@@ -54,14 +54,17 @@ fn custom_crate_path_shim_callable() {
     let mut out_ptr: *mut u8 = std::ptr::null_mut();
     let mut out_len: u32 = 0;
 
+    let inst = unsafe { (desc.construct.unwrap())(std::ptr::null(), 0) };
     let status = unsafe {
         (vtable.add)(
+            inst,
             input_bytes.as_ptr(),
             input_bytes.len() as u32,
             &mut out_ptr,
             &mut out_len,
         )
     };
+    unsafe { (desc.destroy.unwrap())(inst) };
 
     assert_eq!(status, 0);
 

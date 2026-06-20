@@ -1,0 +1,28 @@
+# Standalone — kept out of the parent workspace. WASM-only author crate
+# (FIDIUS-I-0029 / CI.3): a CONFIGURED fidius plugin. `#[plugin_impl(.., config = Cfg)]`
+# binds config once via the `fidius-configure` export; `greet` uses the bound
+# greeting. Built for wasm32-wasip2; loaded via load_wasm_configured.
+[workspace]
+
+[package]
+name = "macro-configured"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+serde = { version = "1", features = ["derive"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

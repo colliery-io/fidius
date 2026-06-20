@@ -1,0 +1,10 @@
+// Copyright 2026 Colliery, Inc. Licensed under Apache 2.0
+//
+// FIDIUS-A-0005: the ONE pinned wasi:http contract every fidius wasm connector
+// shares. Vendored from the wasmtime-wasi-http version fidius-host pins (0.2.6).
+// Bump deliberately, never to chase a wasmtime patch.
+package fidius:guest-http;
+
+world http-client {
+    import wasi:http/outgoing-handler@0.2.6;
+}

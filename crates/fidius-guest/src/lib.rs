@@ -33,6 +33,10 @@ pub mod descriptor;
 pub mod error;
 pub mod frame;
 pub mod hash;
+/// Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028).
+/// Only present in components built for `wasm32-wasip2`.
+#[cfg(target_family = "wasm")]
+pub mod http;
 pub mod python_descriptor;
 pub mod status;
 pub mod stream_ffi;

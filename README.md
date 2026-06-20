@@ -20,6 +20,7 @@ fidius lets you define a Rust trait, annotate it with a macro, and get a compile
 - **Python plugins** — write plugins in Python that satisfy a Rust trait via `fidius-python`.
 - **Sandboxed WASM plugins** — compile a plugin to a WebAssembly component that runs in a deny-all wasmtime sandbox with a capability allow-list; polyglot (Rust *and* other languages implement the same interface). Outbound HTTP is host-brokered and policy-gated (`wasi:http` + a required egress hook).
 - **Server-streaming** — a method can return `fidius::Stream<T>`: pull-based, backpressured, drop-to-cancel, implemented natively on all three backends (Rust/Python/WASM) and proven across Rust, JS, Python, and C guests.
+- **Configured instances** — bind config once and call many (`#[plugin_impl(Trait, config = C)]` + `configure`): config crosses the boundary once, config-bound setup runs once, and N differently-configured instances coexist — on all three backends (cdylib/WASM/Python).
 - **CLI tooling** — scaffold interfaces and plugins, sign, inspect, and package.
 
 ## Workspace Layout

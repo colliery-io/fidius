@@ -358,6 +358,40 @@ impl PluginHost {
         Ok(crate::handle::PluginHandle::from_python(py, info))
     }
 
+    /// Load a **configured** Python plugin (FIDIUS-A-0006 / CI.4): serialize
+    /// `config` and bind it once via the module's
+    /// `__fidius_configure__(config) -> instance`; methods then run on the
+    /// configured instance. N differently-configured instances coexist.
+    /// Available only with the `python` feature.
+    #[cfg(feature = "python")]
+    pub fn load_python_configured<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
+        config: &C,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let dir = self.find_python_package(name)?;
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let cfg = serde_json::to_value(config)
+            .map_err(|e| LoadError::PythonLoad(format!("config serialize: {e}")))?;
+        let py = fidius_python::load_python_plugin_configured(&dir, descriptor, &cfg)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Python,
+        };
+        Ok(crate::handle::PluginHandle::from_python(py, info))
+    }
+
     /// Find a WASM package directory by name across the search paths (matches
     /// `package.toml` `[package].name` with `runtime = "wasm"`).
     #[cfg(feature = "wasm")]
@@ -409,7 +443,24 @@ impl PluginHost {
         name: &str,
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
-        self.load_wasm_impl(name, descriptor, self.egress.clone())
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), None)
+    }
+
+    /// Load a **configured** WASM plugin (FIDIUS-A-0006 / CI.3): serialize
+    /// `config` and bind it once via the guest's `fidius-configure` export. The
+    /// component then runs on a persistent store, so methods dispatch on the
+    /// configured instance and config crosses the sandbox boundary exactly once.
+    /// Available only with the `wasm` feature.
+    #[cfg(feature = "wasm")]
+    pub fn load_wasm_configured<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        config: &C,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::WasmLoad(format!("config serialize: {e}")))?;
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), Some(&cfg))
     }
 
     /// Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
@@ -424,7 +475,7 @@ impl PluginHost {
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
         egress: impl crate::executor::wasm::EgressPolicy,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
-        self.load_wasm_impl(name, descriptor, Some(Arc::new(egress)))
+        self.load_wasm_impl(name, descriptor, Some(Arc::new(egress)), None)
     }
 
     #[cfg(feature = "wasm")]
@@ -433,6 +484,7 @@ impl PluginHost {
         name: &str,
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
         egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
+        config: Option<&[u8]>,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
         use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
 
@@ -539,6 +591,14 @@ impl PluginHost {
             });
         }
 
+        // FIDIUS-A-0006 / CI.3: bind config once via the guest `fidius-configure`
+        // export, retaining a persistent store for subsequent method calls.
+        let mut executor = executor;
+        if let Some(cfg) = config {
+            executor
+                .configure(cfg)
+                .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        }
         Ok(crate::handle::PluginHandle::from_wasm(executor))
     }
 }

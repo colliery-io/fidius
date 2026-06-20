@@ -41,10 +41,24 @@ use crate::executor::PluginExecutor;
 use crate::types::PluginInfo;
 
 /// Type alias for the PluginAllocated FFI function pointer signature.
-type FfiFn = unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32;
+/// FIDIUS-A-0006: every method takes the instance pointer first.
+type FfiFn = unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut *mut u8, *mut u32) -> i32;
 
 /// Type alias for the Arena FFI function pointer signature.
-type ArenaFn = unsafe extern "C" fn(*const u8, u32, *mut u8, u32, *mut u32, *mut u32) -> i32;
+type ArenaFn =
+    unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut u8, u32, *mut u32, *mut u32) -> i32;
+
+/// Construct the plugin instance via the descriptor's `construct` (FIDIUS-A-0006).
+/// Empty config bytes = the zero-config / singleton case (CI.1; typed config is CI.2).
+///
+/// # Safety
+/// `descriptor` must point to a valid `PluginDescriptor`.
+unsafe fn construct_instance(descriptor: *const PluginDescriptor, cfg: &[u8]) -> *mut c_void {
+    match (*descriptor).construct {
+        Some(ctor) => ctor(cfg.as_ptr(), cfg.len() as u32),
+        None => std::ptr::null_mut(),
+    }
+}
 
 /// A handle to a loaded plugin, ready for calling methods.
 ///
@@ -73,6 +87,12 @@ pub struct CdylibExecutor {
     method_count: u32,
     /// Owned plugin metadata.
     info: PluginInfo,
+    /// The plugin instance this handle owns (FIDIUS-A-0006), returned by the
+    /// descriptor's `construct` and passed to every vtable method. Freed via
+    /// `destroy` on drop. Null only for a malformed/legacy descriptor.
+    instance: *mut c_void,
+    /// Destructor for `instance` (from the descriptor).
+    destroy: Option<unsafe extern "C" fn(*mut c_void)>,
 }
 
 // SAFETY: CdylibExecutor is Send + Sync because:
@@ -86,6 +106,17 @@ pub struct CdylibExecutor {
 unsafe impl Send for CdylibExecutor {}
 unsafe impl Sync for CdylibExecutor {}
 
+impl Drop for CdylibExecutor {
+    fn drop(&mut self) {
+        // Release the plugin instance this handle owns (FIDIUS-A-0006).
+        if let Some(destroy) = self.destroy {
+            if !self.instance.is_null() {
+                unsafe { destroy(self.instance) };
+            }
+        }
+    }
+}
+
 impl CdylibExecutor {
     /// Create a new CdylibExecutor. Crate-private — use `from_loaded()` instead.
     #[allow(dead_code)]
@@ -98,6 +129,8 @@ impl CdylibExecutor {
         method_count: u32,
         info: PluginInfo,
     ) -> Self {
+        let instance = unsafe { construct_instance(descriptor, &[]) };
+        let destroy = unsafe { (*descriptor).destroy };
         Self {
             _library: Some(library),
             vtable,
@@ -106,11 +139,15 @@ impl CdylibExecutor {
             capabilities,
             method_count,
             info,
+            instance,
+            destroy,
         }
     }
 
     /// Create a CdylibExecutor from a LoadedPlugin.
     pub fn from_loaded(plugin: crate::loader::LoadedPlugin) -> Self {
+        let instance = unsafe { construct_instance(plugin.descriptor, &[]) };
+        let destroy = unsafe { (*plugin.descriptor).destroy };
         Self {
             _library: Some(plugin.library),
             vtable: plugin.vtable,
@@ -119,6 +156,8 @@ impl CdylibExecutor {
             capabilities: plugin.info.capabilities,
             method_count: plugin.method_count,
             info: plugin.info,
+            instance,
+            destroy,
         }
     }
 
@@ -130,6 +169,16 @@ impl CdylibExecutor {
     /// Used by the generated `Client::in_process(plugin_name)` constructor.
     /// Host applications normally use [`CdylibExecutor::from_loaded`] instead.
     pub fn from_descriptor(desc: &'static PluginDescriptor) -> Result<Self, LoadError> {
+        Self::from_descriptor_with_config(desc, &[])
+    }
+
+    /// Like [`Self::from_descriptor`] but constructs the instance from serialized
+    /// config bytes (FIDIUS-A-0006 / CI.2) — the in-process *configured* path.
+    /// `cfg` is bincode of the plugin's config type (empty = the singleton).
+    pub fn from_descriptor_with_config(
+        desc: &'static PluginDescriptor,
+        cfg: &[u8],
+    ) -> Result<Self, LoadError> {
         let info = PluginInfo {
             name: unsafe { desc.plugin_name_str() }.to_string(),
             interface_name: unsafe { desc.interface_name_str() }.to_string(),
@@ -141,14 +190,18 @@ impl CdylibExecutor {
                 .map_err(|v| LoadError::UnknownBufferStrategy { value: v })?,
             runtime: crate::types::PluginRuntimeKind::Cdylib,
         };
+        let descriptor = desc as *const PluginDescriptor;
+        let instance = unsafe { construct_instance(descriptor, cfg) };
         Ok(Self {
             _library: None,
             vtable: desc.vtable,
-            descriptor: desc as *const PluginDescriptor,
+            descriptor,
             free_buffer: desc.free_buffer,
             capabilities: desc.capabilities,
             method_count: desc.method_count,
             info,
+            instance,
+            destroy: desc.destroy,
         })
     }
 
@@ -251,6 +304,7 @@ impl CdylibExecutor {
 
         let status = unsafe {
             fn_ptr(
+                self.instance,
                 input_bytes.as_ptr(),
                 input_bytes.len() as u32,
                 &mut out_ptr,
@@ -338,6 +392,7 @@ impl CdylibExecutor {
         let status = loop {
             let s = unsafe {
                 fn_ptr(
+                    self.instance,
                     input_bytes.as_ptr(),
                     input_bytes.len() as u32,
                     arena.as_mut_ptr(),
@@ -426,6 +481,7 @@ impl CdylibExecutor {
 
         let status = unsafe {
             fn_ptr(
+                self.instance,
                 input_bytes.as_ptr(),
                 input_bytes.len() as u32,
                 &mut out_ptr,
@@ -507,6 +563,7 @@ impl CdylibExecutor {
         let status = loop {
             let s = unsafe {
                 fn_ptr(
+                    self.instance,
                     input_bytes.as_ptr(),
                     input_bytes.len() as u32,
                     arena.as_mut_ptr(),
@@ -613,6 +670,7 @@ impl CdylibExecutor {
         let mut out_len: u32 = 0;
         let status = unsafe {
             init(
+                self.instance,
                 input_bytes.as_ptr(),
                 input_bytes.len() as u32,
                 &mut out_ptr,

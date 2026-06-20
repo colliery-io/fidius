@@ -50,7 +50,7 @@ fn registry_exists_and_is_valid() {
 fn descriptor_fields_are_correct() {
     let reg = get_registry();
     let desc = unsafe { &**reg.descriptors };
-    assert_eq!(desc.abi_version, 400);
+    assert_eq!(desc.abi_version, 500);
     assert_eq!(
         desc.interface_hash,
         __fidius_Greeter::Greeter_INTERFACE_HASH
@@ -73,14 +73,18 @@ fn can_call_shim_via_vtable() {
     let mut out_ptr: *mut u8 = std::ptr::null_mut();
     let mut out_len: u32 = 0;
 
+    // FIDIUS-A-0006: construct an instance and pass it to the method.
+    let inst = unsafe { (desc.construct.unwrap())(std::ptr::null(), 0) };
     let status = unsafe {
         (vtable.greet)(
+            inst,
             input_bytes.as_ptr(),
             input_bytes.len() as u32,
             &mut out_ptr,
             &mut out_len,
         )
     };
+    unsafe { (desc.destroy.unwrap())(inst) };
 
     assert_eq!(status, 0); // STATUS_OK
 

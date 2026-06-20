@@ -1,6 +1,6 @@
 [package]
 name = "fidius-wit"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2021"
 description = "WIT generation for the Fidius WASM backend: maps Rust interface types (incl. #[derive(WitType)] structs/enums) to WIT records/variants, and emits the generated↔author conversions. Shared by fidius-macro, the build helper, and the CLI."
 license = "Apache-2.0"

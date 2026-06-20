@@ -61,7 +61,7 @@ fn both_descriptors_are_valid() {
         .collect();
 
     for desc in &descs {
-        assert_eq!(desc.abi_version, 400);
+        assert_eq!(desc.abi_version, 500);
         assert_eq!(
             desc.interface_hash,
             __fidius_Greeter::Greeter_INTERFACE_HASH
@@ -96,14 +96,17 @@ fn can_call_both_plugins() {
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
         let mut out_len: u32 = 0;
 
+        let inst = unsafe { (desc.construct.unwrap())(std::ptr::null(), 0) };
         let status = unsafe {
             (vtable.greet)(
+                inst,
                 input_bytes.as_ptr(),
                 input_bytes.len() as u32,
                 &mut out_ptr,
                 &mut out_len,
             )
         };
+        unsafe { (desc.destroy.unwrap())(inst) };
         assert_eq!(status, 0);
 
         let output_slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };

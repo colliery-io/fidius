@@ -269,6 +269,53 @@ fn is_blocked_ip(ip: &IpAddr) -> bool {
     }
 }
 
+/// The `wasi:http` version this host provides — matched to `wasmtime-wasi-http`
+/// and the vendored guest WIT (FIDIUS-A-0005). Bump together with a wasmtime
+/// upgrade; the `fidius-guest` pin tripwire + the macro-egress E2E guard the match.
+const HOST_WASI_HTTP: (u32, u32, u32) = (0, 2, 6);
+
+/// Scan a component's import names for a `wasi:http` version this host can't
+/// satisfy, returning a clear, actionable message if so (FIDIUS-A-0005, fail
+/// loud — the same discipline as the `ABI_VERSION` check, on a new axis).
+///
+/// Compatible iff the import is on the host's `major.minor` line and the host's
+/// patch is `>=` the plugin's (WASI 0.2 is forward-compatible: a newer host
+/// satisfies an older import, never the reverse). A host *behind* the plugin, or
+/// a different line (`0.2`→`0.3`), is rejected up front instead of surfacing as a
+/// cryptic instantiate trap. Pulled out as a free fn so it unit-tests without a
+/// real component.
+fn wasi_http_incompatibility<'a>(import_names: impl Iterator<Item = &'a str>) -> Option<String> {
+    let (hmaj, hmin, hpat) = HOST_WASI_HTTP;
+    for name in import_names {
+        let Some(rest) = name.strip_prefix("wasi:http/") else {
+            continue;
+        };
+        let Some(ver) = rest.split('@').nth(1) else {
+            continue;
+        };
+        let parts: Vec<&str> = ver.split('.').collect();
+        if parts.len() != 3 {
+            continue;
+        }
+        let (Ok(maj), Ok(min), Ok(pat)) = (
+            parts[0].parse::<u32>(),
+            parts[1].parse::<u32>(),
+            parts[2].parse::<u32>(),
+        ) else {
+            continue;
+        };
+        if maj == hmaj && min == hmin && pat <= hpat {
+            return None; // a compatible wasi:http import — nothing to flag
+        }
+        return Some(format!(
+            "plugin requires wasi:http {maj}.{min}.{pat}, but this host provides \
+             {hmaj}.{hmin}.{hpat} — upgrade the host (newer wasmtime) or rebuild the \
+             plugin against an older fidius-guest"
+        ));
+    }
+    None
+}
+
 // wasmtime-wasi 45: `IoView` was merged into `WasiView`, whose `ctx` returns a
 // `WasiCtxView<'_>` borrowing both the ctx and the resource table.
 impl WasiView for HostState {
@@ -312,6 +359,17 @@ pub struct WasmComponentExecutor {
     /// the two-key that links `wasi:http`; otherwise egress is impossible.
     egress: Option<Arc<dyn EgressPolicy>>,
     info: PluginInfo,
+    /// FIDIUS-A-0006 / CI.3: when configured, the instance lives in a *persistent*
+    /// store (config bound once via the `fidius-configure` export); method calls
+    /// dispatch on it instead of a fresh per-call store. `None` = zero-config
+    /// (per-call instantiation, the isolation default).
+    configured: Option<std::sync::Mutex<ConfiguredStore>>,
+}
+
+/// A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
+struct ConfiguredStore {
+    store: Store<HostState>,
+    instance: wasmtime::component::Instance,
 }
 
 impl WasmComponentExecutor {
@@ -413,6 +471,20 @@ impl WasmComponentExecutor {
         egress: Option<Arc<dyn EgressPolicy>>,
         info: PluginInfo,
     ) -> Result<Self, CallError> {
+        // Fail loud on a wasi:http version the host can't satisfy (FIDIUS-A-0005),
+        // ahead of the cryptic wasmtime instantiate error.
+        let import_names: Vec<String> = component
+            .component_type()
+            .imports(&engine)
+            .map(|(name, _)| name.to_string())
+            .collect();
+        if let Some(message) = wasi_http_incompatibility(import_names.iter().map(String::as_str)) {
+            return Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message,
+            });
+        }
+
         let mut linker: Linker<HostState> = Linker::new(&engine);
         // WASI present, zero grants (the deny-all/allow-list `WasiCtx` is built
         // fresh per call in `instantiate`).
@@ -445,7 +517,56 @@ impl WasmComponentExecutor {
             capabilities,
             egress,
             info,
+            configured: None,
         })
+    }
+
+    /// Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
+    /// call the guest's `fidius-configure` export with `cfg`, and retain the store
+    /// so subsequent method calls dispatch on the configured instance. `cfg` is
+    /// the bincode of the plugin's config type (empty = the zero-config no-op).
+    pub fn configure(&mut self, cfg: &[u8]) -> Result<(), CallError> {
+        let (mut store, instance) = self.instantiate()?;
+        let func = self.func(&mut store, &instance, "fidius-configure")?;
+        let typed = func
+            .typed::<(Vec<u8>,), ()>(&store)
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: format!("fidius-configure signature: {e}"),
+            })?;
+        typed
+            .call(&mut store, (cfg.to_vec(),))
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+        typed
+            .post_return(&mut store)
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+        self.configured = Some(std::sync::Mutex::new(ConfiguredStore { store, instance }));
+        Ok(())
+    }
+
+    /// Run `f` with a `(store, instance)`: the persistent configured store if
+    /// configured (FIDIUS-A-0006 / CI.3), else a fresh per-call one (isolation).
+    fn with_store<R>(
+        &self,
+        f: impl FnOnce(&mut Store<HostState>, &wasmtime::component::Instance) -> Result<R, CallError>,
+    ) -> Result<R, CallError> {
+        if let Some(cfg) = &self.configured {
+            let mut guard = cfg.lock().map_err(|_| CallError::Backend {
+                runtime: "wasm".into(),
+                message: "configured store mutex poisoned".into(),
+            })?;
+            let ConfiguredStore { store, instance } = &mut *guard;
+            f(store, instance)
+        } else {
+            let (mut store, instance) = self.instantiate()?;
+            f(&mut store, &instance)
+        }
     }
 
     /// Instantiate a fresh sandboxed `Store` + component instance from the cached
@@ -551,39 +672,41 @@ impl PluginExecutor for WasmComponentExecutor {
 
     fn call_raw(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError> {
         let m = self.method(method, true)?.clone();
-        let (mut store, instance) = self.instantiate()?;
-        let func = self.func(&mut store, &instance, &m.name)?;
-        // `#[wire(raw)]` is always `list<u8> -> list<u8>`. Use the *typed* call so
-        // wasmtime lowers/lifts the bytes as a bulk memcpy instead of building a
-        // `Val::List` of one `Val::U8` per byte (the dynamic path turned a 256 KiB
-        // payload into milliseconds — FIDIUS-I-0024).
-        let typed =
-            func.typed::<(Vec<u8>,), (Vec<u8>,)>(&store)
+        self.with_store(|store, instance| {
+            let func = self.func(store, instance, &m.name)?;
+            // `#[wire(raw)]` is always `list<u8> -> list<u8>`. Use the *typed* call
+            // so wasmtime lowers/lifts the bytes as a bulk memcpy instead of a
+            // `Val::List` of one `Val::U8` per byte (FIDIUS-I-0024).
+            let typed =
+                func.typed::<(Vec<u8>,), (Vec<u8>,)>(&*store)
+                    .map_err(|e| CallError::Backend {
+                        runtime: "wasm".into(),
+                        message: format!(
+                            "raw method '{}' is not list<u8> -> list<u8>: {e}",
+                            m.name
+                        ),
+                    })?;
+            let (out,) =
+                typed
+                    .call(&mut *store, (input.to_vec(),))
+                    .map_err(|e| CallError::Backend {
+                        runtime: "wasm".into(),
+                        message: e.to_string(),
+                    })?;
+            typed
+                .post_return(&mut *store)
                 .map_err(|e| CallError::Backend {
                     runtime: "wasm".into(),
-                    message: format!("raw method '{}' is not list<u8> -> list<u8>: {e}", m.name),
+                    message: e.to_string(),
                 })?;
-        let (out,) = typed
-            .call(&mut store, (input.to_vec(),))
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
-        typed
-            .post_return(&mut store)
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
-        Ok(out)
+            Ok(out)
+        })
     }
 }
 
 impl ValueExecutor for WasmComponentExecutor {
     fn call(&self, method: usize, args: Value) -> Result<Value, CallError> {
         let m = self.method(method, false)?.clone();
-        let (mut store, instance) = self.instantiate()?;
-        let func = self.func(&mut store, &instance, &m.name)?;
 
         // The host tuple-packs args into a `Value::List` of positional args.
         let params: Vec<Val> = match args {
@@ -594,22 +717,25 @@ impl ValueExecutor for WasmComponentExecutor {
             single => vec![value_to_val(&single)?],
         };
 
-        let mut out = [Val::Bool(false)];
-        func.call(&mut store, &params, &mut out)
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
+        self.with_store(|store, instance| {
+            let func = self.func(store, instance, &m.name)?;
+            let mut out = [Val::Bool(false)];
+            func.call(&mut *store, &params, &mut out)
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: e.to_string(),
+                })?;
 
-        // A `result<_, plugin-error>` err arm becomes CallError::Plugin.
-        if let Val::Result(Err(payload)) = &out[0] {
-            return Err(plugin_error_from_val(payload.as_deref()));
-        }
-        let ret = match &out[0] {
-            Val::Result(Ok(inner)) => inner.as_deref().map(val_to_value).unwrap_or(Value::Unit),
-            other => val_to_value(other),
-        };
-        Ok(ret)
+            // A `result<_, plugin-error>` err arm becomes CallError::Plugin.
+            if let Val::Result(Err(payload)) = &out[0] {
+                return Err(plugin_error_from_val(payload.as_deref()));
+            }
+            let ret = match &out[0] {
+                Val::Result(Ok(inner)) => inner.as_deref().map(val_to_value).unwrap_or(Value::Unit),
+                other => val_to_value(other),
+            };
+            Ok(ret)
+        })
     }
 }
 
@@ -632,6 +758,22 @@ impl crate::stream::StreamExecutor for WasmComponentExecutor {
             return Err(CallError::Backend {
                 runtime: "wasm".into(),
                 message: format!("method '{}' is not a server-streaming method", m.name),
+            });
+        }
+        // FIDIUS-A-0006 / CI.3: streaming dispatches on a fresh per-call store (a
+        // stream borrows its store for the stream's lifetime), so it can't share
+        // the configured instance's persistent store. Configured + streaming is a
+        // documented follow-on; fail clearly rather than instantiate an unconfigured
+        // store (whose OnceLock instance would be empty).
+        if self.configured.is_some() {
+            return Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: format!(
+                    "method '{}': server-streaming on a configured WASM instance is not yet \
+                     supported (the stream needs its own store); use a unary method, or a \
+                     zero-config streaming plugin",
+                    m.name
+                ),
             });
         }
 
@@ -950,5 +1092,43 @@ mod ssrf_tests {
         ] {
             assert!(!is_blocked_ip(&ip(s)), "{s} must be allowed");
         }
+    }
+}
+
+#[cfg(test)]
+mod wasi_http_version_tests {
+    use super::*;
+
+    #[test]
+    fn host_matched_version_is_compatible() {
+        // 0.2.6 (the pin) and any older patch on the same line load fine.
+        assert!(wasi_http_incompatibility(["wasi:http/types@0.2.6"].into_iter()).is_none());
+        assert!(
+            wasi_http_incompatibility(["wasi:http/outgoing-handler@0.2.0"].into_iter()).is_none()
+        );
+    }
+
+    #[test]
+    fn newer_minor_or_patch_is_rejected_with_a_clear_message() {
+        // Patch ahead of the host (the exact `wasi` crate 0.2.12 skew that broke
+        // the fetcher) — and a different line — must fail loud, naming versions.
+        for bad in ["wasi:http/types@0.2.12", "wasi:http/types@0.3.0"] {
+            let msg = wasi_http_incompatibility([bad].into_iter())
+                .unwrap_or_else(|| panic!("{bad} should be rejected"));
+            assert!(msg.contains("plugin requires wasi:http"), "{msg}");
+            assert!(
+                msg.contains("0.2.6"),
+                "message names the host version: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_wasi_http_import_is_fine() {
+        // A plugin that never imports wasi:http isn't gated on it.
+        assert!(wasi_http_incompatibility(
+            ["wasi:cli/environment@0.2.6", "wasi:io/streams@0.2.6"].into_iter()
+        )
+        .is_none());
     }
 }
