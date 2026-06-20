@@ -315,6 +315,11 @@ pub fn render_wit_full(iface_kebab: &str, type_defs: &[String], methods: &[WitMe
         }
     }
     s.push_str("    fidius-interface-hash: func() -> u64;\n");
+    // FIDIUS-A-0006 / CI.3: configured-instance constructor. The host calls it
+    // once to bind config (empty bytes for a zero-config plugin); the guest sets
+    // its instance. A carrier like fidius-interface-hash — not part of the
+    // interface hash (which derives from the trait method signatures).
+    s.push_str("    fidius-configure: func(config: list<u8>);\n");
     s.push_str("}\n\n");
     s.push_str(&format!(
         "world {iface_kebab}-plugin {{\n    export {iface_kebab};\n}}\n"

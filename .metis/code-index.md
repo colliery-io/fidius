@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T02:38:37Z | 144 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T12:32:45Z | 147 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -70,6 +70,8 @@
 │   │   └── tests/
 │   │       ├── cdylib_streaming_e2e.rs
 │   │       ├── configured_cdylib_e2e.rs
+│   │       ├── configured_python_e2e.rs
+│   │       ├── configured_wasm_e2e.rs
 │   │       ├── e2e.rs
 │   │       ├── integration.rs
 │   │       ├── macro_egress_e2e.rs
@@ -188,6 +190,8 @@
 │   └── tests/
 │       └── test_sdk.py
 ├── tests/
+│   ├── test-plugin-py-configured/
+│   │   └── configured_pipe.py
 │   ├── test-plugin-py-greeter/
 │   │   └── byte_pipe.py
 │   ├── test-plugin-py-ticker/
@@ -208,6 +212,9 @@
 │       │   └── greeter.js
 │       ├── greeter-py/
 │       │   └── app.py
+│       ├── macro-configured/
+│       │   └── src/
+│       │       └── lib.rs
 │       ├── macro-fetcher/
 │       │   └── src/
 │       │       └── lib.rs
@@ -233,12 +240,9 @@
     ├── guest/
     │   └── src/
     │       └── lib.rs
-    ├── host/
-    │   └── src/
-    │       └── main.rs
-    └── twogen/
+    └── host/
         └── src/
-            └── lib.rs
+            └── main.rs
 ```
 
 ## Modules
@@ -955,16 +959,18 @@
 - pub `load` function L241-285 — `(&self, name: &str) -> Result<LoadedPlugin, LoadError>` — Load a specific plugin by name.
 - pub `find_python_package` function L290-320 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a python plugin package directory by name across the configured
 - pub `load_python` function L332-359 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a Python plugin package by name and validate it against the
-- pub `find_wasm_package` function L364-390 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
-- pub `load_wasm` function L407-413 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
-- pub `load_wasm_with_egress` function L421-428 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
+- pub `load_python_configured` function L367-393 — `( &self, name: &str, descriptor: &'static fidius_core::python_descriptor::Python...` — Load a **configured** Python plugin (FIDIUS-A-0006 / CI.4): serialize
+- pub `find_wasm_package` function L398-424 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
+- pub `load_wasm` function L441-447 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
+- pub `load_wasm_configured` function L455-464 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a **configured** WASM plugin (FIDIUS-A-0006 / CI.3): serialize
+- pub `load_wasm_with_egress` function L472-479 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
 -  `PluginHostBuilder` type L57-142 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
 -  `new` function L58-69 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L144-544 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `PluginHost` type L144-604 — `= PluginHost` — PluginHost builder and plugin discovery.
 -  `discover_cdylib` function L186-206 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
 -  `discover_package` function L211-235 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — Discover a directory-based package (`package.toml`) and surface it by
--  `load_wasm_impl` function L431-543 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — PluginHost builder and plugin discovery.
--  `is_dylib` function L547-556 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+-  `load_wasm_impl` function L482-603 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L607-616 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
 
 #### crates/fidius-host/src/lib.rs
 
@@ -1106,14 +1112,15 @@
 - pub `new` function L62-66 — `(reason: impl Into<String>) -> Self` — A denial with a reason.
 - pub `EgressPolicy` interface L82-85 — `{ fn authorize() }` — Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP**
 - pub `WasmMethod` struct L332-340 — `{ name: String, wire_raw: bool, streaming: bool }` — A method on the WASM interface, in declaration (vtable) order.
-- pub `WasmComponentExecutor` struct L343-362 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
-- pub `from_component_bytes` function L367-375 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
-- pub `from_component_bytes_with_egress` function L380-403 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
-- pub `from_cwasm` function L411-419 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
-- pub `from_cwasm_with_egress` function L427-450 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
-- pub `interface_hash` function L585-601 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
-- pub `validate_component` function L952-960 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
-- pub `precompile_component` function L966-974 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+- pub `WasmComponentExecutor` struct L343-367 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
+- pub `from_component_bytes` function L378-386 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
+- pub `from_component_bytes_with_egress` function L391-414 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
+- pub `from_cwasm` function L422-430 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
+- pub `from_cwasm_with_egress` function L438-461 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
+- pub `configure` function L528-551 — `(&mut self, cfg: &[u8]) -> Result<(), CallError>` — Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
+- pub `interface_hash` function L645-661 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
+- pub `validate_component` function L1033-1041 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L1047-1055 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
 -  `EgressDenied` type L60-67 — `= EgressDenied` — from the package manifest's allow-list.
 -  `EgressHooks` struct L92-94 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
 -  `EgressHooks` type L96-116 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
@@ -1129,34 +1136,36 @@
 -  `wasi_http_incompatibility` function L287-317 — `(import_names: impl Iterator<Item = &'a str>) -> Option<String>` — Scan a component's import names for a `wasi:http` version this host can't
 -  `HostState` type L321-328 — `impl WasiView for HostState` — from the package manifest's allow-list.
 -  `ctx` function L322-327 — `(&mut self) -> WasiCtxView<'_>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L364-602 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `build` function L454-510 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
--  `instantiate` function L515-533 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
--  `func` function L536-563 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
--  `method` function L565-581 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L604-641 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `info` function L605-607 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
--  `method_count` function L609-611 — `(&self) -> u32` — from the package manifest's allow-list.
--  `call_raw` function L613-640 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L643-675 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `call` function L644-674 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
--  `STREAM_CHANNEL_CAP` variable L681 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
--  `WasmComponentExecutor` type L685-788 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `call_streaming` function L686-787 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
--  `plugin_error_from_val` function L792-818 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
--  `to_kebab` function L823-838 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
--  `kebab_to_snake` function L841-843 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
--  `kebab_to_pascal` function L846-856 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
--  `value_to_val` function L858-901 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
--  `val_to_value` function L904-942 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
--  `ssrf_tests` module L977-1015 — `-` — from the package manifest's allow-list.
--  `ip` function L981-983 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
--  `blocks_internal_and_metadata_targets` function L986-1002 — `()` — from the package manifest's allow-list.
--  `allows_public_targets` function L1005-1014 — `()` — from the package manifest's allow-list.
--  `wasi_http_version_tests` module L1018-1053 — `-` — from the package manifest's allow-list.
--  `host_matched_version_is_compatible` function L1022-1028 — `()` — from the package manifest's allow-list.
--  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1031-1043 — `()` — from the package manifest's allow-list.
--  `no_wasi_http_import_is_fine` function L1046-1052 — `()` — from the package manifest's allow-list.
+-  `ConfiguredStore` struct L370-373 — `{ store: Store<HostState>, instance: wasmtime::component::Instance }` — A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
+-  `WasmComponentExecutor` type L375-662 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `build` function L465-522 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
+-  `with_store` function L555-570 — `( &self, f: impl FnOnce(&mut Store<HostState>, &wasmtime::component::Instance) -...` — Run `f` with a `(store, instance)`: the persistent configured store if
+-  `instantiate` function L575-593 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
+-  `func` function L596-623 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
+-  `method` function L625-641 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L664-705 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `info` function L665-667 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
+-  `method_count` function L669-671 — `(&self) -> u32` — from the package manifest's allow-list.
+-  `call_raw` function L673-704 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L707-740 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call` function L708-739 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
+-  `STREAM_CHANNEL_CAP` variable L746 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
+-  `WasmComponentExecutor` type L750-869 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call_streaming` function L751-868 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
+-  `plugin_error_from_val` function L873-899 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
+-  `to_kebab` function L904-919 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
+-  `kebab_to_snake` function L922-924 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
+-  `kebab_to_pascal` function L927-937 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
+-  `value_to_val` function L939-982 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
+-  `val_to_value` function L985-1023 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
+-  `ssrf_tests` module L1058-1096 — `-` — from the package manifest's allow-list.
+-  `ip` function L1062-1064 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
+-  `blocks_internal_and_metadata_targets` function L1067-1083 — `()` — from the package manifest's allow-list.
+-  `allows_public_targets` function L1086-1095 — `()` — from the package manifest's allow-list.
+-  `wasi_http_version_tests` module L1099-1134 — `-` — from the package manifest's allow-list.
+-  `host_matched_version_is_compatible` function L1103-1109 — `()` — from the package manifest's allow-list.
+-  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1112-1124 — `()` — from the package manifest's allow-list.
+-  `no_wasi_http_import_is_fine` function L1127-1133 — `()` — from the package manifest's allow-list.
 
 ### crates/fidius-host/tests
 
@@ -1180,6 +1189,25 @@
 -  `configure` function L47-49 — `(cfg: GreetConfig) -> Self` — differently-configured instances coexist in one host.
 -  `config_bound_once_and_used_in_methods` function L55-67 — `()` — differently-configured instances coexist in one host.
 -  `n_differently_configured_instances_coexist` function L70-90 — `()` — differently-configured instances coexist in one host.
+
+#### crates/fidius-host/tests/configured_python_e2e.rs
+
+-  `PipeConfig` struct L31-33 — `{ display_name: String }` — macro-generated descriptor); `name()` returns the configured display name.
+-  `byte_pipe_descriptor` function L35-37 — `() -> &'static PythonInterfaceDescriptor` — macro-generated descriptor); `name()` returns the configured display name.
+-  `repo_root` function L39-46 — `() -> PathBuf` — macro-generated descriptor); `name()` returns the configured display name.
+-  `copy_dir` function L48-60 — `(src: &Path, dst: &Path)` — macro-generated descriptor); `name()` returns the configured display name.
+-  `stage` function L64-81 — `(tmp: &tempfile::TempDir) -> PathBuf` — Stage the configured fixture: copy it, vendor the SDK, and bake the real
+-  `config_bound_once_and_used_in_methods` function L84-106 — `()` — macro-generated descriptor); `name()` returns the configured display name.
+
+#### crates/fidius-host/tests/configured_wasm_e2e.rs
+
+- pub `Greeter` interface L38-40 — `{ fn greet() }` — configured instances coexist (each its own store).
+-  `Cfg` struct L32-34 — `{ greeting: String }` — configured instances coexist (each its own store).
+-  `component` function L42-55 — `() -> &'static [u8]` — configured instances coexist (each its own store).
+-  `BYTES` variable L43 — `: OnceLock<Vec<u8>>` — configured instances coexist (each its own store).
+-  `stage` function L57-68 — `(root: &std::path::Path)` — configured instances coexist (each its own store).
+-  `config_bound_once_and_used_in_methods` function L71-95 — `()` — configured instances coexist (each its own store).
+-  `n_differently_configured_instances_coexist` function L98-128 — `()` — configured instances coexist (each its own store).
 
 #### crates/fidius-host/tests/e2e.rs
 
@@ -1420,22 +1448,22 @@
 #### crates/fidius-macro/src/impl_macro.rs
 
 - pub `PluginImplAttrs` struct L106-120 — `{ trait_name: Ident, crate_path: Path, buffer_strategy: BufferStrategyAttr, conf...` — Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`,
-- pub `generate_plugin_impl` function L180-319 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
+- pub `generate_plugin_impl` function L180-336 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
 -  `MethodInfo` struct L31-51 — `{ name: &'a Ident, is_async: bool, returns_result: bool, arg_types: Vec<&'a Type...` — Info about an impl method, extracted from the impl block.
 -  `impl_method_is_raw` function L56-73 — `(attrs: &[syn::Attribute]) -> syn::Result<bool>` — Detect a `#[wire(raw)]` attribute on an impl-side method.
 -  `kebab_to_pascal` function L78-88 — `(s: &str) -> String` — kebab-case → PascalCase, for deriving the wit-bindgen resource type name from
 -  `is_result_type` function L91-102 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
 -  `PluginImplAttrs` type L122-177 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
 -  `parse` function L123-176 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `generate_wasm_adapter` function L329-597 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], ) -> TokenS...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
--  `collect_user_idents` function L601-646 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
--  `gen_type` function L651-677 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
--  `wasm_first_generic` function L679-688 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `wasm_unsupported` function L694-704 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
--  `generate_shims` function L708-1021 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L1027-1049 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L1052-1178 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L1181-1192 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+-  `generate_wasm_adapter` function L346-640 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], config: Opt...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
+-  `collect_user_idents` function L644-689 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
+-  `gen_type` function L694-720 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
+-  `wasm_first_generic` function L722-731 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `wasm_unsupported` function L737-747 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
+-  `generate_shims` function L751-1064 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
+-  `generate_vtable_static` function L1070-1092 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L1095-1221 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L1224-1235 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### crates/fidius-macro/src/interface.rs
 
@@ -1717,11 +1745,12 @@
 #### crates/fidius-python/src/loader.rs
 
 - pub `PythonLoadError` enum L47-82 — `Manifest | NotPythonRuntime | MissingPythonSection | ImportFailed | InterfaceHas...` — Errors that can happen during Python plugin load.
-- pub `load_python_plugin` function L89-139 — `( package_dir: &Path, descriptor: &'static PythonInterfaceDescriptor, ) -> Resul...` — Load a Python plugin package against a static interface descriptor.
--  `prepend_sys_path` function L144-173 — `(py: Python<'_>, dir: &Path) -> Result<(), PythonLoadError>` — Prepend `<dir>/vendor` and `<dir>` to `sys.path` if not already present.
--  `validate_interface_hash` function L175-197 — `( module: &Bound<'_, PyModule>, descriptor: &'static PythonInterfaceDescriptor, ...` — All Python work happens in the host's embedded interpreter (T-0085).
--  `resolve_methods` function L199-227 — `( module: &Bound<'_, PyModule>, descriptor: &'static PythonInterfaceDescriptor, ...` — All Python work happens in the host's embedded interpreter (T-0085).
--  `import_failure` function L229-235 — `(what: &str, err: PyErr) -> PythonLoadError` — All Python work happens in the host's embedded interpreter (T-0085).
+- pub `load_python_plugin` function L89-143 — `( package_dir: &Path, descriptor: &'static PythonInterfaceDescriptor, ) -> Resul...` — Load a Python plugin package against a static interface descriptor.
+- pub `load_python_plugin_configured` function L150-208 — `( package_dir: &Path, descriptor: &'static PythonInterfaceDescriptor, config: &s...` — Load a **configured** Python plugin instance (FIDIUS-A-0006 / CI.4): import the
+-  `prepend_sys_path` function L213-242 — `(py: Python<'_>, dir: &Path) -> Result<(), PythonLoadError>` — Prepend `<dir>/vendor` and `<dir>` to `sys.path` if not already present.
+-  `validate_interface_hash` function L244-266 — `( module: &Bound<'_, PyModule>, descriptor: &'static PythonInterfaceDescriptor, ...` — All Python work happens in the host's embedded interpreter (T-0085).
+-  `resolve_methods` function L268-293 — `( obj: &Bound<'_, PyAny>, descriptor: &'static PythonInterfaceDescriptor, ctx_na...` — All Python work happens in the host's embedded interpreter (T-0085).
+-  `import_failure` function L295-301 — `(what: &str, err: PyErr) -> PythonLoadError` — All Python work happens in the host's embedded interpreter (T-0085).
 
 #### crates/fidius-python/src/stream.rs
 
@@ -1887,27 +1916,27 @@
 - pub `return_to_wit` function L191-193 — `(ret: Option<&Type>) -> Result<Option<String>, String>` — Primitive/std-only return mapping (no user types).
 - pub `struct_to_record` function L198-215 — `(item: &ItemStruct, known: &BTreeSet<String>) -> Result<String, String>` — Render a `record <name> { ...
 - pub `enum_to_wit` function L225-268 — `( item: &ItemEnum, known: &BTreeSet<String>, ) -> Result<(Vec<String>, String), ...` — Render a Rust enum to WIT: a `variant <name> { ...
-- pub `render_wit_full` function L274-323 — `(iface_kebab: &str, type_defs: &[String], methods: &[WitMethod]) -> String` — Render a complete `.wit` document: package + interface (the `plugin-error`
-- pub `render_wit` function L327-329 — `(iface_kebab: &str, methods: &[WitMethod]) -> String` — Convenience: render a WIT document with no user type defs (the primitives-only
+- pub `render_wit_full` function L274-328 — `(iface_kebab: &str, type_defs: &[String], methods: &[WitMethod]) -> String` — Render a complete `.wit` document: package + interface (the `plugin-error`
+- pub `render_wit` function L332-334 — `(iface_kebab: &str, methods: &[WitMethod]) -> String` — Convenience: render a WIT document with no user type defs (the primitives-only
 -  `generate` module L30 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
--  `is_unit` function L333-335 — `(ty: &Type) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
--  `path_is` function L337-343 — `(p: &syn::TypePath, name: &str) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
--  `single_generic` function L345-347 — `(seg: &'a syn::PathSegment, what: &str) -> Result<&'a Type, String>` — helper, and the `fidius wit` CLI can all share one implementation.
--  `first_generic` function L349-358 — `(seg: &syn::PathSegment) -> Option<&Type>` — helper, and the `fidius wit` CLI can all share one implementation.
--  `tests` module L361-513 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
--  `known` function L364-366 — `(names: &[&str]) -> BTreeSet<String>` — helper, and the `fidius wit` CLI can all share one implementation.
--  `wit` function L367-369 — `(s: &str) -> String` — helper, and the `fidius wit` CLI can all share one implementation.
--  `primitives_strings_containers` function L372-380 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `returns` function L383-394 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `user_types_need_the_known_set` function L397-410 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `struct_renders_to_record` function L413-419 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `struct_with_nested_user_type` function L422-427 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `enum_renders_to_variant` function L430-439 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `struct_variant_synthesizes_a_record` function L442-451 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `multifield_tuple_variant_is_rejected` function L454-457 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `full_document_places_type_defs_before_funcs` function L460-483 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `streaming_method_renders_a_resource` function L486-501 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
--  `stream_item_type_detects_marker` function L504-512 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `is_unit` function L338-340 — `(ty: &Type) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `path_is` function L342-348 — `(p: &syn::TypePath, name: &str) -> bool` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `single_generic` function L350-352 — `(seg: &'a syn::PathSegment, what: &str) -> Result<&'a Type, String>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `first_generic` function L354-363 — `(seg: &syn::PathSegment) -> Option<&Type>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `tests` module L366-518 — `-` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `known` function L369-371 — `(names: &[&str]) -> BTreeSet<String>` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `wit` function L372-374 — `(s: &str) -> String` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `primitives_strings_containers` function L377-385 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `returns` function L388-399 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `user_types_need_the_known_set` function L402-415 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_renders_to_record` function L418-424 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_with_nested_user_type` function L427-432 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `enum_renders_to_variant` function L435-444 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `struct_variant_synthesizes_a_record` function L447-456 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `multifield_tuple_variant_is_rejected` function L459-462 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `full_document_places_type_defs_before_funcs` function L465-488 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `streaming_method_renders_a_resource` function L491-506 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
+-  `stream_item_type_detects_marker` function L509-517 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
 
 ### pluggable-poc/crates/emit-console/src
 
@@ -2202,6 +2231,18 @@
 - pub `test_plugin_error_details_optional` function L100-102 — `def test_plugin_error_details_optional()`
 - pub `test_module_importable_from_vendor_layout` function L105-134 — `def test_module_importable_from_vendor_layout(tmp_path)` — Simulate the vendored-load pattern: copy fidius/ into a temp dir,
 
+### tests/test-plugin-py-configured
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/test-plugin-py-configured/configured_pipe.py
+
+- pub `ConfiguredPipe` class L14-22 — `{ __init__, reverse, name }`
+- pub `__init__` method L15-16 — `def __init__(self, config)`
+- pub `reverse` method L18-19 — `def reverse(self, data)`
+- pub `name` method L21-22 — `def name(self)`
+- pub `__fidius_configure__` function L25-27 — `def __fidius_configure__(config)` — Bind the config once and return the configured instance.
+
 ### tests/test-plugin-smoke/src
 
 > *Semantic summary to be generated by AI agent.*
@@ -2282,6 +2323,20 @@
 - pub `echo_bytes` method L24-25 — `def echo_bytes(self, data: bytes) -> bytes`
 - pub `probe_env` method L27-29 — `def probe_env(self) -> bool`
 - pub `fidius_interface_hash` method L31-33 — `def fidius_interface_hash(self) -> int`
+
+### tests/wasm-fixtures/macro-configured/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/macro-configured/src/lib.rs
+
+- pub `Cfg` struct L12-14 — `{ greeting: String }`
+- pub `Greeter` interface L17-19 — `{ fn greet() }`
+- pub `ConfGreeter` struct L21-23 — `{ cfg: Cfg }`
+-  `ConfGreeter` type L26-30 — `impl Greeter for ConfGreeter`
+-  `greet` function L27-29 — `(&self, name: String) -> String`
+-  `ConfGreeter` type L32-36 — `= ConfGreeter`
+-  `configure` function L33-35 — `(cfg: Cfg) -> Self`
 
 ### tests/wasm-fixtures/macro-fetcher/src
 
@@ -2404,17 +2459,4 @@
 -  `bench` function L33-42 — `(iters: u32, mut f: F) -> f64` — Run: cargo run --release -- <path-to-guest.wasm>
 -  `round_trip` function L46-68 — `( store: &mut Store<()>, memory: &wasmtime::Memory, alloc: &TypedFunc<u32, u32>,...` — One raw-wire round trip on a warm instance: write `input` into guest memory
 -  `main` function L70-164 — `()` — Run: cargo run --release -- <path-to-guest.wasm>
-
-### wasm-spike/twogen/src
-
-> *Semantic summary to be generated by AI agent.*
-
-#### wasm-spike/twogen/src/lib.rs
-
-- pub `Impl` struct L12 — `-`
-- pub `touch` function L29-32 — `() -> u32` — Touch a wasi:http type so the import is retained (not DCE'd).
--  `exp` module L6-19 — `-`
--  `Impl` type L13-17 — `impl Guest for Impl`
--  `ping` function L14-16 — `() -> u32`
--  `client` module L22-33 — `-`
 

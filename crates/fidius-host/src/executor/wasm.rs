@@ -359,6 +359,17 @@ pub struct WasmComponentExecutor {
     /// the two-key that links `wasi:http`; otherwise egress is impossible.
     egress: Option<Arc<dyn EgressPolicy>>,
     info: PluginInfo,
+    /// FIDIUS-A-0006 / CI.3: when configured, the instance lives in a *persistent*
+    /// store (config bound once via the `fidius-configure` export); method calls
+    /// dispatch on it instead of a fresh per-call store. `None` = zero-config
+    /// (per-call instantiation, the isolation default).
+    configured: Option<std::sync::Mutex<ConfiguredStore>>,
+}
+
+/// A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
+struct ConfiguredStore {
+    store: Store<HostState>,
+    instance: wasmtime::component::Instance,
 }
 
 impl WasmComponentExecutor {
@@ -506,7 +517,56 @@ impl WasmComponentExecutor {
             capabilities,
             egress,
             info,
+            configured: None,
         })
+    }
+
+    /// Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
+    /// call the guest's `fidius-configure` export with `cfg`, and retain the store
+    /// so subsequent method calls dispatch on the configured instance. `cfg` is
+    /// the bincode of the plugin's config type (empty = the zero-config no-op).
+    pub fn configure(&mut self, cfg: &[u8]) -> Result<(), CallError> {
+        let (mut store, instance) = self.instantiate()?;
+        let func = self.func(&mut store, &instance, "fidius-configure")?;
+        let typed = func
+            .typed::<(Vec<u8>,), ()>(&store)
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: format!("fidius-configure signature: {e}"),
+            })?;
+        typed
+            .call(&mut store, (cfg.to_vec(),))
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+        typed
+            .post_return(&mut store)
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+        self.configured = Some(std::sync::Mutex::new(ConfiguredStore { store, instance }));
+        Ok(())
+    }
+
+    /// Run `f` with a `(store, instance)`: the persistent configured store if
+    /// configured (FIDIUS-A-0006 / CI.3), else a fresh per-call one (isolation).
+    fn with_store<R>(
+        &self,
+        f: impl FnOnce(&mut Store<HostState>, &wasmtime::component::Instance) -> Result<R, CallError>,
+    ) -> Result<R, CallError> {
+        if let Some(cfg) = &self.configured {
+            let mut guard = cfg.lock().map_err(|_| CallError::Backend {
+                runtime: "wasm".into(),
+                message: "configured store mutex poisoned".into(),
+            })?;
+            let ConfiguredStore { store, instance } = &mut *guard;
+            f(store, instance)
+        } else {
+            let (mut store, instance) = self.instantiate()?;
+            f(&mut store, &instance)
+        }
     }
 
     /// Instantiate a fresh sandboxed `Store` + component instance from the cached
@@ -612,39 +672,41 @@ impl PluginExecutor for WasmComponentExecutor {
 
     fn call_raw(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError> {
         let m = self.method(method, true)?.clone();
-        let (mut store, instance) = self.instantiate()?;
-        let func = self.func(&mut store, &instance, &m.name)?;
-        // `#[wire(raw)]` is always `list<u8> -> list<u8>`. Use the *typed* call so
-        // wasmtime lowers/lifts the bytes as a bulk memcpy instead of building a
-        // `Val::List` of one `Val::U8` per byte (the dynamic path turned a 256 KiB
-        // payload into milliseconds — FIDIUS-I-0024).
-        let typed =
-            func.typed::<(Vec<u8>,), (Vec<u8>,)>(&store)
+        self.with_store(|store, instance| {
+            let func = self.func(store, instance, &m.name)?;
+            // `#[wire(raw)]` is always `list<u8> -> list<u8>`. Use the *typed* call
+            // so wasmtime lowers/lifts the bytes as a bulk memcpy instead of a
+            // `Val::List` of one `Val::U8` per byte (FIDIUS-I-0024).
+            let typed =
+                func.typed::<(Vec<u8>,), (Vec<u8>,)>(&*store)
+                    .map_err(|e| CallError::Backend {
+                        runtime: "wasm".into(),
+                        message: format!(
+                            "raw method '{}' is not list<u8> -> list<u8>: {e}",
+                            m.name
+                        ),
+                    })?;
+            let (out,) =
+                typed
+                    .call(&mut *store, (input.to_vec(),))
+                    .map_err(|e| CallError::Backend {
+                        runtime: "wasm".into(),
+                        message: e.to_string(),
+                    })?;
+            typed
+                .post_return(&mut *store)
                 .map_err(|e| CallError::Backend {
                     runtime: "wasm".into(),
-                    message: format!("raw method '{}' is not list<u8> -> list<u8>: {e}", m.name),
+                    message: e.to_string(),
                 })?;
-        let (out,) = typed
-            .call(&mut store, (input.to_vec(),))
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
-        typed
-            .post_return(&mut store)
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
-        Ok(out)
+            Ok(out)
+        })
     }
 }
 
 impl ValueExecutor for WasmComponentExecutor {
     fn call(&self, method: usize, args: Value) -> Result<Value, CallError> {
         let m = self.method(method, false)?.clone();
-        let (mut store, instance) = self.instantiate()?;
-        let func = self.func(&mut store, &instance, &m.name)?;
 
         // The host tuple-packs args into a `Value::List` of positional args.
         let params: Vec<Val> = match args {
@@ -655,22 +717,25 @@ impl ValueExecutor for WasmComponentExecutor {
             single => vec![value_to_val(&single)?],
         };
 
-        let mut out = [Val::Bool(false)];
-        func.call(&mut store, &params, &mut out)
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
+        self.with_store(|store, instance| {
+            let func = self.func(store, instance, &m.name)?;
+            let mut out = [Val::Bool(false)];
+            func.call(&mut *store, &params, &mut out)
+                .map_err(|e| CallError::Backend {
+                    runtime: "wasm".into(),
+                    message: e.to_string(),
+                })?;
 
-        // A `result<_, plugin-error>` err arm becomes CallError::Plugin.
-        if let Val::Result(Err(payload)) = &out[0] {
-            return Err(plugin_error_from_val(payload.as_deref()));
-        }
-        let ret = match &out[0] {
-            Val::Result(Ok(inner)) => inner.as_deref().map(val_to_value).unwrap_or(Value::Unit),
-            other => val_to_value(other),
-        };
-        Ok(ret)
+            // A `result<_, plugin-error>` err arm becomes CallError::Plugin.
+            if let Val::Result(Err(payload)) = &out[0] {
+                return Err(plugin_error_from_val(payload.as_deref()));
+            }
+            let ret = match &out[0] {
+                Val::Result(Ok(inner)) => inner.as_deref().map(val_to_value).unwrap_or(Value::Unit),
+                other => val_to_value(other),
+            };
+            Ok(ret)
+        })
     }
 }
 
@@ -693,6 +758,22 @@ impl crate::stream::StreamExecutor for WasmComponentExecutor {
             return Err(CallError::Backend {
                 runtime: "wasm".into(),
                 message: format!("method '{}' is not a server-streaming method", m.name),
+            });
+        }
+        // FIDIUS-A-0006 / CI.3: streaming dispatches on a fresh per-call store (a
+        // stream borrows its store for the stream's lifetime), so it can't share
+        // the configured instance's persistent store. Configured + streaming is a
+        // documented follow-on; fail clearly rather than instantiate an unconfigured
+        // store (whose OnceLock instance would be empty).
+        if self.configured.is_some() {
+            return Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: format!(
+                    "method '{}': server-streaming on a configured WASM instance is not yet \
+                     supported (the stream needs its own store); use a unary method, or a \
+                     zero-config streaming plugin",
+                    m.name
+                ),
             });
         }
 

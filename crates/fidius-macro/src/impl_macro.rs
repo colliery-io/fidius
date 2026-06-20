@@ -256,15 +256,32 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     // Static singleton — now used ONLY by the wasm adapter (FIDIUS-A-0006: the
     // cdylib path constructs instances via the descriptor's `construct`).
     let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
-    let instance = quote! {
-        #[cfg(target_family = "wasm")]
-        static #instance_name: #impl_type = #impl_type;
+    // FIDIUS-A-0006 / CI.3: a configured wasm plugin holds its instance in a
+    // `OnceLock` set by the `fidius-configure` export (bound once); zero-config
+    // keeps the unit singleton.
+    let instance = if attrs.config.is_some() {
+        quote! {
+            #[cfg(target_family = "wasm")]
+            static #instance_name: ::std::sync::OnceLock<#impl_type> = ::std::sync::OnceLock::new();
+        }
+    } else {
+        quote! {
+            #[cfg(target_family = "wasm")]
+            static #instance_name: #impl_type = #impl_type;
+        }
     };
 
     // WASM Component Model auto-export (FIDIUS-T-0106). Emitted under
     // `#[cfg(target_family = "wasm")]`; handles both unary and (FIDIUS-I-0026)
     // server-streaming methods. cdylib/Python builds cfg this out entirely.
-    let wasm_adapter = generate_wasm_adapter(trait_name, &instance_name, &impl_methods);
+    let wasm_adapter = generate_wasm_adapter(
+        trait_name,
+        &instance_name,
+        &impl_methods,
+        attrs.config.as_ref(),
+        crate_path,
+        impl_type,
+    );
 
     // The cdylib FFI machinery — shims (unary or, for streaming methods, the
     // iterator-handle init/next/drop), vtable, descriptor, registration. All
@@ -330,6 +347,9 @@ fn generate_wasm_adapter(
     trait_name: &Ident,
     instance_name: &Ident,
     methods: &[MethodInfo],
+    config: Option<&Path>,
+    crate_path: &Path,
+    impl_type: &Type,
 ) -> TokenStream {
     use crate::wit::{
         conv_expr, render_wit, result_ok_type, return_to_wit, return_to_wit_with, rust_type_to_wit,
@@ -341,6 +361,27 @@ fn generate_wasm_adapter(
     let iface_snake = iface_kebab.replace('-', "_");
     let pkg_seg = format_ident!("{}", iface_snake);
     let world = format!("{iface_kebab}-plugin");
+
+    // FIDIUS-A-0006 / CI.3: the WIT always declares `fidius-configure`, so the
+    // Guest always implements it — a no-op for a zero-config plugin, or
+    // deserialize-and-set the OnceLock instance for a configured one. Methods
+    // dispatch on the static singleton (zero-config) or the configured instance.
+    let dispatch_self = if config.is_some() {
+        quote! { super::#instance_name.get().expect("fidius: plugin method called before configure()") }
+    } else {
+        quote! { super::#instance_name }
+    };
+    let configure_item = if let Some(cfg_ty) = config {
+        quote! {
+            fn fidius_configure(config: ::std::vec::Vec<u8>) {
+                let cfg: #cfg_ty = #crate_path::wire::deserialize(&config)
+                    .expect("fidius: configure failed to deserialize config");
+                let _ = super::#instance_name.set(<#impl_type>::configure(cfg));
+            }
+        }
+    } else {
+        quote! { fn fidius_configure(_config: ::std::vec::Vec<u8>) {} }
+    };
     // The interface-hash const lives in the `#[plugin_interface]` companion
     // module (`__fidius_<Trait>`), a sibling of the impl — reference it there.
     let companion = format_ident!("__fidius_{}", trait_name);
@@ -464,14 +505,14 @@ fn generate_wasm_adapter(
                     type #res_ident = #state_ident;
                     fn #mname(#(#arg_names: #arg_types),*)
                         -> exports::fidius::#pkg_seg::#pkg_seg::#res_ident {
-                        let __s = super::#instance_name.#mname(#(#arg_names),*);
+                        let __s = #dispatch_self.#mname(#(#arg_names),*);
                         exports::fidius::#pkg_seg::#pkg_seg::#res_ident::new(
                             #state_ident { stream: ::core::cell::RefCell::new(__s) }
                         )
                     }
                 });
             } else {
-                let call = quote! { super::#instance_name.#mname(#(#arg_names),*) };
+                let call = quote! { #dispatch_self.#mname(#(#arg_names),*) };
                 if m.returns_result {
                     let ok = match m.ret_type.and_then(result_ok_type) {
                         Some(t) => quote! { #t },
@@ -507,6 +548,7 @@ fn generate_wasm_adapter(
                 impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
                     #(#guest_items)*
                     fn fidius_interface_hash() -> u64 { super::#companion::#hash_const }
+                    #configure_item
                 }
                 export!(__FidiusComponent);
             }
@@ -539,7 +581,7 @@ fn generate_wasm_adapter(
                     syn::parse_str::<syn::Expr>(&s).expect("conv expr parses")
                 })
                 .collect();
-            let call = quote! { super::#instance_name.#mname(#(#call_args),*) };
+            let call = quote! { #dispatch_self.#mname(#(#call_args),*) };
             if m.returns_result {
                 let ok = m.ret_type.and_then(result_ok_type);
                 let gen_ok = match ok {
@@ -590,6 +632,7 @@ fn generate_wasm_adapter(
             impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
                 #(#guest_methods)*
                 fn fidius_interface_hash() -> u64 { super::#companion::#hash_const }
+                #configure_item
             }
             export!(__FidiusComponent);
         }
