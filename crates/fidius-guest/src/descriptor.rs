@@ -224,6 +224,15 @@ pub struct PluginDescriptor {
     /// Number of entries in `trait_metadata`. Zero when `trait_metadata`
     /// is null.
     pub trait_metadata_count: u32,
+    /// Construct a plugin instance from serialized config bytes (FIDIUS-A-0006).
+    /// `cfg_ptr`/`cfg_len` carry bincode of the plugin's config type, or an empty
+    /// slice for a zero-config plugin (singleton = construct-with-`()`). Returns
+    /// an opaque, owning instance pointer the host passes to **every** vtable
+    /// method and releases via [`destroy`](Self::destroy). Null = construction
+    /// failed (e.g. a config deserialize error).
+    pub construct: Option<unsafe extern "C" fn(*const u8, u32) -> *mut c_void>,
+    /// Release an instance previously returned by [`construct`](Self::construct).
+    pub destroy: Option<unsafe extern "C" fn(*mut c_void)>,
 }
 
 // SAFETY: PluginDescriptor fields are either primitives, pointers to static

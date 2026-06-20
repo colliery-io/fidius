@@ -1,30 +1,30 @@
 ---
-id: gh-3-wasi-http-stability-guards
+id: ci-1-cdylib-construct-destroy-abi
 level: task
-title: "GH.3 — wasi:http stability guards (fail-loud version check + drift tripwire + docs)"
-short_code: "FIDIUS-T-0146"
-created_at: 2026-06-20T01:10:09.862679+00:00
-updated_at: 2026-06-20T01:41:49.685136+00:00
-parent: FIDIUS-I-0028
+title: "CI.1 — cdylib construct/destroy ABI (singleton = construct-with-unit, ABI 400→500)"
+short_code: "FIDIUS-T-0147"
+created_at: 2026-06-20T01:44:06.033709+00:00
+updated_at: 2026-06-20T01:44:39.373591+00:00
+parent: FIDIUS-I-0029
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/completed"
+  - "#phase/active"
 
 
 exit_criteria_met: false
-initiative_id: FIDIUS-I-0028
+initiative_id: FIDIUS-I-0029
 ---
 
-# GH.3 — wasi:http stability guards (fail-loud version check + drift tripwire + docs)
+# CI.1 — cdylib construct/destroy ABI (singleton = construct-with-unit, ABI 400→500)
 
 *This template includes sections for various types of tasks. Delete sections that don't apply to your specific use case.*
 
 ## Parent Initiative **[CONDITIONAL: Assigned Task]**
 
-[[FIDIUS-I-0028]]
+[[FIDIUS-I-0029]]
 
 ## Objective **[REQUIRED]**
 
@@ -63,8 +63,6 @@ initiative_id: FIDIUS-I-0028
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
-
-## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -137,19 +135,34 @@ initiative_id: FIDIUS-I-0028
 
 ## Status Updates **[REQUIRED]**
 
-**DONE (committed 0e27111):**
-- Docs — `docs/explanation/wasm-capabilities.md` gained a guest-side how-to
-  (`fidius_guest::http` in `read()`; `capabilities=["http"]` is the only extra
-  wiring) + the published compatibility contract (plugin built vs fidius-guest X
-  runs on host ≥ X within the wasi:http line; host-forward safe; 0.2→0.3 = major).
-- Drift tripwire — `crates/fidius-guest/tests/wasi_http_pin.rs` asserts the
-  vendored pin (`wasi:http/outgoing-handler@0.2.6`). The `macro_egress_e2e` E2E is
-  the runtime guard (instantiation fails if guest/host versions diverge).
+**ABI fully mapped — this is an atomic change (no green intermediate). Execution map:**
 
-**REMAINING (scoped follow-on, needs a decision):** the *proactive* fail-loud
-version check at load (ADR-0005 item 4) — reframe a host-behind-plugin wasi:http
-mismatch as a fidius-framed error. Today such a mismatch still surfaces (a wasmtime
-instantiate error → `LoadError::WasmLoad`, non-silent), and the tripwire + E2E
-guard the internal drift risk. A proactive reframe needs component-import
-introspection + a deliberately-mismatched fixture to test it. Left undone pending
-sign-off on whether it's worth the surface now or a later task.
+Current ABI: cdylib method = uniform `unsafe extern "C" fn(in_ptr,in_len, out_ptr_ptr,out_len) -> i32`
+(PluginAllocated) / `(...,arena_ptr,cap,out_off,out_len)` (Arena). Host casts
+`vtable as *const FfiFn` and indexes by method number. Shims dispatch on a `static`
+singleton. Pivot: **prepend `instance: *mut c_void`** to that fn type everywhere +
+add construct/destroy.
+
+Touch points (all move in lockstep):
+1. `crates/fidius-guest/src/descriptor.rs` (struct `PluginDescriptor`, ~L177): append
+   `construct: Option<unsafe extern "C" fn(*const u8, u32) -> *mut c_void>` +
+   `destroy: Option<unsafe extern "C" fn(*mut c_void)>`. Size 104→120, 8-aligned.
+2. `crates/fidius-macro/src/interface.rs::generate_vtable` (L202-216): both `fn_type`
+   variants gain a leading `*mut ::core::ffi::c_void`. (Also the Client/host caller if
+   it invokes directly.)
+3. `crates/fidius-macro/src/impl_macro.rs`: shims (L800/891/944 + streaming init L800)
+   gain `instance: *mut c_void` first param → `let __p = &*(instance as *const #impl_type);`
+   → dispatch on `__p`. Generate `construct` (`Box::into_raw(Box::new(<unit ctor>)) as *mut c_void`;
+   typed `config = C` deserialize is CI.2) + `destroy` (`drop(Box::from_raw(p as *mut #impl_type))`);
+   wire both into the descriptor literal (~L1072). Keep the `static #instance_name`
+   for the **wasm** adapter path (cfg-split); cdylib shims now use the param.
+4. `crates/fidius-host/src/executor/cdylib.rs`: `FfiFn`/`ArenaFn` aliases + every call
+   site (244/328/419/497/611 + streaming) gain the instance arg. Executor calls
+   `construct` at load → store `*mut c_void` → pass to each call → `destroy` on Drop.
+5. `crates/fidius-host/src/loader.rs` (L39-43): carry `construct`/`destroy` from desc.
+6. ABI_VERSION 400→500 = bump workspace to **0.5.0** (version-derived); fix
+   `layout_and_roundtrip.rs` (descriptor_size 104→120, +2 offsets, ABI 400→500) and the
+   macro abi asserts (impl_basic/multi_plugin/smoke_cdylib 400→500).
+
+CI.1 scope = singleton works via `construct(())` end to end; typed `config=C` ctor +
+`ConfiguredHandle` is CI.2. Verify: existing cdylib suites green on the new ABI.

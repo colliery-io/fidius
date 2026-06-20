@@ -199,15 +199,19 @@ fn generate_vtable(ir: &InterfaceIR) -> TokenStream {
     // - Arena: (in_ptr, in_len, arena_ptr, arena_cap, out_offset, out_len) -> i32
     //   (host provides arena; plugin writes into it; STATUS_BUFFER_TOO_SMALL
     //    with needed size in out_len if too small)
+    // FIDIUS-A-0006: every method takes the instance pointer first (returned by
+    // the descriptor's `construct`); the singleton is `construct(())`.
     let fn_type = match ir.attrs.buffer_strategy {
         BufferStrategyAttr::PluginAllocated => quote! {
             unsafe extern "C" fn(
+                *mut ::core::ffi::c_void,
                 *const u8, u32,
                 *mut *mut u8, *mut u32,
             ) -> i32
         },
         BufferStrategyAttr::Arena => quote! {
             unsafe extern "C" fn(
+                *mut ::core::ffi::c_void,
                 *const u8, u32,
                 *mut u8, u32,
                 *mut u32, *mut u32,
@@ -455,6 +459,8 @@ fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
             capabilities: u64,
             free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
             method_count: u32,
+            construct: Option<unsafe extern "C" fn(*const u8, u32) -> *mut std::ffi::c_void>,
+            destroy: Option<unsafe extern "C" fn(*mut std::ffi::c_void)>,
         ) -> #crate_path::descriptor::PluginDescriptor {
             #crate_path::descriptor::PluginDescriptor {
                 descriptor_size: std::mem::size_of::<#crate_path::descriptor::PluginDescriptor>() as u32,
@@ -471,6 +477,8 @@ fn generate_descriptor_builder(ir: &InterfaceIR) -> TokenStream {
                 method_metadata: #method_metadata_expr,
                 trait_metadata: #trait_metadata_expr,
                 trait_metadata_count: #trait_meta_count,
+                construct,
+                destroy,
             }
         }
     }

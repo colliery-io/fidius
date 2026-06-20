@@ -243,9 +243,11 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
         }
     }
 
-    // Generate static instance
+    // Static singleton — now used ONLY by the wasm adapter (FIDIUS-A-0006: the
+    // cdylib path constructs instances via the descriptor's `construct`).
     let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
     let instance = quote! {
+        #[cfg(target_family = "wasm")]
         static #instance_name: #impl_type = #impl_type;
     };
 
@@ -698,8 +700,6 @@ fn generate_shims(
     crate_path: &Path,
     buffer_strategy: BufferStrategyAttr,
 ) -> TokenStream {
-    let instance_name = format_ident!("__FIDIUS_INSTANCE_{}", impl_ident);
-
     let shim_fns: Vec<TokenStream> = methods
         .iter()
         .map(|method| {
@@ -798,6 +798,7 @@ fn generate_shims(
 
                     #[cfg(not(target_family = "wasm"))]
                     unsafe extern "C" fn #shim_name(
+                        instance: *mut ::core::ffi::c_void,
                         in_ptr: *const u8,
                         in_len: u32,
                         out_ptr: *mut *mut u8,
@@ -806,7 +807,7 @@ fn generate_shims(
                         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
                             #deserialize_args
-                            let __stream: #stream_ty = #instance_name.#method_name(#(#arg_names),*);
+                            let __stream: #stream_ty = (unsafe { &*(instance as *const #impl_ident) }).#method_name(#(#arg_names),*);
                             let __state: Box<#state_ty> = Box::new(
                                 #crate_path::stream_ffi::StreamState::new(__stream),
                             );
@@ -829,15 +830,17 @@ fn generate_shims(
                 };
             }
 
-            // The method call — either sync or async via block_on
+            // The method call — dispatches on the instance pointer the host
+            // passed (FIDIUS-A-0006), not a static singleton. Either sync or
+            // async via block_on.
             let method_call = if method.is_async {
                 quote! {
                     #crate_path::async_runtime::FIDIUS_RUNTIME.block_on(
-                        #instance_name.#method_name(#(#arg_names),*)
+                        (unsafe { &*(instance as *const #impl_ident) }).#method_name(#(#arg_names),*)
                     )
                 }
             } else {
-                quote! { #instance_name.#method_name(#(#arg_names),*) }
+                quote! { (unsafe { &*(instance as *const #impl_ident) }).#method_name(#(#arg_names),*) }
             };
 
             // Generate the output handling based on whether the method returns Result.
@@ -889,6 +892,7 @@ fn generate_shims(
                 BufferStrategyAttr::Arena => quote! {
                     #[cfg(not(target_family = "wasm"))]
                     unsafe extern "C" fn #shim_name(
+                        instance: *mut ::core::ffi::c_void,
                         in_ptr: *const u8,
                         in_len: u32,
                         arena_ptr: *mut u8,
@@ -942,6 +946,7 @@ fn generate_shims(
                 BufferStrategyAttr::PluginAllocated => quote! {
                 #[cfg(not(target_family = "wasm"))]
                 unsafe extern "C" fn #shim_name(
+                    instance: *mut ::core::ffi::c_void,
                     in_ptr: *const u8,
                     in_len: u32,
                     out_ptr: *mut *mut u8,
@@ -1050,6 +1055,8 @@ fn generate_descriptor(
     );
     let plugin_name_const = format_ident!("__FIDIUS_PLUGIN_NAME_{}", impl_ident);
     let impl_name_str = impl_ident.to_string();
+    let construct_name = format_ident!("__fidius_construct_{}", impl_ident);
+    let destroy_name = format_ident!("__fidius_destroy_{}", impl_ident);
 
     let optional_methods_ident = format_ident!("{}_OPTIONAL_METHODS", trait_name);
     let method_strs: Vec<String> = methods.iter().map(|m| m.to_string()).collect();
@@ -1063,6 +1070,24 @@ fn generate_descriptor(
     };
 
     quote! {
+        // FIDIUS-A-0006: construct/destroy a plugin instance. CI.1 builds the
+        // zero-config (unit) instance and ignores the config bytes; typed
+        // `config = C` deserialization is CI.2. The host passes the returned
+        // pointer to every vtable method and frees it via destroy.
+        #[cfg(not(target_family = "wasm"))]
+        unsafe extern "C" fn #construct_name(
+            _cfg_ptr: *const u8,
+            _cfg_len: u32,
+        ) -> *mut ::std::ffi::c_void {
+            ::std::boxed::Box::into_raw(::std::boxed::Box::new(#impl_ident)) as *mut ::std::ffi::c_void
+        }
+
+        #[cfg(not(target_family = "wasm"))]
+        unsafe extern "C" fn #destroy_name(instance: *mut ::std::ffi::c_void) {
+            if instance.is_null() { return; }
+            unsafe { drop(::std::boxed::Box::from_raw(instance as *mut #impl_ident)); }
+        }
+
         #[cfg(not(target_family = "wasm"))]
         const #plugin_name_const: &std::ffi::CStr = unsafe {
             std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#impl_name_str, "\0").as_bytes())
@@ -1110,6 +1135,8 @@ fn generate_descriptor(
                 CAPS,
                 #free_buffer_expr,
                 #method_count,
+                Some(#construct_name),
+                Some(#destroy_name),
             )
         };
     }

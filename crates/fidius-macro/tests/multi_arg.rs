@@ -64,24 +64,33 @@ fn get_registry() -> &'static fidius_core::descriptor::PluginRegistry {
 /// Helper: call a vtable method by index with given input bytes.
 unsafe fn call_vtable(
     vtable: &__fidius_MultiArg::MultiArg_VTable,
+    desc: &fidius_core::descriptor::PluginDescriptor,
     index: usize,
     input_bytes: &[u8],
     free_buffer: Option<unsafe extern "C" fn(*mut u8, usize)>,
 ) -> (i32, Vec<u8>) {
-    let fns: [unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32; 4] =
-        [vtable.status, vtable.echo, vtable.concat, vtable.add_three];
+    let fns: [unsafe extern "C" fn(
+        *mut std::ffi::c_void,
+        *const u8,
+        u32,
+        *mut *mut u8,
+        *mut u32,
+    ) -> i32; 4] = [vtable.status, vtable.echo, vtable.concat, vtable.add_three];
 
+    let inst = unsafe { (desc.construct.unwrap())(std::ptr::null(), 0) };
     let mut out_ptr: *mut u8 = std::ptr::null_mut();
     let mut out_len: u32 = 0;
 
     let status = unsafe {
         (fns[index])(
+            inst,
             input_bytes.as_ptr(),
             input_bytes.len() as u32,
             &mut out_ptr,
             &mut out_len,
         )
     };
+    unsafe { (desc.destroy.unwrap())(inst) };
 
     let output = if !out_ptr.is_null() && out_len > 0 {
         let slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
@@ -105,7 +114,7 @@ fn zero_args_status() {
 
     // Zero args: serialize ()
     let input_bytes = fidius_core::wire::serialize(&()).unwrap();
-    let (status, output) = unsafe { call_vtable(vtable, 0, &input_bytes, desc.free_buffer) };
+    let (status, output) = unsafe { call_vtable(vtable, desc, 0, &input_bytes, desc.free_buffer) };
 
     assert_eq!(status, 0, "status() should return STATUS_OK");
     let result: String = fidius_core::wire::deserialize(&output).unwrap();
@@ -120,7 +129,7 @@ fn one_arg_echo() {
 
     // One arg: serialize (String,)
     let input_bytes = fidius_core::wire::serialize(&("hello".to_string(),)).unwrap();
-    let (status, output) = unsafe { call_vtable(vtable, 1, &input_bytes, desc.free_buffer) };
+    let (status, output) = unsafe { call_vtable(vtable, desc, 1, &input_bytes, desc.free_buffer) };
 
     assert_eq!(status, 0, "echo() should return STATUS_OK");
     let result: String = fidius_core::wire::deserialize(&output).unwrap();
@@ -136,7 +145,7 @@ fn two_args_concat() {
     // Two args: serialize (String, String)
     let input_bytes =
         fidius_core::wire::serialize(&("foo".to_string(), "bar".to_string())).unwrap();
-    let (status, output) = unsafe { call_vtable(vtable, 2, &input_bytes, desc.free_buffer) };
+    let (status, output) = unsafe { call_vtable(vtable, desc, 2, &input_bytes, desc.free_buffer) };
 
     assert_eq!(status, 0, "concat() should return STATUS_OK");
     let result: String = fidius_core::wire::deserialize(&output).unwrap();
@@ -151,7 +160,7 @@ fn three_args_add() {
 
     // Three args: serialize (i64, i64, i64)
     let input_bytes = fidius_core::wire::serialize(&(10i64, 20i64, 30i64)).unwrap();
-    let (status, output) = unsafe { call_vtable(vtable, 3, &input_bytes, desc.free_buffer) };
+    let (status, output) = unsafe { call_vtable(vtable, desc, 3, &input_bytes, desc.free_buffer) };
 
     assert_eq!(status, 0, "add_three() should return STATUS_OK");
     let result: i64 = fidius_core::wire::deserialize(&output).unwrap();

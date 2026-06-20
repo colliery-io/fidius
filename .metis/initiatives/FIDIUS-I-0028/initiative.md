@@ -4,14 +4,14 @@ level: initiative
 title: "Guest-side brokered HTTP — fidius::http for sandboxed WASM connectors"
 short_code: "FIDIUS-I-0028"
 created_at: 2026-06-20T01:07:24.257487+00:00
-updated_at: 2026-06-20T01:10:53.668362+00:00
+updated_at: 2026-06-20T01:41:58.316916+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
