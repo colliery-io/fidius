@@ -4,14 +4,14 @@ level: initiative
 title: "Configured plugin instances — bind config once, call many (partial application)"
 short_code: "FIDIUS-I-0029"
 created_at: 2026-06-20T01:41:51.753814+00:00
-updated_at: 2026-06-20T01:44:38.309434+00:00
+updated_at: 2026-06-20T12:38:37.284744+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false

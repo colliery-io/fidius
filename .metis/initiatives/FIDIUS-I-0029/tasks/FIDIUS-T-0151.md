@@ -4,14 +4,14 @@ level: task
 title: "CI.5 — docs + configured-connector example (partial application story)"
 short_code: "FIDIUS-T-0151"
 created_at: 2026-06-20T01:44:15.010505+00:00
-updated_at: 2026-06-20T12:36:51.536645+00:00
+updated_at: 2026-06-20T12:38:36.339070+00:00
 parent: FIDIUS-I-0029
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ initiative_id: FIDIUS-I-0029
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 

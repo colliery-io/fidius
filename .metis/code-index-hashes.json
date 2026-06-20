@@ -61,7 +61,7 @@
     "crates/fidius-host/tests/wasm_egress_e2e.rs": "9ac345742670ec0499f1ec0b796561671b09abcac47566453a12e00da6b311d7",
     "crates/fidius-host/tests/wasm_executor.rs": "452a144ac2b12ddd39750c333c72a901bffe30f82a5a8229e559e39c8137bb4b",
     "crates/fidius-host/tests/wasm_streaming_e2e.rs": "8bd731064c41f6a305969f6cfe2d743339f1128e49757857055f0f9ff0d8b0e6",
-    "crates/fidius-macro/src/impl_macro.rs": "d765490fc950b36e60ebde9ec315340d122906d294d57d921994ab45970f5267",
+    "crates/fidius-macro/src/impl_macro.rs": "40dfdcc3dace920e176ee4dc0142a9dfec932e9169f03d9f4bac270e7d2a58f7",
     "crates/fidius-macro/src/interface.rs": "7ef1b367d34f332713e21f967f5404da7cd468b99e04a34667ad49ca34f5f550",
     "crates/fidius-macro/src/ir.rs": "49cef7238256c04cc57fed24d4dc78a05ac34d9cb8d35a217dd8018b6db27cd7",
     "crates/fidius-macro/src/lib.rs": "0f00fc18458db7669525ae7826c2430bdfc54b32da6cf20ad2dbb4c0e57f799c",
