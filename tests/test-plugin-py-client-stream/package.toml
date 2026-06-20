@@ -1,0 +1,12 @@
+[package]
+name = "py-client-stream"
+version = "0.1.0"
+interface = "Sink"
+interface_version = 1
+runtime = "python"
+
+[metadata]
+category = "test"
+
+[python]
+entry_module = "sink"

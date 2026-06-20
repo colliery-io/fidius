@@ -4,14 +4,14 @@ level: task
 title: "CS2.4 — Python host-backed generator + E2E"
 short_code: "FIDIUS-T-0164"
 created_at: 2026-06-20T16:44:16.659202+00:00
-updated_at: 2026-06-20T16:44:16.659202+00:00
+updated_at: 2026-06-20T19:10:07.586461+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Python client-streaming: the plugin method receives a **host-backed generator/it
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

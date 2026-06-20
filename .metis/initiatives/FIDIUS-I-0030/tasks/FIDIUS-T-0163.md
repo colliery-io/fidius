@@ -4,14 +4,14 @@ level: task
 title: "CS2.3 — WASM imported fidius-stream-next + executor producer + E2E"
 short_code: "FIDIUS-T-0163"
 created_at: 2026-06-20T16:44:15.315805+00:00
-updated_at: 2026-06-20T18:53:25.421157+00:00
+updated_at: 2026-06-20T19:09:38.296517+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ WASM client-streaming: the component **imports** `fidius-stream-next: func() -> 
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -135,4 +137,18 @@ WASM client-streaming: the component **imports** `fidius-stream-next: func() -> 
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commits 24be1eb, d35a688, a6a802e).** WASM client-streaming works end to end.
+The guest imports `fidius:stream-pull/pull.next() -> option<list<u8>>` (inline WIT +
+`generate!` that composes with the macro's export `generate!`, like wasi:http);
+`WasmHostStream<T>` (fidius-guest) pulls + bincode-deserializes. Host: `HostState`
+gained a `client_stream` producer; the linker provides `fidius:stream-pull/pull@0.1.0`
+backed by it; `WasmComponentExecutor::call_client_streaming`. Macro wasm adapter: drops
+the rejection, builds `Stream::from_iter(WasmHostStream)`, emits the method WIT WITHOUT
+the stream param, and classifies the stream **item** (not the `Stream<T>` wrapper) for
+user-type detection. ir: the interface hash uses the stream arg's **item** type (its
+crate path differs host `fidius_core` vs guest `fidius_guest`). Added the unified safe
+`PluginHandle::call_client_streaming<I,A,O>` over cdylib + WASM (**folds in CS2.5's host
+API**). New `client-stream` fixture + `wasm_client_stream_e2e`: host produces [1..=5] →
+guest sums → 15. Default 67 + cdylib client-stream + server-streaming + lint green.
+**Remaining in the arc: CS2.4 (Python), CS2.5 (just docs now — host API done, compile-fail
+removed in CS2.2).**

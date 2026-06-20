@@ -267,14 +267,10 @@ impl PluginHandle {
         A: Serialize,
         O: DeserializeOwned,
     {
-        // Each item crosses as bincode; the guest deserializes it into the item type.
-        let encoded: Vec<Vec<u8>> = items
-            .into_iter()
-            .map(|i| fidius_core::wire::serialize(&i))
-            .collect::<Result<_, _>>()
-            .map_err(|e| CallError::Serialization(e.to_string()))?;
         match &self.backend {
+            // cdylib + WASM consume the items as bincode (the guest deserializes each).
             Backend::Cdylib(e) => {
+                let encoded = bincode_items(items)?;
                 let handle = crate::client_stream::host_producer_handle(encoded.into_iter());
                 let arg_bytes = fidius_core::wire::serialize(args)
                     .map_err(|e| CallError::Serialization(e.to_string()))?;
@@ -285,18 +281,27 @@ impl PluginHandle {
             }
             #[cfg(feature = "wasm")]
             Backend::Wasm(e) => {
+                let encoded = bincode_items(items)?;
                 let arg_value = fidius_core::to_value(args)
                     .map_err(|err| CallError::Serialization(err.to_string()))?;
                 let out = e.call_client_streaming(method, encoded, arg_value)?;
                 fidius_core::from_value(out)
                     .map_err(|err| CallError::Deserialization(err.to_string()))
             }
+            // Python crosses via the self-describing `Value` currency.
             #[cfg(feature = "python")]
-            Backend::Python(_) => Err(CallError::Backend {
-                runtime: "python".into(),
-                message: "client-streaming is not yet wired for Python (FIDIUS-I-0030 CS2.4)"
-                    .into(),
-            }),
+            Backend::Python(e) => {
+                let item_values: Vec<fidius_core::Value> = items
+                    .into_iter()
+                    .map(|i| fidius_core::to_value(&i))
+                    .collect::<Result<_, _>>()
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let out = e.call_client_streaming(method, item_values, arg_value)?;
+                fidius_core::from_value(out)
+                    .map_err(|err| CallError::Deserialization(err.to_string()))
+            }
         }
     }
 
@@ -359,4 +364,16 @@ fn cdylib_stream_decode<O: DeserializeOwned + Serialize>(
     let item: O = fidius_core::wire::deserialize(bytes)
         .map_err(|e| CallError::Deserialization(e.to_string()))?;
     fidius_core::to_value(&item).map_err(|e| CallError::Serialization(e.to_string()))
+}
+
+/// Bincode-encode each client-streaming item (the cdylib + WASM currency).
+#[cfg(feature = "streaming")]
+fn bincode_items<I: Serialize>(
+    items: impl IntoIterator<Item = I>,
+) -> Result<Vec<Vec<u8>>, CallError> {
+    items
+        .into_iter()
+        .map(|i| fidius_core::wire::serialize(&i))
+        .collect::<Result<_, _>>()
+        .map_err(|e| CallError::Serialization(e.to_string()))
 }

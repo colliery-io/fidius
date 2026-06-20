@@ -158,6 +158,60 @@ impl PythonPluginHandle {
         serde_json::to_vec(&result_value).map_err(|e| PythonCallError::OutputEncode(e.to_string()))
     }
 
+    /// **Client-streaming** call (FIDIUS-I-0030 CS2.4): the host produces the stream
+    /// items (`items_json`, a JSON array); the plugin method receives them as a
+    /// host-backed iterator (its **first** positional arg) and returns a value.
+    /// `args_json` are the method's non-stream args (a JSON array).
+    pub fn call_client_streaming_json(
+        &self,
+        method_index: usize,
+        items_json: &[u8],
+        args_json: &[u8],
+    ) -> Result<Vec<u8>, PythonCallError> {
+        let method = self.lookup_method(method_index, false)?;
+        let items: Vec<serde_json::Value> = serde_json::from_slice(items_json)
+            .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+        let args: serde_json::Value = serde_json::from_slice(args_json)
+            .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+
+        let result_value = Python::with_gil(|py| -> Result<serde_json::Value, PythonCallError> {
+            let callable = method.callable.bind(py);
+            // The stream argument: a host-fed Python iterator (first positional).
+            let stream = Py::new(
+                py,
+                HostFedStream {
+                    items: items.into_iter(),
+                },
+            )
+            .map_err(|e| PythonCallError::Plugin(pyerr_to_plugin_error(e)))?
+            .into_bound(py)
+            .into_any();
+            let mut py_args: Vec<Bound<'_, PyAny>> = vec![stream];
+            match &args {
+                serde_json::Value::Array(a) => {
+                    for v in a {
+                        py_args.push(
+                            value_to_pyobject(py, v)
+                                .map_err(|e| PythonCallError::InputDecode(e.to_string()))?,
+                        );
+                    }
+                }
+                serde_json::Value::Null => {}
+                other => py_args.push(
+                    value_to_pyobject(py, other)
+                        .map_err(|e| PythonCallError::InputDecode(e.to_string()))?,
+                ),
+            }
+            let args_tuple = PyTuple::new(py, py_args)
+                .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+            let result = callable
+                .call(args_tuple, None::<&Bound<'_, PyDict>>)
+                .map_err(|e| PythonCallError::Plugin(pyerr_to_plugin_error(e)))?;
+            pyobject_to_value(&result).map_err(|e| PythonCallError::OutputEncode(e.to_string()))
+        })?;
+        serde_json::to_vec(&result_value).map_err(|e| PythonCallError::OutputEncode(e.to_string()))
+    }
+
     /// Start a server-streaming call (FIDIUS-I-0026). Calls the method to obtain
     /// its iterator/generator and wraps it in a [`crate::stream::PythonStream`]
     /// the host then pumps. Input is JSON like [`Self::call_typed_json`];
@@ -264,6 +318,28 @@ fn build_call_args<'py>(
             // Single non-array, non-null value — treat as one positional arg.
             let pyobj = value_to_pyobject(py, other)?;
             PyTuple::new(py, vec![pyobj])
+        }
+    }
+}
+
+/// A host-fed Python iterator (FIDIUS-I-0030 CS2.4): yields the host's stream items
+/// to a client-streaming plugin method. `__next__` returns `None` at the end, which
+/// PyO3 surfaces as `StopIteration` — so plain `for x in rows:` works.
+#[pyclass]
+struct HostFedStream {
+    items: std::vec::IntoIter<serde_json::Value>,
+}
+
+#[pymethods]
+impl HostFedStream {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        match self.items.next() {
+            Some(v) => Ok(Some(value_to_pyobject(py, &v)?.unbind())),
+            None => Ok(None),
         }
     }
 }
