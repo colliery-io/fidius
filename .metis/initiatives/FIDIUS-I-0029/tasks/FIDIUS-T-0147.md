@@ -4,14 +4,14 @@ level: task
 title: "CI.1 — cdylib construct/destroy ABI (singleton = construct-with-unit, ABI 400→500)"
 short_code: "FIDIUS-T-0147"
 created_at: 2026-06-20T01:44:06.033709+00:00
-updated_at: 2026-06-20T01:44:39.373591+00:00
+updated_at: 2026-06-20T02:30:45.207145+00:00
 parent: FIDIUS-I-0029
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ initiative_id: FIDIUS-I-0029
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 

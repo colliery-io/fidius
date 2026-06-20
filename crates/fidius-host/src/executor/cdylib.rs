@@ -53,9 +53,9 @@ type ArenaFn =
 ///
 /// # Safety
 /// `descriptor` must point to a valid `PluginDescriptor`.
-unsafe fn construct_instance(descriptor: *const PluginDescriptor) -> *mut c_void {
+unsafe fn construct_instance(descriptor: *const PluginDescriptor, cfg: &[u8]) -> *mut c_void {
     match (*descriptor).construct {
-        Some(ctor) => ctor(std::ptr::null(), 0),
+        Some(ctor) => ctor(cfg.as_ptr(), cfg.len() as u32),
         None => std::ptr::null_mut(),
     }
 }
@@ -129,7 +129,7 @@ impl CdylibExecutor {
         method_count: u32,
         info: PluginInfo,
     ) -> Self {
-        let instance = unsafe { construct_instance(descriptor) };
+        let instance = unsafe { construct_instance(descriptor, &[]) };
         let destroy = unsafe { (*descriptor).destroy };
         Self {
             _library: Some(library),
@@ -146,7 +146,7 @@ impl CdylibExecutor {
 
     /// Create a CdylibExecutor from a LoadedPlugin.
     pub fn from_loaded(plugin: crate::loader::LoadedPlugin) -> Self {
-        let instance = unsafe { construct_instance(plugin.descriptor) };
+        let instance = unsafe { construct_instance(plugin.descriptor, &[]) };
         let destroy = unsafe { (*plugin.descriptor).destroy };
         Self {
             _library: Some(plugin.library),
@@ -169,6 +169,16 @@ impl CdylibExecutor {
     /// Used by the generated `Client::in_process(plugin_name)` constructor.
     /// Host applications normally use [`CdylibExecutor::from_loaded`] instead.
     pub fn from_descriptor(desc: &'static PluginDescriptor) -> Result<Self, LoadError> {
+        Self::from_descriptor_with_config(desc, &[])
+    }
+
+    /// Like [`Self::from_descriptor`] but constructs the instance from serialized
+    /// config bytes (FIDIUS-A-0006 / CI.2) — the in-process *configured* path.
+    /// `cfg` is bincode of the plugin's config type (empty = the singleton).
+    pub fn from_descriptor_with_config(
+        desc: &'static PluginDescriptor,
+        cfg: &[u8],
+    ) -> Result<Self, LoadError> {
         let info = PluginInfo {
             name: unsafe { desc.plugin_name_str() }.to_string(),
             interface_name: unsafe { desc.interface_name_str() }.to_string(),
@@ -181,7 +191,7 @@ impl CdylibExecutor {
             runtime: crate::types::PluginRuntimeKind::Cdylib,
         };
         let descriptor = desc as *const PluginDescriptor;
-        let instance = unsafe { construct_instance(descriptor) };
+        let instance = unsafe { construct_instance(descriptor, cfg) };
         Ok(Self {
             _library: None,
             vtable: desc.vtable,

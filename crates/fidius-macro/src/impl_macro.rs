@@ -112,6 +112,11 @@ pub struct PluginImplAttrs {
     /// at compile time (the emitted shim's signature won't match the
     /// generated vtable's field type).
     pub buffer_strategy: BufferStrategyAttr,
+    /// FIDIUS-A-0006: the config type `C` for a configured plugin
+    /// (`#[plugin_impl(Trait, config = C)]`). When set, `construct` deserializes
+    /// `C` and calls the impl's `fn configure(cfg: C) -> Self`. None = zero-config
+    /// (the singleton, constructed from unit).
+    pub config: Option<Path>,
 }
 
 impl Parse for PluginImplAttrs {
@@ -119,6 +124,7 @@ impl Parse for PluginImplAttrs {
         let trait_name: Ident = input.parse()?;
         let mut crate_path = None;
         let mut buffer_strategy = None;
+        let mut config = None;
 
         while !input.is_empty() {
             let _comma: Token![,] = input.parse()?;
@@ -145,6 +151,9 @@ impl Parse for PluginImplAttrs {
                             }
                         });
                     }
+                    "config" => {
+                        config = Some(input.parse::<Path>()?);
+                    }
                     other => {
                         return Err(syn::Error::new(
                             key.span(),
@@ -162,6 +171,7 @@ impl Parse for PluginImplAttrs {
             trait_name,
             crate_path,
             buffer_strategy,
+            config,
         })
     }
 }
@@ -288,6 +298,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
             &method_names,
             crate_path,
             buffer_strategy,
+            attrs.config.as_ref(),
         );
         let registration = generate_inventory_registration(&impl_ident, crate_path);
         quote! {
@@ -1044,6 +1055,7 @@ fn generate_descriptor(
     methods: &[&Ident],
     crate_path: &Path,
     buffer_strategy: BufferStrategyAttr,
+    config: Option<&Path>,
 ) -> TokenStream {
     let companion = format_ident!("__fidius_{}", trait_name);
     let vtable_name = format_ident!("__FIDIUS_VTABLE_{}", impl_ident);
@@ -1069,6 +1081,29 @@ fn generate_descriptor(
         BufferStrategyAttr::Arena => quote! { None },
     };
 
+    // FIDIUS-A-0006 construct body. With `config = C`: deserialize C from the
+    // host-supplied bytes and call `Type::configure(cfg)` (null on a bad config).
+    // Without: the zero-config unit instance (the singleton).
+    let construct_body = match config {
+        Some(cfg_ty) => quote! {
+            let __slice = if cfg_ptr.is_null() || cfg_len == 0 {
+                &[][..]
+            } else {
+                unsafe { ::core::slice::from_raw_parts(cfg_ptr, cfg_len as usize) }
+            };
+            let __cfg: #cfg_ty = match #crate_path::wire::deserialize(__slice) {
+                ::core::result::Result::Ok(c) => c,
+                ::core::result::Result::Err(_) => return ::core::ptr::null_mut(),
+            };
+            ::std::boxed::Box::into_raw(::std::boxed::Box::new(#impl_ident::configure(__cfg)))
+                as *mut ::std::ffi::c_void
+        },
+        None => quote! {
+            let _ = (cfg_ptr, cfg_len);
+            ::std::boxed::Box::into_raw(::std::boxed::Box::new(#impl_ident)) as *mut ::std::ffi::c_void
+        },
+    };
+
     quote! {
         // FIDIUS-A-0006: construct/destroy a plugin instance. CI.1 builds the
         // zero-config (unit) instance and ignores the config bytes; typed
@@ -1076,10 +1111,10 @@ fn generate_descriptor(
         // pointer to every vtable method and frees it via destroy.
         #[cfg(not(target_family = "wasm"))]
         unsafe extern "C" fn #construct_name(
-            _cfg_ptr: *const u8,
-            _cfg_len: u32,
+            cfg_ptr: *const u8,
+            cfg_len: u32,
         ) -> *mut ::std::ffi::c_void {
-            ::std::boxed::Box::into_raw(::std::boxed::Box::new(#impl_ident)) as *mut ::std::ffi::c_void
+            #construct_body
         }
 
         #[cfg(not(target_family = "wasm"))]
