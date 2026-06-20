@@ -128,11 +128,80 @@ pub fn load_python_plugin(
         })?;
 
         validate_interface_hash(&module, descriptor)?;
-        let method_callables = resolve_methods(&module, descriptor)?;
+        let module_name = module
+            .name()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|_| descriptor.interface_name.to_string());
+        let method_callables = resolve_methods(module.as_any(), descriptor, &module_name)?;
 
         Ok(PythonPluginHandle::new(
             descriptor,
             module.unbind().into(),
+            method_callables,
+        ))
+    })
+}
+
+/// Load a **configured** Python plugin instance (FIDIUS-A-0006 / CI.4): import the
+/// module, call its module-level `__fidius_configure__(config) -> instance` with
+/// the deserialized config, and bind methods on the returned instance — so the
+/// config is bound once and N differently-configured instances coexist (each is a
+/// distinct object). The module must export `__fidius_configure__`.
+pub fn load_python_plugin_configured(
+    package_dir: &Path,
+    descriptor: &'static PythonInterfaceDescriptor,
+    config: &serde_json::Value,
+) -> Result<PythonPluginHandle, PythonLoadError> {
+    ensure_initialized();
+
+    let manifest = load_manifest_untyped(package_dir)?;
+    if !matches!(manifest.package.runtime(), PackageRuntime::Python) {
+        return Err(PythonLoadError::NotPythonRuntime {
+            path: package_dir.display().to_string(),
+            got: manifest
+                .package
+                .runtime
+                .clone()
+                .unwrap_or_else(|| "rust".to_string()),
+        });
+    }
+    let py_meta =
+        manifest
+            .python
+            .as_ref()
+            .ok_or_else(|| PythonLoadError::MissingPythonSection {
+                path: package_dir.display().to_string(),
+            })?;
+
+    Python::with_gil(|py| {
+        prepend_sys_path(py, package_dir)?;
+        let module = py.import(py_meta.entry_module.as_str()).map_err(|e| {
+            PythonLoadError::ImportFailed {
+                module: py_meta.entry_module.clone(),
+                message: e.to_string(),
+            }
+        })?;
+        validate_interface_hash(&module, descriptor)?;
+
+        let cfg_obj = crate::value_bridge::value_to_pyobject(py, config).map_err(|e| {
+            PythonLoadError::ImportFailed {
+                module: py_meta.entry_module.clone(),
+                message: format!("config conversion failed: {e}"),
+            }
+        })?;
+        let instance = module
+            .getattr("__fidius_configure__")
+            .and_then(|f| f.call1((cfg_obj,)))
+            .map_err(|e| PythonLoadError::ImportFailed {
+                module: py_meta.entry_module.clone(),
+                message: format!("__fidius_configure__ failed: {e}"),
+            })?;
+
+        let ctx = format!("{} instance", py_meta.entry_module);
+        let method_callables = resolve_methods(&instance, descriptor, &ctx)?;
+        Ok(PythonPluginHandle::new(
+            descriptor,
+            instance.unbind(),
             method_callables,
         ))
     })
@@ -197,23 +266,20 @@ fn validate_interface_hash(
 }
 
 fn resolve_methods(
-    module: &Bound<'_, PyModule>,
+    obj: &Bound<'_, PyAny>,
     descriptor: &'static PythonInterfaceDescriptor,
+    ctx_name: &str,
 ) -> Result<Vec<Py<PyAny>>, PythonLoadError> {
-    // Resolve callables by direct attribute lookup on the loaded module.
-    // The fidius SDK's @method decorator returns the function unchanged
-    // (it's a registration-only marker), so module-attribute lookup is the
-    // canonical way to find a callable. Skipping the SDK registry here also
-    // avoids the cross-module ambiguity that arises when many plugins
-    // share the embedded interpreter.
-    let module_name = module
-        .name()
-        .map(|n| n.to_string())
-        .unwrap_or_else(|_| descriptor.interface_name.to_string());
+    // Resolve callables by direct attribute lookup on `obj` — the loaded module
+    // (zero-config: the SDK's @method decorator returns the function unchanged,
+    // so module-attribute lookup is canonical) OR a configured instance returned
+    // by `__fidius_configure__` (FIDIUS-A-0006 / CI.4: bound methods on the
+    // instance, which closes over the bound config).
+    let module_name = ctx_name.to_string();
 
     let mut callables = Vec::with_capacity(descriptor.methods.len());
     for method in descriptor.methods {
-        let callable = module
+        let callable = obj
             .getattr(method.name)
             .map_err(|e| PythonLoadError::MethodNotRegistered {
                 interface: descriptor.interface_name,

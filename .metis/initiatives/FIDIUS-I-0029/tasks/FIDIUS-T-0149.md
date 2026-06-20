@@ -133,4 +133,34 @@ initiative_id: FIDIUS-I-0029
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**SCOPED (not started) — fresh-session-sized, architectural. Execution map:**
+
+Current wasm shape: `generate_wasm_adapter` (impl_macro.rs ~L329) emits a WIT world
+that exports the interface as **free functions** dispatching on the cfg(wasm)
+static singleton `super::#instance_name` (two code paths: primitive ~L440-514, and
+`#[derive(WitType)]` user-type ~L516+). The executor (`executor/wasm.rs`)
+**instantiates a fresh `Store` per call** (`fn instantiate` L515, used by call_value
+L615 / call_streaming L699); streaming is the only thing that holds a store alive
+across calls (the stream resource), which is the precedent to reuse.
+
+Two viable shapes:
+- **(R) WIT `resource`**: world exports a resource w/ `configure(cfg) -> handle` +
+  methods on it. Cleanest Component-Model fit, reuses streaming's persistent-store
+  machinery — but restructures BOTH generator paths + the executor dispatch.
+- **(C) `fidius-configure(cfg: list<u8>)` export + guest config storage**: change
+  the guest singleton `static INSTANCE: Type` → `OnceLock<Type>` set by configure;
+  methods read it. Smaller generator change, but still needs the persistent store.
+
+Either way the load-bearing piece is the **host executor**: a *configured* mode that
+instantiates ONE persistent `Store`, calls configure once, holds `(Store, Instance)`
+and dispatches method calls on it — vs today's per-call fresh store. A held `Store`
+is **not `Sync`** → wrap in `Mutex` (or make the configured handle !Sync), unlike
+the current Send+Sync per-call executor. Then `PluginHost`/`PluginHandle` configure
+path for wasm + a wasm E2E (config bound once; composes w/ streaming + the egress
+two-key gate).
+
+RECOMMENDATION: shape **(R)**, reuse the streaming resource/store lifetime. Build:
+macro adapter (both paths) → executor configured mode (Mutex<Store>) → host
+configure wiring → E2E. Sibling tasks CI.4 (Python — small: construct the class
+with config) + CI.5 (docs). cdylib is DONE (CI.1 3543e19 + CI.2 a122b86); 0.5.0
+cuts when CI.3-5 land.

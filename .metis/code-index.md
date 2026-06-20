@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T02:29:45Z | 143 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T02:38:37Z | 144 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -69,6 +69,7 @@
 │   │   │   └── types.rs
 │   │   └── tests/
 │   │       ├── cdylib_streaming_e2e.rs
+│   │       ├── configured_cdylib_e2e.rs
 │   │       ├── e2e.rs
 │   │       ├── integration.rs
 │   │       ├── macro_egress_e2e.rs
@@ -903,10 +904,10 @@
 
 #### crates/fidius-host/src/error.rs
 
-- pub `LoadError` enum L21-78 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
-- pub `CallError` enum L82-143 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
--  `CallError` type L153-175 — `= CallError` — Fold the Python backend's call error into the unified [`CallError`].
--  `from` function L154-174 — `(e: fidius_python::PythonCallError) -> Self` — Error types for fidius-host plugin loading and calling.
+- pub `LoadError` enum L21-83 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
+- pub `CallError` enum L87-148 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
+-  `CallError` type L158-180 — `= CallError` — Fold the Python backend's call error into the unified [`CallError`].
+-  `from` function L159-179 — `(e: fidius_python::PythonCallError) -> Self` — Error types for fidius-host plugin loading and calling.
 
 #### crates/fidius-host/src/executor.rs
 
@@ -921,19 +922,20 @@
 - pub `PluginHandle` struct L68-70 — `{ backend: Backend }` — A handle to a loaded plugin, ready for calling methods.
 - pub `from_loaded` function L74-78 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a `PluginHandle` from a freshly loaded cdylib plugin.
 - pub `from_descriptor` function L83-87 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a `PluginHandle` from a descriptor already registered in the
-- pub `find_in_process_descriptor` function L91-95 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
-- pub `from_python` function L101-105 — `(py: fidius_python::PythonPluginHandle, info: PluginInfo) -> Self` — Create a `PluginHandle` backed by a loaded Python plugin.
-- pub `from_wasm` function L110-114 — `(executor: WasmComponentExecutor) -> Self` — Create a `PluginHandle` backed by a loaded WASM component.
-- pub `call_method` function L121-149 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `call_streaming` function L164-191 — `( &self, index: usize, input: &I, ) -> Result<crate::stream::ChunkStream, CallEr...` — Start a server-streaming method call by vtable index (FIDIUS-I-0026).
-- pub `call_method_raw` function L194-202 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
-- pub `has_capability` function L206-211 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
-- pub `info` function L214-222 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L227-236 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
-- pub `trait_metadata` function L240-248 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
+- pub `configure_in_process` function L94-103 — `( desc: &'static PluginDescriptor, config: &C, ) -> Result<Self, LoadError>` — Construct a **configured** in-process plugin instance (FIDIUS-A-0006 /
+- pub `find_in_process_descriptor` function L107-111 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
+- pub `from_python` function L117-121 — `(py: fidius_python::PythonPluginHandle, info: PluginInfo) -> Self` — Create a `PluginHandle` backed by a loaded Python plugin.
+- pub `from_wasm` function L126-130 — `(executor: WasmComponentExecutor) -> Self` — Create a `PluginHandle` backed by a loaded WASM component.
+- pub `call_method` function L137-165 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `call_streaming` function L180-207 — `( &self, index: usize, input: &I, ) -> Result<crate::stream::ChunkStream, CallEr...` — Start a server-streaming method call by vtable index (FIDIUS-I-0026).
+- pub `call_method_raw` function L210-218 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
+- pub `has_capability` function L222-227 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
+- pub `info` function L230-238 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L243-252 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
+- pub `trait_metadata` function L256-264 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
 -  `Backend` enum L50-60 — `Cdylib | Python | Wasm` — The execution backend behind a [`PluginHandle`].
--  `PluginHandle` type L72-249 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
--  `cdylib_stream_decode` function L257-263 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
+-  `PluginHandle` type L72-265 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
+-  `cdylib_stream_decode` function L273-279 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
 
 #### crates/fidius-host/src/host.rs
 
@@ -1051,36 +1053,37 @@
 
 - pub `CdylibExecutor` struct L71-96 — `{ _library: Option<Arc<Library>>, vtable: *const c_void, descriptor: *const Plug...` — A handle to a loaded plugin, ready for calling methods.
 - pub `from_loaded` function L148-162 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a CdylibExecutor from a LoadedPlugin.
-- pub `from_descriptor` function L171-196 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a CdylibExecutor from a plugin descriptor already registered in
-- pub `find_in_process_descriptor` function L204-218 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
-- pub `call_method` function L236-256 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `call_method_raw` function L267-278 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
-- pub `call_streaming_raw` function L637-772 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
-- pub `has_capability` function L777-782 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L785-787 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L800-832 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
-- pub `trait_metadata` function L838-859 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
+- pub `from_descriptor` function L171-173 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a CdylibExecutor from a plugin descriptor already registered in
+- pub `from_descriptor_with_config` function L178-206 — `( desc: &'static PluginDescriptor, cfg: &[u8], ) -> Result<Self, LoadError>` — Like [`Self::from_descriptor`] but constructs the instance from serialized
+- pub `find_in_process_descriptor` function L214-228 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
+- pub `call_method` function L246-266 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `call_method_raw` function L277-288 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
+- pub `call_streaming_raw` function L647-782 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
+- pub `has_capability` function L787-792 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L795-797 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L810-842 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
+- pub `trait_metadata` function L848-869 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
 -  `FfiFn` type L45 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut *mut u8, *mut u32) -> i...` — Type alias for the PluginAllocated FFI function pointer signature.
 -  `ArenaFn` type L48-49 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut u8, u32, *mut u32, *mut...` — Type alias for the Arena FFI function pointer signature.
--  `construct_instance` function L56-61 — `(descriptor: *const PluginDescriptor) -> *mut c_void` — Construct the plugin instance via the descriptor's `construct` (FIDIUS-A-0006).
+-  `construct_instance` function L56-61 — `(descriptor: *const PluginDescriptor, cfg: &[u8]) -> *mut c_void` — Construct the plugin instance via the descriptor's `construct` (FIDIUS-A-0006).
 -  `CdylibExecutor` type L106 — `impl Send for CdylibExecutor` — (and future WASM) backends.
 -  `CdylibExecutor` type L107 — `impl Sync for CdylibExecutor` — (and future WASM) backends.
 -  `CdylibExecutor` type L109-118 — `impl Drop for CdylibExecutor` — (and future WASM) backends.
 -  `drop` function L110-117 — `(&mut self)` — (and future WASM) backends.
--  `CdylibExecutor` type L120-860 — `= CdylibExecutor` — (and future WASM) backends.
+-  `CdylibExecutor` type L120-870 — `= CdylibExecutor` — (and future WASM) backends.
 -  `new` function L123-145 — `( library: Arc<Library>, vtable: *const c_void, descriptor: *const PluginDescrip...` — Create a new CdylibExecutor.
--  `call_plugin_allocated` function L282-361 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
--  `call_arena` function L367-454 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
--  `call_plugin_allocated_raw` function L459-538 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
--  `call_arena_raw` function L542-620 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
--  `STREAM_CHANNEL_CAP` variable L648 — `: usize` — Bounded backpressure/memory window between the pump thread and the
--  `SendHandle` struct L689 — `-` — (and future WASM) backends.
--  `SendHandle` type L690 — `impl Send for SendHandle` — (and future WASM) backends.
--  `INITIAL_ITEM_CAP` variable L705 — `: usize` — (and future WASM) backends.
--  `CdylibExecutor` type L862-878 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
--  `info` function L863-865 — `(&self) -> &PluginInfo` — (and future WASM) backends.
--  `method_count` function L867-869 — `(&self) -> u32` — (and future WASM) backends.
--  `call_raw` function L875-877 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
+-  `call_plugin_allocated` function L292-371 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
+-  `call_arena` function L377-464 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
+-  `call_plugin_allocated_raw` function L469-548 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
+-  `call_arena_raw` function L552-630 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
+-  `STREAM_CHANNEL_CAP` variable L658 — `: usize` — Bounded backpressure/memory window between the pump thread and the
+-  `SendHandle` struct L699 — `-` — (and future WASM) backends.
+-  `SendHandle` type L700 — `impl Send for SendHandle` — (and future WASM) backends.
+-  `INITIAL_ITEM_CAP` variable L715 — `: usize` — (and future WASM) backends.
+-  `CdylibExecutor` type L872-888 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
+-  `info` function L873-875 — `(&self) -> &PluginInfo` — (and future WASM) backends.
+-  `method_count` function L877-879 — `(&self) -> u32` — (and future WASM) backends.
+-  `call_raw` function L885-887 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
 
 #### crates/fidius-host/src/executor/python.rs
 
@@ -1165,6 +1168,18 @@
 -  `cdylib_stream_yields_all_items` function L46-57 — `()` — streaming peer alongside Python and WASM.
 -  `cdylib_empty_stream` function L60-67 — `()` — streaming peer alongside Python and WASM.
 -  `cdylib_huge_stream_is_bounded_and_cancellable` function L70-84 — `()` — streaming peer alongside Python and WASM.
+
+#### crates/fidius-host/tests/configured_cdylib_e2e.rs
+
+- pub `GreetConfig` struct L25-27 — `{ greeting: String }` — differently-configured instances coexist in one host.
+- pub `Greeter` interface L30-32 — `{ fn greet() }` — differently-configured instances coexist in one host.
+- pub `ConfiguredGreeter` struct L34-36 — `{ cfg: GreetConfig }` — differently-configured instances coexist in one host.
+-  `ConfiguredGreeter` type L39-44 — `impl Greeter for ConfiguredGreeter` — differently-configured instances coexist in one host.
+-  `greet` function L40-43 — `(&self, name: String) -> String` — differently-configured instances coexist in one host.
+-  `ConfiguredGreeter` type L46-50 — `= ConfiguredGreeter` — differently-configured instances coexist in one host.
+-  `configure` function L47-49 — `(cfg: GreetConfig) -> Self` — differently-configured instances coexist in one host.
+-  `config_bound_once_and_used_in_methods` function L55-67 — `()` — differently-configured instances coexist in one host.
+-  `n_differently_configured_instances_coexist` function L70-90 — `()` — differently-configured instances coexist in one host.
 
 #### crates/fidius-host/tests/e2e.rs
 
@@ -1404,23 +1419,23 @@
 
 #### crates/fidius-macro/src/impl_macro.rs
 
-- pub `PluginImplAttrs` struct L106-115 — `{ trait_name: Ident, crate_path: Path, buffer_strategy: BufferStrategyAttr }` — Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`,
-- pub `generate_plugin_impl` function L170-308 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
+- pub `PluginImplAttrs` struct L106-120 — `{ trait_name: Ident, crate_path: Path, buffer_strategy: BufferStrategyAttr, conf...` — Arguments to `#[plugin_impl(TraitName)]`, `#[plugin_impl(TraitName, crate = "...")]`,
+- pub `generate_plugin_impl` function L180-319 — `(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Result<TokenStream>` — Generate all code for a `#[plugin_impl(TraitName)]` invocation.
 -  `MethodInfo` struct L31-51 — `{ name: &'a Ident, is_async: bool, returns_result: bool, arg_types: Vec<&'a Type...` — Info about an impl method, extracted from the impl block.
 -  `impl_method_is_raw` function L56-73 — `(attrs: &[syn::Attribute]) -> syn::Result<bool>` — Detect a `#[wire(raw)]` attribute on an impl-side method.
 -  `kebab_to_pascal` function L78-88 — `(s: &str) -> String` — kebab-case → PascalCase, for deriving the wit-bindgen resource type name from
 -  `is_result_type` function L91-102 — `(ty: &Type) -> bool` — Check if a return type looks like `Result<T, ...>`.
--  `PluginImplAttrs` type L117-167 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `parse` function L118-166 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `generate_wasm_adapter` function L318-586 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], ) -> TokenS...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
--  `collect_user_idents` function L590-635 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
--  `gen_type` function L640-666 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
--  `wasm_first_generic` function L668-677 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
--  `wasm_unsupported` function L683-693 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
--  `generate_shims` function L697-1010 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
--  `generate_vtable_static` function L1016-1038 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
--  `generate_descriptor` function L1041-1143 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
--  `generate_inventory_registration` function L1146-1157 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
+-  `PluginImplAttrs` type L122-177 — `impl Parse for PluginImplAttrs` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `parse` function L123-176 — `(input: ParseStream) -> syn::Result<Self>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `generate_wasm_adapter` function L329-597 — `( trait_name: &Ident, instance_name: &Ident, methods: &[MethodInfo], ) -> TokenS...` — Generate the WASM component auto-export adapter for `#[plugin_impl]`.
+-  `collect_user_idents` function L601-646 — `(ty: &Type, out: &mut std::collections::BTreeSet<String>)` — Collect candidate user-type idents (non-primitive path leaves) from a type,
+-  `gen_type` function L651-677 — `(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> Toke...` — The wit-bindgen-generated type for an author type: identity for types holding
+-  `wasm_first_generic` function L679-688 — `(seg: &syn::PathSegment) -> Option<&Type>` — dylibs, the FIDIUS_PLUGIN_REGISTRY.
+-  `wasm_unsupported` function L694-704 — `(method: &Ident, reason: &str) -> TokenStream` — Emit a `#[cfg(target_family = "wasm")]`-gated `compile_error!` for a method
+-  `generate_shims` function L708-1021 — `( impl_ident: &Ident, methods: &[MethodInfo], crate_path: &Path, buffer_strategy...` — Generate extern "C" shim functions for each method.
+-  `generate_vtable_static` function L1027-1049 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], ) -> TokenStream` — Generate the static vtable with function pointers.
+-  `generate_descriptor` function L1052-1178 — `( trait_name: &Ident, impl_ident: &Ident, methods: &[&Ident], crate_path: &Path,...` — Generate the PluginDescriptor static.
+-  `generate_inventory_registration` function L1181-1192 — `(impl_ident: &Ident, crate_path: &Path) -> TokenStream` — Register the descriptor via inventory for multi-plugin support.
 
 #### crates/fidius-macro/src/interface.rs
 

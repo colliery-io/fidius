@@ -358,6 +358,40 @@ impl PluginHost {
         Ok(crate::handle::PluginHandle::from_python(py, info))
     }
 
+    /// Load a **configured** Python plugin (FIDIUS-A-0006 / CI.4): serialize
+    /// `config` and bind it once via the module's
+    /// `__fidius_configure__(config) -> instance`; methods then run on the
+    /// configured instance. N differently-configured instances coexist.
+    /// Available only with the `python` feature.
+    #[cfg(feature = "python")]
+    pub fn load_python_configured<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
+        config: &C,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let dir = self.find_python_package(name)?;
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let cfg = serde_json::to_value(config)
+            .map_err(|e| LoadError::PythonLoad(format!("config serialize: {e}")))?;
+        let py = fidius_python::load_python_plugin_configured(&dir, descriptor, &cfg)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Python,
+        };
+        Ok(crate::handle::PluginHandle::from_python(py, info))
+    }
+
     /// Find a WASM package directory by name across the search paths (matches
     /// `package.toml` `[package].name` with `runtime = "wasm"`).
     #[cfg(feature = "wasm")]
