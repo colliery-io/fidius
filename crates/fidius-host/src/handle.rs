@@ -217,6 +217,39 @@ impl PluginHandle {
         }
     }
 
+    /// Client-streaming raw call (FIDIUS-I-0030 CS2.2): pass the host's producer
+    /// `handle` (built via [`crate::client_stream::host_producer_handle`]) and the
+    /// bincode of the non-stream args; returns the bincode of the method's result.
+    /// Wired for the cdylib backend; WASM/Python land in CS2.3/CS2.4. The typed
+    /// `call_client_streaming` wrapper is CS2.5.
+    ///
+    /// # Safety
+    /// `handle` must be a valid, exclusively-owned producer handle (e.g. from
+    /// [`crate::client_stream::host_producer_handle`]); it is consumed by the call.
+    #[cfg(feature = "streaming")]
+    pub unsafe fn call_client_streaming_raw(
+        &self,
+        index: usize,
+        handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,
+        input: &[u8],
+    ) -> Result<Vec<u8>, CallError> {
+        match &self.backend {
+            // SAFETY: forwarded per this fn's contract.
+            Backend::Cdylib(e) => unsafe { e.call_client_streaming_raw(index, handle, input) },
+            #[cfg(feature = "python")]
+            Backend::Python(_) => Err(CallError::Backend {
+                runtime: "python".into(),
+                message: "client-streaming is not yet wired for Python (FIDIUS-I-0030 CS2.4)"
+                    .into(),
+            }),
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(_) => Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: "client-streaming is not yet wired for WASM (FIDIUS-I-0030 CS2.3)".into(),
+            }),
+        }
+    }
+
     /// Check if an optional method is supported (capability bit set).
     /// Returns `false` for `bit >= 64` and for backends without capabilities.
     pub fn has_capability(&self, bit: u32) -> bool {

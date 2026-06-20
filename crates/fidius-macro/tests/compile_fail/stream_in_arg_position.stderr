@@ -1,5 +1,0 @@
-error: client-streaming (`Stream<T>` in argument position) is recognized but no backend is wired for it yet (FIDIUS-I-0030, CS2.2–CS2.4)
-  --> tests/compile_fail/stream_in_arg_position.rs:23:8
-   |
-23 |     fn sink(&self, items: fidius::Stream<u32>) -> u32;
-   |        ^^^^

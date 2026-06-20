@@ -551,6 +551,102 @@ impl CdylibExecutor {
         Ok(result)
     }
 
+    /// Client-streaming raw call (FIDIUS-I-0030 CS2.2). The vtable slot is a
+    /// `ClientStreamFn` that also takes the host's producer `handle`, from which
+    /// the plugin pulls its `Stream<T>` argument. `input_bytes` is the bincode of
+    /// the **non-stream** args; the bincode of the method's result is returned. The
+    /// plugin's consumer frees `handle` via its `drop_fn` — the host must not.
+    ///
+    /// # Safety
+    /// `handle` must be a valid, exclusively-owned producer handle (e.g. from
+    /// [`crate::client_stream::host_producer_handle`]); it is consumed by the call.
+    #[cfg(feature = "streaming")]
+    pub unsafe fn call_client_streaming_raw(
+        &self,
+        index: usize,
+        handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,
+        input_bytes: &[u8],
+    ) -> Result<Vec<u8>, CallError> {
+        if index >= self.method_count as usize {
+            return Err(CallError::InvalidMethodIndex {
+                index,
+                count: self.method_count,
+            });
+        }
+        type ClientStreamFn = unsafe extern "C" fn(
+            *mut c_void,
+            *mut fidius_core::stream_ffi::FidiusStreamHandle,
+            *const u8,
+            u32,
+            *mut *mut u8,
+            *mut u32,
+        ) -> i32;
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<ClientStreamFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
+        };
+
+        let mut out_ptr: *mut u8 = std::ptr::null_mut();
+        let mut out_len: u32 = 0;
+        let status = unsafe {
+            fn_ptr(
+                self.instance,
+                handle,
+                input_bytes.as_ptr(),
+                input_bytes.len() as u32,
+                &mut out_ptr,
+                &mut out_len,
+            )
+        };
+
+        match status {
+            STATUS_OK => {}
+            STATUS_SERIALIZATION_ERROR => {
+                return Err(CallError::Serialization("FFI serialization failed".into()))
+            }
+            STATUS_PLUGIN_ERROR => {
+                let err = if !out_ptr.is_null() && out_len > 0 {
+                    let slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let pe: PluginError = wire::deserialize(slice)
+                        .unwrap_or_else(|_| PluginError::new("UNKNOWN", "plugin error"));
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+                    pe
+                } else {
+                    PluginError::new("UNKNOWN", "plugin returned error but no data")
+                };
+                return Err(CallError::Plugin(err));
+            }
+            STATUS_PANIC => {
+                let msg = if !out_ptr.is_null() && out_len > 0 {
+                    let slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let m = wire::deserialize::<String>(slice)
+                        .unwrap_or_else(|_| "unknown panic".into());
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+                    m
+                } else {
+                    "unknown panic".into()
+                };
+                return Err(CallError::Panic(msg));
+            }
+            _ => return Err(CallError::UnknownStatus { code: status }),
+        }
+
+        if out_ptr.is_null() {
+            return Err(CallError::Serialization(
+                "plugin returned null output buffer".into(),
+            ));
+        }
+        let result = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) }.to_vec();
+        if let Some(free) = self.free_buffer {
+            unsafe { free(out_ptr, out_len as usize) };
+        }
+        Ok(result)
+    }
+
     /// Arena raw path — same FFI shape as `call_arena`, success bytes
     /// returned as a `Vec<u8>` copied out of the arena.
     fn call_arena_raw(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError> {

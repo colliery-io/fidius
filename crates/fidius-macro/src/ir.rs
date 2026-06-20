@@ -556,15 +556,9 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             client_stream_item.is_some(),
         );
 
-        // CS2.1: client-streaming is recognized + hashed, but no backend pull
-        // channel is wired yet (CS2.2–CS2.4). Reject with a clear message.
-        if client_stream_item.is_some() {
-            return Err(syn::Error::new(
-                method.sig.ident.span(),
-                "client-streaming (`Stream<T>` in argument position) is recognized but no \
-                 backend is wired for it yet (FIDIUS-I-0030, CS2.2–CS2.4)",
-            ));
-        }
+        // Client-streaming (FIDIUS-I-0030): recognized + hashed in CS2.1; the
+        // cdylib backend is wired in CS2.2. The WASM adapter + the typed Client
+        // still reject/skip it (CS2.3/CS2.5), so non-cdylib paths stay guarded.
 
         methods.push(MethodIR {
             name: method.sig.ident.clone(),
@@ -764,13 +758,12 @@ mod tests {
     }
 
     #[test]
-    fn client_streaming_is_recognized_but_not_yet_wired() {
-        // FIDIUS-I-0030 CS2.1: a `Stream<T>` argument is recognized as
-        // client-streaming (and folded into the hash), but codegen rejects it
-        // with a clear "not yet wired" message until CS2.2–CS2.4.
+    fn client_streaming_is_recognized_in_the_ir() {
+        // FIDIUS-I-0030: a `Stream<T>` argument is recognized as client-streaming —
+        // `client_stream_item` is set and the signature carries the `<stream` marker.
         let item: ItemTrait = syn::parse2(quote! {
-            pub trait Bad: Send + Sync {
-                fn sink(&self, items: fidius::Stream<Row>) -> u32;
+            pub trait Sink: Send + Sync {
+                fn load(&self, items: fidius::Stream<Row>) -> u32;
             }
         })
         .unwrap();
@@ -779,10 +772,16 @@ mod tests {
             buffer_strategy: BufferStrategyAttr::PluginAllocated,
             crate_path: syn::parse_str("fidius").unwrap(),
         };
-        let err = parse_interface(attrs, &item).unwrap_err();
+        let ir = parse_interface(attrs, &item).unwrap();
+        let m = &ir.methods[0];
         assert!(
-            err.to_string().contains("client-streaming") && err.to_string().contains("wired"),
-            "got: {err}"
+            m.client_stream_item.is_some(),
+            "a `Stream<T>` arg sets client_stream_item"
+        );
+        assert!(
+            m.signature_string.contains("<stream"),
+            "the hash carries the `<stream` marker: {}",
+            m.signature_string
         );
     }
 }

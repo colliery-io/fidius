@@ -201,7 +201,7 @@ fn generate_vtable(ir: &InterfaceIR) -> TokenStream {
     //    with needed size in out_len if too small)
     // FIDIUS-A-0006: every method takes the instance pointer first (returned by
     // the descriptor's `construct`); the singleton is `construct(())`.
-    let fn_type = match ir.attrs.buffer_strategy {
+    let base_fn_type = match ir.attrs.buffer_strategy {
         BufferStrategyAttr::PluginAllocated => quote! {
             unsafe extern "C" fn(
                 *mut ::core::ffi::c_void,
@@ -219,15 +219,35 @@ fn generate_vtable(ir: &InterfaceIR) -> TokenStream {
         },
     };
 
+    // Client-streaming (FIDIUS-I-0030): the method also receives the host's
+    // producer handle, from which the guest pulls the `Stream<T>` argument.
+    let crate_path = &ir.attrs.crate_path;
+    let client_stream_fn_type = quote! {
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            *mut #crate_path::stream_ffi::FidiusStreamHandle,
+            *const u8, u32,
+            *mut *mut u8, *mut u32,
+        ) -> i32
+    };
+    let method_fn_type = |m: &crate::ir::MethodIR| {
+        if m.client_stream_item.is_some() {
+            &client_stream_fn_type
+        } else {
+            &base_fn_type
+        }
+    };
+
     let fields: Vec<TokenStream> = ir
         .methods
         .iter()
         .map(|m| {
             let field_name = &m.name;
+            let ft = method_fn_type(m);
             if m.optional_since.is_some() {
-                quote! { pub #field_name: Option<#fn_type> }
+                quote! { pub #field_name: Option<#ft> }
             } else {
-                quote! { pub #field_name: #fn_type }
+                quote! { pub #field_name: #ft }
             }
         })
         .collect();
@@ -240,7 +260,8 @@ fn generate_vtable(ir: &InterfaceIR) -> TokenStream {
         .iter()
         .map(|m| {
             let name = &m.name;
-            quote! { #name: #fn_type }
+            let ft = method_fn_type(m);
+            quote! { #name: #ft }
         })
         .collect();
 
@@ -554,9 +575,11 @@ fn generate_client(ir: &InterfaceIR) -> TokenStream {
                 quote! {}
             };
 
-            if m.streaming {
-                // Server-streaming methods (FIDIUS-I-0026) are intentionally NOT
-                // given a typed Client method here. Emitting one would reference
+            if m.streaming || m.client_stream_item.is_some() {
+                // Server- and client-streaming methods (FIDIUS-I-0026 / I-0030) are
+                // intentionally NOT given a typed Client method here. Callers reach
+                // them through the handle (`call_streaming` / `call_client_streaming`).
+                // Emitting one would reference
                 // `#crate_path::ChunkStream`, which only exists when the consuming
                 // crate enables `fidius`'s `streaming` feature — coupling every
                 // `host` build of a streaming interface to `streaming` and

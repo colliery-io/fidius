@@ -48,6 +48,10 @@ struct MethodInfo<'a> {
     /// (FIDIUS-I-0026). When `Some`, the WASM adapter emits a `resource`
     /// instead of a value-returning func, and the cdylib path is disabled.
     stream_item: Option<&'a Type>,
+    /// For a **client-streaming** method — a `Stream<T>` in *argument* position
+    /// (FIDIUS-I-0030): the item type `T`. When `Some`, the cdylib shim takes the
+    /// host's producer handle and builds the `Stream<T>` the method consumes.
+    client_stream_item: Option<&'a Type>,
 }
 
 /// Detect a `#[wire(raw)]` attribute on an impl-side method. Mirrors the
@@ -210,6 +214,10 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                     }
                 }
             }
+            // Client-streaming (FIDIUS-I-0030): a `Stream<T>` in argument position.
+            let client_stream_item = arg_types
+                .iter()
+                .find_map(|t| crate::wit::stream_item_type(t));
             let wire_raw = impl_method_is_raw(&method.attrs)?;
             impl_methods.push(MethodInfo {
                 name: &method.sig.ident,
@@ -220,6 +228,7 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
                 wire_raw,
                 ret_type,
                 stream_item,
+                client_stream_item,
             });
         }
     }
@@ -235,7 +244,9 @@ pub fn generate_plugin_impl(attrs: &PluginImplAttrs, item: &ItemImpl) -> syn::Re
     // and per-item Box<[u8]> allocation are PluginAllocated-shaped; Arena
     // streaming is out of scope). Fail at macro time — this is a structural
     // misconfiguration, not target-dependent.
-    let any_streaming = impl_methods.iter().any(|m| m.stream_item.is_some());
+    let any_streaming = impl_methods
+        .iter()
+        .any(|m| m.stream_item.is_some() || m.client_stream_item.is_some());
     if any_streaming && matches!(buffer_strategy, BufferStrategyAttr::Arena) {
         return Err(syn::Error::new(
             proc_macro2::Span::call_site(),
@@ -387,6 +398,16 @@ fn generate_wasm_adapter(
     let companion = format_ident!("__fidius_{}", trait_name);
     let hash_const = format_ident!("{}_INTERFACE_HASH", trait_name);
     let module_ident = format_ident!("__fidius_wasm_{}", instance_name);
+
+    // Client-streaming (FIDIUS-I-0030) is wired for cdylib (CS2.2) but not yet for
+    // WASM (CS2.3). On a wasm build of such a plugin, fail loud + clear.
+    if let Some(m) = methods.iter().find(|m| m.client_stream_item.is_some()) {
+        return wasm_unsupported(
+            m.name,
+            "client-streaming (`Stream<T>` in argument position) is not yet supported on the \
+             WASM backend (FIDIUS-I-0030 CS2.3); it works on the cdylib backend today",
+        );
+    }
 
     // Collect candidate user types (non-primitive path idents in signatures;
     // `#[derive(WitType)]` records/variants). Reject reference args (owned only,
@@ -1003,6 +1024,68 @@ fn generate_shims(
                     }
                 }
             };
+
+            // Client-streaming (FIDIUS-I-0030 CS2.2): the vtable slot is a
+            // `ClientStreamFn` — it also takes the host's producer handle, from
+            // which we build the `Stream<T>` the method consumes. The non-stream
+            // args still cross as a bincode tuple; the result returns via the
+            // PluginAllocated out-buffer (Arena is rejected in generate_plugin_impl).
+            if let Some(item_ty) = method.client_stream_item {
+                let stream_idx = method
+                    .arg_types
+                    .iter()
+                    .position(|t| crate::wit::stream_item_type(t).is_some())
+                    .expect("client-streaming method has a `Stream<T>` argument");
+                let stream_arg_name = &method.arg_names[stream_idx];
+                let non_stream_names: Vec<&Ident> = method
+                    .arg_names
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, n)| n)
+                    .collect();
+                let non_stream_types: Vec<&Type> = method
+                    .arg_types
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != stream_idx)
+                    .map(|(_, t)| *t)
+                    .collect();
+                return quote! {
+                    #[cfg(not(target_family = "wasm"))]
+                    unsafe extern "C" fn #shim_name(
+                        instance: *mut ::core::ffi::c_void,
+                        handle: *mut #crate_path::stream_ffi::FidiusStreamHandle,
+                        in_ptr: *const u8,
+                        in_len: u32,
+                        out_ptr: *mut *mut u8,
+                        out_len: *mut u32,
+                    ) -> i32 {
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            let in_slice = unsafe { std::slice::from_raw_parts(in_ptr, in_len as usize) };
+                            let (#(#non_stream_names,)*) = match #crate_path::wire::deserialize::<(#(#non_stream_types,)*)>(in_slice) {
+                                Ok(v) => v,
+                                Err(_) => return #crate_path::status::STATUS_SERIALIZATION_ERROR,
+                            };
+                            // Build the `Stream<T>` from the host producer handle.
+                            let #stream_arg_name = #crate_path::stream_marker::Stream::from_iter(
+                                unsafe { #crate_path::stream_ffi::HostStream::<#item_ty>::from_handle(handle) }
+                            );
+                            let output = #method_call;
+                            let (output_bytes, status) = #output_handling;
+                            let boxed: Box<[u8]> = output_bytes.into_boxed_slice();
+                            let len = boxed.len();
+                            let ptr = Box::into_raw(boxed) as *mut u8;
+                            unsafe { *out_ptr = ptr; *out_len = len as u32; }
+                            status
+                        }));
+                        match result {
+                            ::core::result::Result::Ok(status) => status,
+                            ::core::result::Result::Err(_) => #crate_path::status::STATUS_PANIC,
+                        }
+                    }
+                };
+            }
 
             match buffer_strategy {
                 BufferStrategyAttr::Arena => quote! {
