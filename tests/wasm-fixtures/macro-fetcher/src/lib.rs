@@ -13,6 +13,9 @@ use fidius_macro::{plugin_impl, plugin_interface};
 pub trait Fetcher: Send + Sync {
     /// GET `url`, returning the body — or `"ERROR: …"` (incl. a denied egress).
     fn fetch(&self, url: String) -> String;
+    /// GET `url` with a short request timeout; `"ERROR: …"` if it doesn't respond
+    /// in time (PC.3).
+    fn fetch_timeout(&self, url: String) -> String;
 }
 
 pub struct MyFetcher;
@@ -21,6 +24,15 @@ pub struct MyFetcher;
 impl Fetcher for MyFetcher {
     fn fetch(&self, url: String) -> String {
         match fidius_guest::http::get(&url) {
+            Ok(resp) => resp.text(),
+            Err(e) => format!("ERROR: {e}"),
+        }
+    }
+
+    fn fetch_timeout(&self, url: String) -> String {
+        let req =
+            fidius_guest::http::Request::get(url).timeout(core::time::Duration::from_millis(300));
+        match fidius_guest::http::send(req) {
             Ok(resp) => resp.text(),
             Err(e) => format!("ERROR: {e}"),
         }

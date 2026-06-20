@@ -4,14 +4,14 @@ level: task
 title: "PC.2 — Typed-record stream items over WASM"
 short_code: "FIDIUS-T-0153"
 created_at: 2026-06-20T15:39:20.111336+00:00
-updated_at: 2026-06-20T16:07:39.945901+00:00
+updated_at: 2026-06-20T16:15:10.400192+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Lift the restriction that WASM **streaming items must be primitives/`String`**. 
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -137,4 +139,15 @@ Lift the restriction that WASM **streaming items must be primitives/`String`**. 
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 3bd22e8).** Finding: the build.rs WIT side (`render_wit_full`) already
+renders user-typed stream resources (`resource <m>-stream { next: -> option<record> }`),
+and the build.rs `generate()` already sets `stream_item` to the record's WIT name; the
+host `val_to_value` already decodes record `Val`s. So the only gap was the **macro's
+user-type (build.rs) branch**, which emitted no streaming resource. Implemented: that
+branch now mirrors the primitives branch — emits the resource state struct +
+`Guest<M>Stream::next()` returning the binding item, converting each user item via
+`conv_expr`; removed the rejection guard (impl_macro ~435). New `records-stream` fixture
+(`rows(count) -> Stream<Row>`) + `records_stream_wasm` E2E: typed records stream over real
+WASM (all items + drop-cancel). No regression: `records_wasm` (3), `macro_wasm_streaming`
+(3) green; default suite 65 + lint green. Removed the resolved caveat from
+configured-instances.md (streaming.md had none).

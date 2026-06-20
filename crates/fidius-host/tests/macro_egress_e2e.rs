@@ -39,6 +39,7 @@ use fidius_host::{LoadError, PluginHost};
 #[fidius_macro::plugin_interface(version = 1, buffer = PluginAllocated, crate = "fidius_core")]
 pub trait Fetcher: Send + Sync {
     fn fetch(&self, url: String) -> String;
+    fn fetch_timeout(&self, url: String) -> String;
 }
 
 /// Build the macro-fetcher component once.
@@ -73,6 +74,25 @@ fn mock_http_once(body: &'static str) -> (String, std::thread::JoinHandle<()>) {
                 body
             );
             let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+    (url, h)
+}
+
+/// A loopback server that accepts the connection but **stalls** ~2s before
+/// responding — past the guest's 300ms timeout — to exercise PC.3.
+fn mock_http_slow() -> (String, std::thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let url = format!("http://{addr}/");
+    let h = std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 2048];
+            let _ = stream.read(&mut buf);
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let _ = stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nhi");
             let _ = stream.flush();
         }
     });
@@ -170,4 +190,60 @@ fn macro_connector_no_policy_fails_closed() {
         matches!(res, Err(LoadError::WasmLoad(_))),
         "must fail closed without an egress policy"
     );
+}
+
+#[test]
+fn macro_connector_times_out_on_slow_upstream() {
+    let (url, server) = mock_http_slow();
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_pkg(tmp.path());
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .egress(AllowAll)
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm(
+            "macro-fetcher-pkg",
+            &__fidius_Fetcher::Fetcher_WASM_DESCRIPTOR,
+        )
+        .expect("load_wasm");
+
+    // fetch_timeout (method 1) sets a 300ms timeout; a ~2s upstream must fail
+    // FAST (an ERROR), not hang for the full delay.
+    let started = std::time::Instant::now();
+    let body: String = handle.call_method(1, &(url,)).expect("fetch_timeout call");
+    let elapsed = started.elapsed();
+    assert!(
+        body.starts_with("ERROR:"),
+        "a slow upstream should time out as ERROR, got: {body}"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_millis(1500),
+        "timeout should fail fast (~300ms), took {elapsed:?}"
+    );
+    let _ = server.join();
+}
+
+#[test]
+fn macro_connector_timeout_allows_a_fast_response() {
+    let (url, server) = mock_http_once("quick");
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_pkg(tmp.path());
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .egress(AllowAll)
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm(
+            "macro-fetcher-pkg",
+            &__fidius_Fetcher::Fetcher_WASM_DESCRIPTOR,
+        )
+        .expect("load_wasm");
+
+    // Same timed method, but the upstream responds immediately → success.
+    let body: String = handle.call_method(1, &(url,)).expect("fetch_timeout call");
+    server.join().unwrap();
+    assert_eq!(body, "quick");
 }

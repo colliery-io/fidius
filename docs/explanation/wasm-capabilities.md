@@ -277,6 +277,22 @@ a native/cdylib connector uses a normal HTTP client directly (it already has the
 host's authority). *Unify the contract, not the capabilities* — the trust tiers
 legitimately differ.
 
+**Timeouts.** Set a per-request timeout so a slow upstream fails fast instead of
+hanging the call — it bounds the connect, first-byte, and between-bytes waits via
+`wasi:http`'s `request-options`:
+
+```rust
+use core::time::Duration;
+let req = fidius_guest::http::Request::get(url).timeout(Duration::from_secs(5));
+match fidius_guest::http::send(req) {
+    Ok(resp) => { /* … */ }
+    Err(e) => { /* timed out / denied / transport error */ }
+}
+```
+
+The bare `get`/`post` helpers apply no fidius timeout (the host/runtime default
+applies); reach for `Request::…​.timeout(…)` + `send` when you need a bound.
+
 ### Version compatibility (the contract)
 
 `fidius_guest::http` pins **one** `wasi:http` version for the whole ecosystem

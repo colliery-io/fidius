@@ -4,14 +4,14 @@ level: task
 title: "PC.3 — Guest HTTP RequestOptions + timeout"
 short_code: "FIDIUS-T-0154"
 created_at: 2026-06-20T15:39:21.522638+00:00
-updated_at: 2026-06-20T15:39:21.522638+00:00
+updated_at: 2026-06-20T16:15:18.571505+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Add request **timeouts** to the guest HTTP client (`crates/fidius-guest/src/http
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

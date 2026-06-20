@@ -63,6 +63,11 @@ pub struct Request {
     pub headers: Vec<(String, String)>,
     /// Request body (empty for GET).
     pub body: Vec<u8>,
+    /// Optional request timeout. When set, it bounds connect, first-byte, and
+    /// between-bytes waits (wasi:http `request-options`); a slow upstream then
+    /// fails with an [`HttpError`] instead of hanging the call. `None` = no
+    /// fidius-imposed timeout (the host/runtime default applies).
+    pub timeout: Option<core::time::Duration>,
 }
 
 impl Request {
@@ -73,6 +78,7 @@ impl Request {
             url: url.into(),
             headers: Vec::new(),
             body: Vec::new(),
+            timeout: None,
         }
     }
 
@@ -83,12 +89,20 @@ impl Request {
             url: url.into(),
             headers: Vec::new(),
             body: body.into(),
+            timeout: None,
         }
     }
 
     /// Add a header (builder style).
     pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.push((name.into(), value.into()));
+        self
+    }
+
+    /// Set a request timeout (builder style). Bounds connect / first-byte /
+    /// between-bytes waits so a slow upstream fails fast instead of hanging.
+    pub fn timeout(mut self, dur: core::time::Duration) -> Self {
+        self.timeout = Some(dur);
         self
     }
 }
@@ -215,7 +229,18 @@ pub fn send(req: Request) -> Result<Response, HttpError> {
     }
     OutgoingBody::finish(body, None).map_err(|e| HttpError::new(format!("finish: {e:?}")))?;
 
-    let fut = outgoing_handler::handle(outgoing, None::<RequestOptions>)
+    // Build request-options when a timeout was set (wasi:http durations are
+    // nanoseconds). The same bound applies to connect, first-byte, and
+    // between-bytes waits so any stall fails fast.
+    let options = req.timeout.map(|d| {
+        let ns = d.as_nanos().min(u64::MAX as u128) as u64;
+        let opts = RequestOptions::new();
+        let _ = opts.set_connect_timeout(Some(ns));
+        let _ = opts.set_first_byte_timeout(Some(ns));
+        let _ = opts.set_between_bytes_timeout(Some(ns));
+        opts
+    });
+    let fut = outgoing_handler::handle(outgoing, options)
         .map_err(|e| HttpError::new(format!("dispatch denied or failed: {e:?}")))?;
     fut.subscribe().block();
     let resp = fut
