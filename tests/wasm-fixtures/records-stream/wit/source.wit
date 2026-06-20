@@ -1,0 +1,23 @@
+package fidius:source@0.1.0;
+
+interface source {
+    record plugin-error {
+        code: string,
+        message: string,
+        details: option<string>,
+    }
+    record row {
+        id: u32,
+        label: string,
+    }
+    resource rows-stream {
+        next: func() -> result<option<row>, plugin-error>;
+    }
+    rows: func(count: u32) -> rows-stream;
+    fidius-interface-hash: func() -> u64;
+    fidius-configure: func(config: list<u8>);
+}
+
+world source-plugin {
+    export source;
+}

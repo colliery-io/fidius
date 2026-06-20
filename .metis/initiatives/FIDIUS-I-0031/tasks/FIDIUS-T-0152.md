@@ -4,14 +4,14 @@ level: task
 title: "PC.1 — Rich WIT type mapping (maps, tuples, nesting)"
 short_code: "FIDIUS-T-0152"
 created_at: 2026-06-20T15:39:18.699224+00:00
-updated_at: 2026-06-20T15:44:01.988061+00:00
+updated_at: 2026-06-20T16:07:27.427371+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Extend `fidius-wit`'s type mapping (`crates/fidius-wit/src/lib.rs`, `wit_type_wi
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -150,3 +152,16 @@ type-blind. Inherent ambiguities: a Rust tuple serializes to `Value::List` (no
 remove the `Value::Map` rejection. (2) returns: keep `val_to_value` structural, override
 `deserialize_map` in `fidius-guest/src/value.rs` so a `Value::List` of pairs deserializes
 to a map (so `from_value::<HashMap>` + `<Vec<(K,V)>>` both work). (3) fixture/E2E + doc.
+
+**DONE (commit 11af6de).** All criteria met. Implemented as planned + one extra: a
+string-keyed map serializes to `Value::Record`, so `value_to_val_typed`'s `list<tuple>`
+arm also accepts `Value::Record`. Guest authoring with `HashMap` works (`gen_type` emits
+the `Vec<(K,V)>` binding; `conv_expr` does `into_iter().collect()`). E2E: records-greeter
+`tally(HashMap<String,u32>, (i32,i32)) -> HashMap` round-trips over real WASM
+(`records_wasm::maps_and_tuples_round_trip`). Unit tests: fidius-wit `maps_tuples_and_nesting`,
+fidius-guest `map_deserializes_from_a_list_of_pairs`. Doc: `wasm-component-abi.md` updated.
+Also fixed a pre-existing `wasm_executor::unknown_capability_rejected_at_load` (used
+`"filesystem"`, now path-scoped → switched to `"gpu"`). Default suite + lint + records_wasm
++ macro_wasm + wasm_executor + macro_wasm_streaming all green. **Note:** tuple-inside-record
+and `Vec<tuple-with-user-type>` arg lowering use structural fallback (top-level + list-nested
+tuples/maps covered); deeper user-typed tuple nesting is a follow-on if needed.

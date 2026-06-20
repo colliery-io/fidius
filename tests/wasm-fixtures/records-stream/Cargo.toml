@@ -1,0 +1,30 @@
+# WASM author fixture (PC.2 / FIDIUS-T-0153): a server-streaming plugin whose
+# stream item is a user `#[derive(WitType)]` record. build.rs regenerates wit/ +
+# conversions; #[plugin_impl] auto-exports the component with a record-stream
+# resource.
+[workspace]
+
+[package]
+name = "records-stream"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[build-dependencies]
+fidius-build = { path = "../../../crates/fidius-build" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

@@ -432,19 +432,6 @@ fn generate_wasm_adapter(
 
     let has_user = !known.is_empty();
 
-    // v1 scope: server-streaming is supported only with primitive/String item
-    // types and only in interfaces with no `#[derive(WitType)]` user types. The
-    // build.rs/user-type streaming path is a follow-on.
-    if has_user {
-        if let Some(m) = methods.iter().find(|m| m.stream_item.is_some()) {
-            return wasm_unsupported(
-                m.name,
-                "server-streaming alongside #[derive(WitType)] user types is not yet supported; \
-                 use a primitive or String stream item type in a user-type-free interface",
-            );
-        }
-    }
-
     if !has_user {
         // ── Primitives-only: self-contained inline WIT (no build.rs needed). ──
         let mut wit_methods = Vec::new();
@@ -559,64 +546,107 @@ fn generate_wasm_adapter(
     // The Guest uses wit-bindgen's generated types; we convert at the boundary
     // via the generated `From` impls (`conv_expr` is identity for primitive-only
     // fields and `.into()`/map for user types).
-    let guest_methods: Vec<TokenStream> = methods
-        .iter()
-        .map(|m| {
-            let mname = m.name;
-            let arg_sig: Vec<TokenStream> = m
-                .arg_names
-                .iter()
-                .zip(&m.arg_types)
-                .map(|(n, t)| {
-                    let gt = gen_type(t, &known, &pkg_seg);
-                    quote! { #n: #gt }
-                })
-                .collect();
-            let call_args: Vec<syn::Expr> = m
-                .arg_names
-                .iter()
-                .zip(&m.arg_types)
-                .map(|(n, t)| {
-                    let s = conv_expr(&n.to_string(), t, &known);
-                    syn::parse_str::<syn::Expr>(&s).expect("conv expr parses")
-                })
-                .collect();
-            let call = quote! { #dispatch_self.#mname(#(#call_args),*) };
-            if m.returns_result {
-                let ok = m.ret_type.and_then(result_ok_type);
-                let gen_ok = match ok {
-                    Some(t) => gen_type(t, &known, &pkg_seg),
-                    None => quote! { () },
-                };
-                let ok_map = match ok {
-                    Some(t) => {
-                        let e: syn::Expr =
-                            syn::parse_str(&conv_expr("__v", t, &known)).expect("conv expr");
-                        quote! { .map(|__v| #e) }
-                    }
-                    None => quote! {},
-                };
-                quote! {
-                    fn #mname(#(#arg_sig),*)
-                        -> Result<#gen_ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
-                        #call #ok_map .map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
-                            code: __e.code, message: __e.message, details: __e.details,
-                        })
+    let mut guest_methods: Vec<TokenStream> = Vec::new();
+    let mut resource_defs: Vec<TokenStream> = Vec::new();
+    for m in methods {
+        let mname = m.name;
+        let arg_sig: Vec<TokenStream> = m
+            .arg_names
+            .iter()
+            .zip(&m.arg_types)
+            .map(|(n, t)| {
+                let gt = gen_type(t, &known, &pkg_seg);
+                quote! { #n: #gt }
+            })
+            .collect();
+        let call_args: Vec<syn::Expr> = m
+            .arg_names
+            .iter()
+            .zip(&m.arg_types)
+            .map(|(n, t)| {
+                let s = conv_expr(&n.to_string(), t, &known);
+                syn::parse_str::<syn::Expr>(&s).expect("conv expr parses")
+            })
+            .collect();
+
+        // Server-streaming with user types (PC.2): a wit-bindgen exported resource
+        // whose `next()` yields the *binding* item type, converting each user item
+        // via the generated `From`/`conv_expr`. Mirrors the primitives-only branch.
+        if let Some(item) = m.stream_item {
+            let res_pascal =
+                kebab_to_pascal(&format!("{}-stream", to_kebab_case(&mname.to_string())));
+            let res_ident = format_ident!("{}", res_pascal);
+            let guest_trait = format_ident!("Guest{}", res_pascal);
+            let state_ident = format_ident!("__Fidius{}", res_pascal);
+            let stream_ty = m.ret_type.expect("streaming method has a return type");
+            let item_binding = gen_type(item, &known, &pkg_seg);
+            let item_conv: syn::Expr =
+                syn::parse_str(&conv_expr("__v", item, &known)).expect("conv expr parses");
+            resource_defs.push(quote! {
+                struct #state_ident {
+                    stream: ::core::cell::RefCell<#stream_ty>,
+                }
+                impl exports::fidius::#pkg_seg::#pkg_seg::#guest_trait for #state_ident {
+                    fn next(&self) -> ::core::result::Result<
+                        ::core::option::Option<#item_binding>,
+                        exports::fidius::#pkg_seg::#pkg_seg::PluginError,
+                    > {
+                        ::core::result::Result::Ok(
+                            self.stream.borrow_mut().next_item().map(|__v| #item_conv),
+                        )
                     }
                 }
-            } else {
-                match m.ret_type {
-                    Some(rt) => {
-                        let gen_ret = gen_type(rt, &known, &pkg_seg);
-                        let e: syn::Expr =
-                            syn::parse_str(&conv_expr("__r", rt, &known)).expect("conv expr");
-                        quote! { fn #mname(#(#arg_sig),*) -> #gen_ret { let __r = #call; #e } }
-                    }
-                    None => quote! { fn #mname(#(#arg_sig),*) { #call } },
+            });
+            guest_methods.push(quote! {
+                type #res_ident = #state_ident;
+                fn #mname(#(#arg_sig),*)
+                    -> exports::fidius::#pkg_seg::#pkg_seg::#res_ident {
+                    let __s = #dispatch_self.#mname(#(#call_args),*);
+                    exports::fidius::#pkg_seg::#pkg_seg::#res_ident::new(
+                        #state_ident { stream: ::core::cell::RefCell::new(__s) },
+                    )
                 }
+            });
+            continue;
+        }
+
+        let call = quote! { #dispatch_self.#mname(#(#call_args),*) };
+        if m.returns_result {
+            let ok = m.ret_type.and_then(result_ok_type);
+            let gen_ok = match ok {
+                Some(t) => gen_type(t, &known, &pkg_seg),
+                None => quote! { () },
+            };
+            let ok_map = match ok {
+                Some(t) => {
+                    let e: syn::Expr =
+                        syn::parse_str(&conv_expr("__v", t, &known)).expect("conv expr");
+                    quote! { .map(|__v| #e) }
+                }
+                None => quote! {},
+            };
+            guest_methods.push(quote! {
+                fn #mname(#(#arg_sig),*)
+                    -> Result<#gen_ok, exports::fidius::#pkg_seg::#pkg_seg::PluginError> {
+                    #call #ok_map .map_err(|__e| exports::fidius::#pkg_seg::#pkg_seg::PluginError {
+                        code: __e.code, message: __e.message, details: __e.details,
+                    })
+                }
+            });
+        } else {
+            match m.ret_type {
+                Some(rt) => {
+                    let gen_ret = gen_type(rt, &known, &pkg_seg);
+                    let e: syn::Expr =
+                        syn::parse_str(&conv_expr("__r", rt, &known)).expect("conv expr");
+                    guest_methods.push(
+                        quote! { fn #mname(#(#arg_sig),*) -> #gen_ret { let __r = #call; #e } },
+                    );
+                }
+                None => guest_methods.push(quote! { fn #mname(#(#arg_sig),*) { #call } }),
             }
-        })
-        .collect();
+        }
+    }
 
     quote! {
         #[cfg(target_family = "wasm")]
@@ -628,6 +658,7 @@ fn generate_wasm_adapter(
             // external type definitions.
             ::wit_bindgen::generate!({ path: "wit", world: #world });
             include!(concat!(env!("OUT_DIR"), "/fidius_wit_conversions.rs"));
+            #(#resource_defs)*
             struct __FidiusComponent;
             impl exports::fidius::#pkg_seg::#pkg_seg::Guest for __FidiusComponent {
                 #(#guest_methods)*

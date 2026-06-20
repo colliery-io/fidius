@@ -101,13 +101,6 @@ impl Source for MySource {
 // host: load_wasm_configured(.., &Config { .. })?; then call_streaming(READ, ..)
 ```
 
-## Limitations (0.5.0)
-
-- **WASM streaming of user-typed records**: streaming *items* must be primitives or
-  `String` (e.g. `Stream<u64>`, or `Stream<String>` of JSON) — `Stream<MyRecord>`
-  with a `#[derive(WitType)]` item isn't supported on wasm yet. This is independent
-  of configuration; a REST connector can stream JSON `String` records today.
-
 ## See also
 
 - [Capabilities & the WASM Sandbox](wasm-capabilities.md) — a configured connector
