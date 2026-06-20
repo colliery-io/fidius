@@ -1,0 +1,12 @@
+[package]
+name = "py-configured-ticker"
+version = "0.1.0"
+interface = "Ticker"
+interface_version = 1
+runtime = "python"
+
+[metadata]
+category = "test"
+
+[python]
+entry_module = "configured_ticker"

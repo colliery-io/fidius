@@ -66,6 +66,7 @@ nav:
     - Signing Plugins: tutorials/signing-plugins.md
     - Source Packages: tutorials/source-packages.md
   - How-To Guides:
+    - Write a Host Application: how-to/host-application.md
     - Scaffold a Project: how-to/scaffold-project.md
     - Test Plugins: how-to/test-plugins.md
     - Method Metadata: how-to/method-metadata.md

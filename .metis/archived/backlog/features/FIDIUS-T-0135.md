@@ -7,7 +7,7 @@ created_at: 2026-06-19T16:13:17.007756+00:00
 updated_at: 2026-06-19T16:13:17.007756+00:00
 parent: 
 blocked_by: []
-archived: false
+archived: true
 
 tags:
   - "#task"
@@ -42,6 +42,8 @@ The same host-import surface is the natural place for **credential injection** (
 - **User Value**: weir's v0 manifest-driven connectors are REST/HTTP **sources**. Their generated WASM `read` must make outbound HTTP calls to fetch records. With no HTTP capability to grant, the recorded state is: *"HTTP-in-sandbox needs a `wasi:http` grant (so generated wasm `read` is a stub; dylib carries live HTTP)."* → a REST connector runs live only on the **dylib (trusted, in-process)** path; the **WASM build's `read` is a stub** — the sandboxed/community path can't actually fetch yet.
 - **Business Value**: unlocks "Airbyte-style connectors without Docker" / untrusted community connectors — the core pitch of the sandboxed WASM tier. Combined with FIDIUS-I-0026 server-streaming, a REST source becomes a real `read() -> Stream<Record>` that paginates an API from inside the sandbox.
 - **Effort Estimate**: **L** (linker + host-state wiring is small; the security-meaningful capability model — per-host/port allow-listing — and the credential-injection hook are the substantive parts; plus integration tests against a mock server).
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
