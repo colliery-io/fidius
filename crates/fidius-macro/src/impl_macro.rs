@@ -412,13 +412,15 @@ fn generate_wasm_adapter(
                     "reference arguments are not supported — take owned types (String, Vec<u8>, …)",
                 );
             }
-            // Client-streaming: the `Stream<T>` arg isn't a WIT type — classify its
-            // ITEM type `T` (CS2.3), like a server-streaming return.
-            if let Some(item) = crate::wit::stream_item_type(ty) {
-                if m.client_stream_item.is_some() {
-                    collect_user_idents(item, &mut known);
-                    continue;
-                }
+            // Client-streaming: the `Stream<T>` arg crosses as bincode (`list<u8>` via the
+            // `fidius:stream-pull` import / `WasmHostStream`), NOT as a WIT type — its item
+            // is opaque at the boundary, so it is never collected as a WIT user type
+            // (FIDIUS-T-0171). The item only needs `Serialize`/`Deserialize`, which the
+            // generated `WasmHostStream::<T>` enforces (a compile error otherwise). This is
+            // what lets a `#[derive(Serialize, Deserialize)]` record be a client/bidi stream
+            // item without forcing the user-type (build.rs WIT) path.
+            if m.client_stream_item.is_some() && crate::wit::stream_item_type(ty).is_some() {
+                continue;
             }
             collect_user_idents(ty, &mut known);
         }
@@ -436,15 +438,10 @@ fn generate_wasm_adapter(
     }
     for m in methods {
         for ty in &m.arg_types {
-            // Client-streaming: validate the `Stream<T>` arg's item type, not the
-            // (non-WIT) `Stream<T>` wrapper.
-            if let Some(item) = crate::wit::stream_item_type(ty) {
-                if m.client_stream_item.is_some() {
-                    if let Err(e) = wit_type_with(item, &known) {
-                        return wasm_unsupported(m.name, &e);
-                    }
-                    continue;
-                }
+            // Client-streaming: the `Stream<T>` arg crosses as bincode, not WIT — skip WIT
+            // validation of its (opaque) item (FIDIUS-T-0171).
+            if m.client_stream_item.is_some() && crate::wit::stream_item_type(ty).is_some() {
+                continue;
             }
             if let Err(e) = wit_type_with(ty, &known) {
                 return wasm_unsupported(m.name, &e);
@@ -689,13 +686,19 @@ fn generate_wasm_adapter(
     }
 
     // ── User types present: consume the build.rs-generated wit/ + conversions. ──
-    // Client-streaming with `#[derive(WitType)]` user types is a follow-on; the
-    // primitives-only branch above wires it (CS2.3).
+    // Client-/bidi-streaming flows through the primitives branch above when its only
+    // user type is a *stream item* — those cross as bincode, not WIT, so they don't land
+    // here (FIDIUS-T-0171). Reaching this branch with a client-stream method means the
+    // stream item's record is ALSO used in a WIT position (a non-stream arg/return), or a
+    // bidi *output* item is a record (it crosses via the WIT resource). That mix needs the
+    // user-type Guest codegen for client/bidi, which isn't wired here yet — fail clean.
     if let Some(m) = methods.iter().find(|m| m.client_stream_item.is_some()) {
         return wasm_unsupported(
             m.name,
-            "client-streaming alongside #[derive(WitType)] user types is not yet supported on \
-             WASM; use a primitive/String stream item in a user-type-free interface",
+            "on WASM, a client-/bidi-streaming method's `#[derive(WitType)]` record can be a \
+             stream ITEM (it crosses as bincode), but it cannot ALSO appear in a WIT-typed \
+             non-stream arg/return, and a bidi OUTPUT stream item cannot be a record yet \
+             (FIDIUS-T-0171); use a bincode-only record for the stream and primitives elsewhere",
         );
     }
     // The Guest uses wit-bindgen's generated types; we convert at the boundary

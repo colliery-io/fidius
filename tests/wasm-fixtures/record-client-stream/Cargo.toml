@@ -1,0 +1,27 @@
+# WASM fixture (FIDIUS-T-0171): a user-typed (record) stream ITEM on the input side.
+# The item crosses as bincode (list<u8>) via fidius:stream-pull, so the record needs
+# Serialize/Deserialize (not #[derive(WitType)]).
+[workspace]
+
+[package]
+name = "record-client-stream"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+serde = { version = "1", features = ["derive"] }
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

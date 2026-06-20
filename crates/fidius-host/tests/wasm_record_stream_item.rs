@@ -1,0 +1,138 @@
+// Copyright 2026 Colliery, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! WASM client- and bidi-streaming with a **user-typed (record) stream item on the
+//! INPUT side** (FIDIUS-T-0171). The input item crosses as bincode via the
+//! `fidius:stream-pull` import, so a `Serialize`/`Deserialize` record works without
+//! `#[derive(WitType)]` — it no longer forces the user-type (build.rs WIT) path.
+
+#![cfg(all(feature = "wasm", feature = "streaming"))]
+#![allow(unexpected_cfgs)]
+
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::OnceLock;
+
+use fidius_core::from_value;
+use fidius_host::PluginHost;
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Row {
+    pub id: u64,
+    pub name: String,
+}
+
+#[fidius_macro::plugin_interface(version = 1, buffer = PluginAllocated, crate = "fidius_core")]
+pub trait Rows: Send + Sync {
+    fn sum_ids(&self, rows: fidius_core::Stream<Row>) -> u64;
+    fn big_ids(&self, rows: fidius_core::Stream<Row>) -> fidius_core::Stream<u64>;
+}
+
+fn component() -> &'static [u8] {
+    static BYTES: OnceLock<Vec<u8>> = OnceLock::new();
+    BYTES.get_or_init(|| {
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/wasm-fixtures/record-client-stream");
+        let status = Command::new("cargo")
+            .args(["build", "--target", "wasm32-wasip2", "--release"])
+            .current_dir(&fixture)
+            .status()
+            .expect("run `cargo build --target wasm32-wasip2` (see T-0094 for the toolchain)");
+        assert!(status.success(), "record-client-stream wasm build failed");
+        let art = fixture.join("target/wasm32-wasip2/release/record_client_stream.wasm");
+        std::fs::read(&art).unwrap_or_else(|e| panic!("read {}: {e}", art.display()))
+    })
+}
+
+fn stage_pkg(root: &std::path::Path) {
+    let dir = root.join("record-client-stream-pkg");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("package.toml"),
+        r#"
+[package]
+name = "record-client-stream-pkg"
+version = "0.1.0"
+interface = "rows"
+interface_version = 1
+runtime = "wasm"
+
+[metadata]
+category = "test"
+
+[wasm]
+component = "record_client_stream.wasm"
+"#,
+    )
+    .unwrap();
+    std::fs::write(dir.join("record_client_stream.wasm"), component()).unwrap();
+}
+
+fn rows() -> Vec<Row> {
+    vec![
+        Row {
+            id: 1,
+            name: "a".into(),
+        },
+        Row {
+            id: 2,
+            name: "b".into(),
+        },
+        Row {
+            id: 3,
+            name: "c".into(),
+        },
+    ]
+}
+
+fn load() -> fidius_host::PluginHandle {
+    let tmp = Box::leak(Box::new(tempfile::TempDir::new().unwrap()));
+    stage_pkg(tmp.path());
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    host.load_wasm(
+        "record-client-stream-pkg",
+        &__fidius_Rows::Rows_WASM_DESCRIPTOR,
+    )
+    .expect("load record-client-stream")
+}
+
+#[tokio::test]
+async fn wasm_client_streaming_accepts_a_record_item() {
+    let handle = load();
+    // client-streaming: the host produces Row items (bincode); the guest sums their ids.
+    let sum: u64 = handle
+        .call_client_streaming::<Row, (), u64>(0, rows(), &())
+        .expect("client-streaming with a record item");
+    assert_eq!(sum, 6);
+}
+
+#[tokio::test]
+async fn wasm_bidi_record_in_primitive_out() {
+    let handle = load();
+    // bidirectional: record in (bincode import), primitive out (WIT resource).
+    let mut stream = handle
+        .call_bidi_streaming::<Row, (), u64>(1, rows(), &())
+        .await
+        .expect("bidi with a record input item");
+    let mut got = Vec::new();
+    while let Some(item) = stream.next().await {
+        got.push(from_value::<u64>(item.unwrap()).unwrap());
+    }
+    assert_eq!(got, vec![10, 20, 30]);
+}

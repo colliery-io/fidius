@@ -141,4 +141,9 @@ Small, isolated; noted as a limitation in FIDIUS-I-0030 CS2.4 / FIDIUS-I-0032 BD
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**2026-06-20 — decision: document the convention, don't fix.** The "stream arg goes first"
+rule is a reasonable positional contract (no different from the positional/duck-typing
+Python authors already work with), so the user opted to document it rather than thread
+`stream_idx` into the Python descriptor. Added a "Python convention — the stream argument
+comes first" callout to `docs/explanation/streaming.md` (covers client- and bidi-streaming).
+The surprise is closed; the general-position support stays backlogged if it's ever wanted.

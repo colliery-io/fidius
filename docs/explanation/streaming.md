@@ -106,11 +106,15 @@ output resource), and Python (a host-fed iterator argument **and** a returned ge
 The guest writes a plain lazy adapter — e.g. `Stream::from_iter(std::iter::from_fn(move ||
 input.next_item().map(transform)))` in Rust, or `for r in rows: yield f(r)` in Python.
 
-> **Limitations.** Stream items are primitive/`String` on cdylib and WASM (user
-> `#[derive(WitType)]` items are a follow-on, shared with client-streaming); the host
-> producer eager-collects its items today (plugin-side pull is lazy). A truly concurrent
-> two-pump (independent in/out rates without internal buffering) was deliberately rejected
-> — see ADR-0010.
+> **Limitations.** An **input** stream item (client-streaming, and the input side of
+> bidirectional) can be any `Serialize`/`Deserialize` type — primitives, `String`, or a
+> record — because it crosses as bincode (FIDIUS-T-0171); no `#[derive(WitType)]` needed.
+> Two WASM-only caveats: a record used as a stream item cannot *also* appear in a WIT-typed
+> non-stream arg/return, and a bidi **output** item (which crosses via the WIT resource)
+> must still be a primitive/`String` for now (a record output is a follow-on). The host
+> producer also eager-collects its input items today (plugin-side pull is lazy). And a
+> truly concurrent two-pump (independent in/out rates without internal buffering) was
+> deliberately rejected — see ADR-0010.
 
 ## The host side: `ChunkStream`
 

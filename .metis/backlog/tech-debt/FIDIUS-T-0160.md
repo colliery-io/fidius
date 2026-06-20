@@ -4,15 +4,15 @@ level: task
 title: "Deep user-typed tuple nesting in WASM arg marshalling (tuple-in-record)"
 short_code: "FIDIUS-T-0160"
 created_at: 2026-06-20T16:42:56.857902+00:00
-updated_at: 2026-06-20T16:42:56.857902+00:00
+updated_at: 2026-06-20T23:26:39.113790+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/backlog"
   - "#tech-debt"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -64,6 +64,12 @@ PC.1 ([[FIDIUS-T-0152]]) covers top-level and list-nested tuples/maps in WASM ar
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -134,4 +140,11 @@ PC.1 ([[FIDIUS-T-0152]]) covers top-level and list-nested tuples/maps in WASM ar
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 42f83ab).** Added a `Type::Record` arm to `value_to_val_typed` (wasm.rs):
+it matches each WIT field (kebab) to the `Value`'s field (snake/Pascal → kebab) and
+recurses with the field's **declared type**, so a tuple (or map / nested record) inside a
+record field lowers correctly instead of falling to the structural path. Extended the
+records-greeter fixture with `Span { label, range: (u32, u32) }` + `span_width` and a
+`tuple_nested_in_record_arg` E2E (`Span{range:(3,10)}` → 7). Existing record-arg tests
+(midpoint/describe) now also flow through the typed record path — unchanged. Default 71 +
+wasm regression + lint green.

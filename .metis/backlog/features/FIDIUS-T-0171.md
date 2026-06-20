@@ -4,15 +4,15 @@ level: task
 title: "User-typed (#[derive(WitType)]) stream items in client/bidi streaming"
 short_code: "FIDIUS-T-0171"
 created_at: 2026-06-20T23:08:00.301373+00:00
-updated_at: 2026-06-20T23:08:00.301373+00:00
+updated_at: 2026-06-20T23:33:16.130759+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/backlog"
   - "#feature"
+  - "#phase/todo"
 
 
 exit_criteria_met: false
@@ -73,6 +73,8 @@ a bidi-streaming plugin on WASM + cdylib. Shared limitation called out in ADR-00
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

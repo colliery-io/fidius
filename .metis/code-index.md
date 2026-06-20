@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T23:01:09Z | 154 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T23:27:13Z | 154 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -1167,8 +1167,8 @@
 - pub `call_client_streaming` function L640-686 — `( &self, method: usize, producer: Vec<Vec<u8>>, args: Value, ) -> Result<Value, ...` — Client-streaming (FIDIUS-I-0030 CS2.3): call a method whose `Stream<T>`
 - pub `call_bidi_streaming` function L694-702 — `( &self, method: usize, producer: Vec<Vec<u8>>, args: Value, ) -> Result<crate::...` — Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): the host produces `producer`
 - pub `interface_hash` function L797-813 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
-- pub `validate_component` function L1316-1324 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
-- pub `precompile_component` function L1330-1338 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+- pub `validate_component` function L1343-1351 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L1357-1365 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
 -  `EgressDenied` type L62-69 — `= EgressDenied` — from the package manifest's allow-list.
 -  `EgressHooks` struct L94-96 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
 -  `EgressHooks` type L98-118 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
@@ -1207,22 +1207,22 @@
 -  `kebab_to_snake` function L1116-1118 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
 -  `kebab_to_pascal` function L1121-1131 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
 -  `value_to_val` function L1133-1181 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
--  `value_to_val_typed` function L1188-1265 — `(v: &Value, ty: &wasmtime::component::Type) -> Result<Val, CallError>` — Type-directed lowering for the **argument** path.
--  `val_to_value` function L1268-1306 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
--  `ssrf_tests` module L1341-1379 — `-` — from the package manifest's allow-list.
--  `ip` function L1345-1347 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
--  `blocks_internal_and_metadata_targets` function L1350-1366 — `()` — from the package manifest's allow-list.
--  `allows_public_targets` function L1369-1378 — `()` — from the package manifest's allow-list.
--  `fs_capability_tests` module L1382-1421 — `-` — from the package manifest's allow-list.
--  `msg` function L1385-1390 — `(r: Result<(), CallError>) -> String` — from the package manifest's allow-list.
--  `path_scoped_fs_grants_are_accepted` function L1393-1398 — `()` — from the package manifest's allow-list.
--  `bare_filesystem_is_rejected` function L1401-1405 — `()` — from the package manifest's allow-list.
--  `fs_grant_without_a_path_is_rejected` function L1408-1411 — `()` — from the package manifest's allow-list.
--  `build_wasi_ctx_with_an_fs_grant_does_not_panic` function L1414-1420 — `()` — from the package manifest's allow-list.
--  `wasi_http_version_tests` module L1424-1459 — `-` — from the package manifest's allow-list.
--  `host_matched_version_is_compatible` function L1428-1434 — `()` — from the package manifest's allow-list.
--  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1437-1449 — `()` — from the package manifest's allow-list.
--  `no_wasi_http_import_is_fine` function L1452-1458 — `()` — from the package manifest's allow-list.
+-  `value_to_val_typed` function L1188-1292 — `(v: &Value, ty: &wasmtime::component::Type) -> Result<Val, CallError>` — Type-directed lowering for the **argument** path.
+-  `val_to_value` function L1295-1333 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
+-  `ssrf_tests` module L1368-1406 — `-` — from the package manifest's allow-list.
+-  `ip` function L1372-1374 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
+-  `blocks_internal_and_metadata_targets` function L1377-1393 — `()` — from the package manifest's allow-list.
+-  `allows_public_targets` function L1396-1405 — `()` — from the package manifest's allow-list.
+-  `fs_capability_tests` module L1409-1448 — `-` — from the package manifest's allow-list.
+-  `msg` function L1412-1417 — `(r: Result<(), CallError>) -> String` — from the package manifest's allow-list.
+-  `path_scoped_fs_grants_are_accepted` function L1420-1425 — `()` — from the package manifest's allow-list.
+-  `bare_filesystem_is_rejected` function L1428-1432 — `()` — from the package manifest's allow-list.
+-  `fs_grant_without_a_path_is_rejected` function L1435-1438 — `()` — from the package manifest's allow-list.
+-  `build_wasi_ctx_with_an_fs_grant_does_not_panic` function L1441-1447 — `()` — from the package manifest's allow-list.
+-  `wasi_http_version_tests` module L1451-1486 — `-` — from the package manifest's allow-list.
+-  `host_matched_version_is_compatible` function L1455-1461 — `()` — from the package manifest's allow-list.
+-  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1464-1476 — `()` — from the package manifest's allow-list.
+-  `no_wasi_http_import_is_fine` function L1479-1485 — `()` — from the package manifest's allow-list.
 
 ### crates/fidius-host/tests
 
@@ -1501,13 +1501,15 @@
 
 - pub `Point` struct L38-41 — `{ x: i32, y: i32 }` — exercising the kebab↔snake/Pascal name normalization end to end.
 - pub `Shape` enum L44-49 — `Circle | Rect | Triangle | Dot` — exercising the kebab↔snake/Pascal name normalization end to end.
-- pub `Geo` interface L52-60 — `{ fn midpoint(), fn describe(), fn tally() }` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `records_greeter_component` function L62-76 — `() -> &'static [u8]` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `BYTES` variable L63 — `: OnceLock<Vec<u8>>` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `stage_pkg` function L78-104 — `(root: &std::path::Path)` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `record_in_record_out_round_trips` function L107-123 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `variant_in_round_trips_all_cases` function L126-154 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
--  `maps_and_tuples_round_trip` function L157-179 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+- pub `Span` struct L53-56 — `{ label: String, range: (u32, u32) }` — exercising the kebab↔snake/Pascal name normalization end to end.
+- pub `Geo` interface L59-68 — `{ fn midpoint(), fn describe(), fn tally(), fn span_width() }` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `records_greeter_component` function L70-84 — `() -> &'static [u8]` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `BYTES` variable L71 — `: OnceLock<Vec<u8>>` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `stage_pkg` function L86-112 — `(root: &std::path::Path)` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `record_in_record_out_round_trips` function L115-131 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `variant_in_round_trips_all_cases` function L134-162 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `maps_and_tuples_round_trip` function L165-187 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
+-  `tuple_nested_in_record_arg` function L190-212 — `()` — exercising the kebab↔snake/Pascal name normalization end to end.
 
 #### crates/fidius-host/tests/wasm_bidi_stream_e2e.rs
 
@@ -2447,12 +2449,14 @@
 
 - pub `geom` module L11 — `-`
 - pub `Shape` enum L15-20 — `Circle | Rect | Triangle | Dot`
-- pub `Geo` interface L23-32 — `{ fn midpoint(), fn describe(), fn tally() }`
-- pub `MyGeo` struct L34 — `-`
--  `MyGeo` type L37-62 — `impl Geo for MyGeo`
--  `midpoint` function L38-43 — `(&self, a: Point, b: Point) -> Point`
--  `describe` function L45-52 — `(&self, s: Shape) -> String`
--  `tally` function L54-61 — `( &self, counts: std::collections::HashMap<String, u32>, bump: (i32, i32), ) -> ...`
+- pub `Span` struct L25-28 — `{ label: String, range: (u32, u32) }`
+- pub `Geo` interface L31-42 — `{ fn midpoint(), fn describe(), fn tally(), fn span_width() }`
+- pub `MyGeo` struct L44 — `-`
+-  `MyGeo` type L47-76 — `impl Geo for MyGeo`
+-  `midpoint` function L48-53 — `(&self, a: Point, b: Point) -> Point`
+-  `describe` function L55-62 — `(&self, s: Shape) -> String`
+-  `tally` function L64-71 — `( &self, counts: std::collections::HashMap<String, u32>, bump: (i32, i32), ) -> ...`
+-  `span_width` function L73-75 — `(&self, s: Span) -> u32`
 
 ### tests/wasm-fixtures/records-stream
 
