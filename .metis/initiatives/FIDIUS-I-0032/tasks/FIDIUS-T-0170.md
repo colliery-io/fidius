@@ -4,14 +4,14 @@ level: task
 title: "BD.5 — docs + transform-connector example + un-defer"
 short_code: "FIDIUS-T-0170"
 created_at: 2026-06-20T22:21:14.773097+00:00
-updated_at: 2026-06-20T22:21:14.773097+00:00
+updated_at: 2026-06-20T22:55:43.380917+00:00
 parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -67,6 +67,8 @@ one, driven host-side). Confirm ADR-0010 → decided. Depends on BD.2/BD.3/BD.4.
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

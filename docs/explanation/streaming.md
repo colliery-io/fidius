@@ -64,8 +64,46 @@ The host feeds it with `PluginHandle::call_client_streaming(method, items, &args
 It works on **all three backends**: cdylib (a host callback the plugin pulls), WASM
 (the `fidius:stream-pull` import, composed like wasi:http), and Python (a host-fed
 iterator the method receives). Drop = cancel; backpressure inverts (the plugin's
-consumption rate parks the host). *Bidirectional* (`Stream` in both arg and return)
-is a separate, later decision (see ADR-0007).
+consumption rate parks the host).
+
+## Bidirectional: `Stream<T>` in *both* arg and return
+
+A method can take `Stream<In>` **and** return `Stream<Out>` (FIDIUS-I-0032 / ADR-0010) —
+a streaming **transform** the plugin owns end to end (parse → enrich → re-emit, windowed
+aggregation, filter):
+
+```rust
+#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]
+pub trait Transformer: Send + Sync {
+    fn transform(&self, input: fidius::Stream<Row>) -> fidius::Stream<Out>;
+}
+```
+
+It is built as the **synchronous lazy-pull composition** of the two halves above — *not*
+a second concurrent pump. The returned `Stream<Out>` is lazy; when the host pulls an
+`Out`, the plugin's iterator pulls `In` **on demand**, re-entering the host producer on
+the same call stack:
+
+> host → `output.next()` → plugin → `input.next()` → host yields `In` → plugin computes →
+> returns `Out`
+
+So there are no threads, no channels, and **no deadlock** — the input and output rates are
+coupled through the plugin's own iterator (a plugin that needs uneven rates buffers
+internally). Drop tears down the whole chain; backpressure is the host's output pull rate.
+
+The host drives it with `PluginHandle::call_bidi_streaming::<In, Args, Out>(method, items,
+&args).await`, which returns a `ChunkStream` of `Out`. All three backends compose their
+existing client- (input) and server- (output) streaming machinery: cdylib (producer handle
+in → output stream handle out), WASM (the `fidius:stream-pull` import **and** an exported
+output resource), and Python (a host-fed iterator argument **and** a returned generator).
+The guest writes a plain lazy adapter — e.g. `Stream::from_iter(std::iter::from_fn(move ||
+input.next_item().map(transform)))` in Rust, or `for r in rows: yield f(r)` in Python.
+
+> **Limitations.** Stream items are primitive/`String` on cdylib and WASM (user
+> `#[derive(WitType)]` items are a follow-on, shared with client-streaming); the host
+> producer eager-collects its items today (plugin-side pull is lazy). A truly concurrent
+> two-pump (independent in/out rates without internal buffering) was deliberately rejected
+> — see ADR-0010.
 
 ## The host side: `ChunkStream`
 

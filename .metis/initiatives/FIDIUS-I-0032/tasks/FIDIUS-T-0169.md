@@ -4,14 +4,14 @@ level: task
 title: "BD.4 — Python host-fed iterator(input)+generator(output) + E2E"
 short_code: "FIDIUS-T-0169"
 created_at: 2026-06-20T22:21:13.724451+00:00
-updated_at: 2026-06-20T22:50:35.042563+00:00
+updated_at: 2026-06-20T22:55:35.605423+00:00
 parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -68,6 +68,8 @@ iterator is the re-entrancy. Depends on BD.1.
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -140,4 +142,19 @@ iterator is the re-entrancy. Depends on BD.1.
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 8812577).** Python bidirectional works end to end — a literal composition of
+CS2.4's input and ST's output.
+- fidius-python: `call_bidi_streaming_start` passes the `HostFedStream` iterator (CS2.4) as
+  the method's first positional arg, then wraps the returned generator as the output
+  `PythonStream` (ST's `try_iter`). The generator pulling the iterator is the re-entrancy
+  (single-threaded Python).
+- host: extracted the server-streaming Python pump into `pump_python_stream` (shared);
+  added `Pyo3Executor::call_bidi_streaming` (Value items → JSON → start → pump) + the
+  `PluginHandle` python arm.
+- New `py-bidi-stream` fixture (`def transform(rows): for r in rows: yield r*2`) +
+  `python_bidi_stream_e2e`: host produces [1..=5] → [2,4,6,8,10].
+- Default 71 + python server/client-streaming regression (pump refactor) + lint green.
+
+**Bidirectional streaming now works on cdylib, WASM, and Python — all E2E-proven.** Each
+backend was a composition of its already-shipped client- (input) and server- (output)
+streaming halves, exactly as ADR-0010 predicted. Only BD.5 (docs) remains.

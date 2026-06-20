@@ -105,6 +105,7 @@ pub use fidius_core::hash;
 pub use fidius_core::python_descriptor;
 pub use fidius_core::status;
 pub use fidius_core::stream_ffi;
+pub use fidius_core::stream_marker;
 pub use fidius_core::wasm_descriptor;
 pub use fidius_core::wire;
 
