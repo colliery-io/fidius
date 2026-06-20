@@ -4,14 +4,14 @@ level: task
 title: "GH.1 — fidius::http client (vendored wasi:http + two-generate spike)"
 short_code: "FIDIUS-T-0144"
 created_at: 2026-06-20T01:10:04.244787+00:00
-updated_at: 2026-06-20T01:10:54.593364+00:00
+updated_at: 2026-06-20T01:19:04.574654+00:00
 parent: FIDIUS-I-0028
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ initiative_id: FIDIUS-I-0028
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 

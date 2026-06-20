@@ -4,14 +4,14 @@ level: task
 title: "GH.2 — macro-authored connector fixture + guest→host egress E2E"
 short_code: "FIDIUS-T-0145"
 created_at: 2026-06-20T01:10:08.688960+00:00
-updated_at: 2026-06-20T01:10:08.688960+00:00
+updated_at: 2026-06-20T01:19:04.998953+00:00
 parent: FIDIUS-I-0028
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ initiative_id: FIDIUS-I-0028
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
