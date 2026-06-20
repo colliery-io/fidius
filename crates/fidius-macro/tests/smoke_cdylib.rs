@@ -105,17 +105,19 @@ fn load_cdylib_and_call_plugin() {
     let input = (AddInput { a: 3, b: 7 },);
     let input_bytes = fidius_core::wire::serialize(&input).unwrap();
 
-    // The vtable's first function pointer is `add`
-    // Read it as a raw fn pointer from the vtable
-    let add_fn: unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32 = unsafe {
-        *(desc.vtable as *const unsafe extern "C" fn(*const u8, u32, *mut *mut u8, *mut u32) -> i32)
-    };
+    // The vtable's first function pointer is `add`. FIDIUS-A-0006: every method
+    // takes the instance pointer first; construct an instance to pass it.
+    type AddFn =
+        unsafe extern "C" fn(*mut std::ffi::c_void, *const u8, u32, *mut *mut u8, *mut u32) -> i32;
+    let add_fn: AddFn = unsafe { *(desc.vtable as *const AddFn) };
 
+    let inst = unsafe { (desc.construct.expect("construct"))(std::ptr::null(), 0) };
     let mut out_ptr: *mut u8 = std::ptr::null_mut();
     let mut out_len: u32 = 0;
 
     let status = unsafe {
         add_fn(
+            inst,
             input_bytes.as_ptr(),
             input_bytes.len() as u32,
             &mut out_ptr,
@@ -129,8 +131,9 @@ fn load_cdylib_and_call_plugin() {
     let output: AddOutput = fidius_core::wire::deserialize(output_slice).unwrap();
     assert_eq!(output.result, 10);
 
-    // Free the output buffer
+    // Free the output buffer, then destroy the instance.
     if let Some(free) = desc.free_buffer {
         unsafe { free(out_ptr, out_len as usize) };
     }
+    unsafe { (desc.destroy.expect("destroy"))(inst) };
 }
