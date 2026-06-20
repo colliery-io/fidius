@@ -22,7 +22,8 @@
 //!
 //! - [`StreamExecutor`] — the backend-side trait. `async fn call_streaming`
 //!   starts a server-streaming method and returns a [`ChunkStream`]. Implemented
-//!   by the self-describing backends (Python first, then WASM); cdylib follows.
+//!   by all three backends (Python and WASM via self-describing values; cdylib
+//!   via its FFI iterator-handle ABI).
 //! - [`ChunkStream`] — the host-side handle: a `futures::Stream` of
 //!   `Result<Value, CallError>`. **Native async** (D1) — every consuming host is
 //!   a tokio app, so the handle is awaited, not polled on a blocked thread.
@@ -153,9 +154,9 @@ impl Stream for ChunkStream {
 /// Backends whose typed boundary can produce a **server-streaming** result.
 ///
 /// Sits beside [`crate::executor::ValueExecutor`]: that returns one [`Value`],
-/// this returns a [`ChunkStream`] of them. Implemented by the self-describing
-/// backends (Python, then WASM); cdylib gains a streaming path later via its
-/// FFI iterator-handle ABI. `PluginHandle` routes a streaming method to
+/// this returns a [`ChunkStream`] of them. Implemented by all three backends
+/// (Python and WASM via self-describing values; cdylib via its FFI
+/// iterator-handle ABI). `PluginHandle` routes a streaming method to
 /// `call_streaming` exactly as it routes a unary one to `call`.
 #[async_trait::async_trait]
 pub trait StreamExecutor: PluginExecutor {

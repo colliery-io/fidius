@@ -77,6 +77,7 @@ serial_test = "3"
 # build_test_plugin() across integration/e2e tests. `streaming` brings the
 # composition harness (stream_of/collect/pump) for the streaming E2E.
 fidius-test = { path = "../fidius-test", features = ["streaming"] }
+async-trait = { workspace = true }
 # Dev-dep (rlib) on the test fixture so integration tests can use the
 # generated CalculatorClient type. The fixture's subprocess cdylib build
 # used by the tests is a separate cargo invocation and does NOT pull this
