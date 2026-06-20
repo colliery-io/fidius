@@ -4,14 +4,14 @@ level: task
 title: "BD.3 — WASM import(input)+resource(output) co-occurrence + codegen + E2E"
 short_code: "FIDIUS-T-0168"
 created_at: 2026-06-20T22:21:12.310037+00:00
-updated_at: 2026-06-20T22:43:40.832758+00:00
+updated_at: 2026-06-20T22:50:23.339571+00:00
 parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -70,6 +70,8 @@ shape where shared).
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -142,4 +144,19 @@ shape where shared).
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 8a5a520).** WASM bidirectional works end to end. The component BOTH imports
+`fidius:stream-pull` (input, CS2.3) AND exports a streaming resource (output, WS).
+- macro: a bidi wasm guest branch (before the server-only branch) builds the input
+  `Stream<In>` from `WasmHostStream`, calls the method → `Stream<Out>`, returns it as the
+  output resource. **The WIT machinery already composed** — the params loop skips the
+  input stream via the client-streaming rule, and `(ret, stream_item)` makes the output a
+  resource via the server-streaming rule — so no WIT changes were needed. Removed the BD.2
+  wasm guard.
+- host: extracted the server-streaming pump into `stream_with_producer(producer:
+  Option<Vec<Vec<u8>>>)` — `Some` seeds `HostState.client_stream` in the **pump-owned**
+  store before the export call (so it lives for the stream's lifetime, and the output
+  resource's `next()` re-enters the import); `call_streaming` delegates with `None`. Added
+  `call_bidi_streaming` + the `PluginHandle` wasm arm.
+- New `bidi-stream` fixture + `wasm_bidi_stream_e2e`: host produces [1..=5] → guest doubles
+  → [2,4,6,8,10]. Default 70 + wasm server/client-streaming regression (refactor) + lint
+  green. **Bidirectional now works on cdylib + WASM.** Next: BD.4 (Python).

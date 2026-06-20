@@ -4,14 +4,14 @@ level: task
 title: "BD.4 — Python host-fed iterator(input)+generator(output) + E2E"
 short_code: "FIDIUS-T-0169"
 created_at: 2026-06-20T22:21:13.724451+00:00
-updated_at: 2026-06-20T22:21:13.724451+00:00
+updated_at: 2026-06-20T22:50:35.042563+00:00
 parent: FIDIUS-I-0032
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -68,6 +68,8 @@ iterator is the re-entrancy. Depends on BD.1.
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

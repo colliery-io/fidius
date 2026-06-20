@@ -123,49 +123,76 @@ impl crate::stream::StreamExecutor for Pyo3Executor {
             .call_streaming_start(method, &json)
             .map_err(CallError::from)?;
 
-        let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
+        Ok(pump_python_stream(stream))
+    }
+}
 
-        // Dedicated pump thread (not a tokio worker — it uses blocking_send and
-        // holds the GIL per item). Native `Value` items, no framing: the Value
-        // rail produces `Value`s directly (bincode can't reconstruct one).
-        std::thread::spawn(move || {
-            use fidius_python::PyStreamStep;
-            loop {
-                match stream.next() {
-                    // Clean end: drop `tx` → the host stream ends (None).
-                    PyStreamStep::End => break,
-                    // Producer error: surface one Err, then end.
-                    PyStreamStep::Error(pe) => {
-                        let _ = tx.blocking_send(Err(CallError::Plugin(pe)));
+#[cfg(feature = "streaming")]
+impl Pyo3Executor {
+    /// Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): the host produces `items`
+    /// (the plugin's input iterator) and consumes the plugin's returned generator as a
+    /// `ChunkStream`. Pulling the output pulls the input — the synchronous lazy-pull
+    /// composition. `args` are the non-stream args.
+    pub fn call_bidi_streaming(
+        &self,
+        method: usize,
+        items: Vec<Value>,
+        args: Value,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
+        let items_json =
+            serde_json::to_vec(&items).map_err(|e| CallError::Serialization(e.to_string()))?;
+        let args_json =
+            serde_json::to_vec(&args).map_err(|e| CallError::Serialization(e.to_string()))?;
+        let stream = self
+            .py
+            .call_bidi_streaming_start(method, &items_json, &args_json)
+            .map_err(CallError::from)?;
+        Ok(pump_python_stream(stream))
+    }
+}
+
+/// Pump a `PythonStream` (a guest generator) into a [`crate::stream::ChunkStream`] on a
+/// dedicated GIL-holding thread (blocking_send = backpressure; native `Value` items, no
+/// framing). Shared by server-streaming ([`Pyo3Executor::call_streaming`]) and
+/// bidirectional ([`Pyo3Executor::call_bidi_streaming`]).
+#[cfg(feature = "streaming")]
+fn pump_python_stream(stream: fidius_python::PythonStream) -> crate::stream::ChunkStream {
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
+
+    std::thread::spawn(move || {
+        use fidius_python::PyStreamStep;
+        loop {
+            match stream.next() {
+                // Clean end: drop `tx` → the host stream ends (None).
+                PyStreamStep::End => break,
+                // Producer error: surface one Err, then end.
+                PyStreamStep::Error(pe) => {
+                    let _ = tx.blocking_send(Err(CallError::Plugin(pe)));
+                    break;
+                }
+                PyStreamStep::Item(jv) => {
+                    // JSON is self-describing, so `Value` reconstructs fine here.
+                    let item = match serde_json::from_value::<Value>(jv) {
+                        Ok(v) => Ok(v),
+                        Err(e) => Err(CallError::Deserialization(e.to_string())),
+                    };
+                    let is_err = item.is_err();
+                    // blocking_send parks the GIL-free thread when the channel is full →
+                    // backpressure. `Err` means the consumer dropped → cancel the generator.
+                    if tx.blocking_send(item).is_err() {
+                        stream.cancel();
                         break;
                     }
-                    PyStreamStep::Item(jv) => {
-                        // JSON is self-describing, so `Value` reconstructs fine
-                        // here (unlike bincode).
-                        let item = match serde_json::from_value::<Value>(jv) {
-                            Ok(v) => Ok(v),
-                            Err(e) => Err(CallError::Deserialization(e.to_string())),
-                        };
-                        let is_err = item.is_err();
-                        // blocking_send parks the GIL-free thread when the
-                        // channel is full → backpressure. `Err` means the
-                        // consumer dropped the stream → cancel the generator.
-                        if tx.blocking_send(item).is_err() {
-                            stream.cancel();
-                            break;
-                        }
-                        if is_err {
-                            break;
-                        }
+                    if is_err {
+                        break;
                     }
                 }
             }
-        });
+        }
+    });
 
-        // Adapt the receiver into the host-facing item stream.
-        let body = futures::stream::unfold(rx, |mut rx| async move {
-            rx.recv().await.map(|item| (item, rx))
-        });
-        Ok(crate::stream::ChunkStream::new(body))
-    }
+    let body = futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|item| (item, rx))
+    });
+    crate::stream::ChunkStream::new(body)
 }

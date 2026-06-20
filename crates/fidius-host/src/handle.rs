@@ -236,11 +236,17 @@ impl PluginHandle {
                 }
             }
             #[cfg(feature = "python")]
-            Backend::Python(_) => Err(CallError::Backend {
-                runtime: "python".into(),
-                message: "bidirectional streaming is not yet wired for Python (FIDIUS-I-0032 BD.4)"
-                    .into(),
-            }),
+            Backend::Python(e) => {
+                // Python crosses via the self-describing `Value` currency.
+                let item_values: Vec<fidius_core::Value> = items
+                    .into_iter()
+                    .map(|i| fidius_core::to_value(&i))
+                    .collect::<Result<_, _>>()
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                e.call_bidi_streaming(index, item_values, arg_value)
+            }
             #[cfg(feature = "wasm")]
             Backend::Wasm(e) => {
                 let encoded = bincode_items(items)?;

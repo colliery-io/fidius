@@ -212,6 +212,66 @@ impl PythonPluginHandle {
         serde_json::to_vec(&result_value).map_err(|e| PythonCallError::OutputEncode(e.to_string()))
     }
 
+    /// **Bidirectional** streaming (FIDIUS-I-0032 / ADR-0010): the method receives the
+    /// host-fed input iterator (its **first** positional arg, CS2.4) AND returns a
+    /// generator (ST). The host feeds `items_json` (input) and pumps the returned
+    /// generator (output); pulling the output pulls the input — the synchronous lazy-pull
+    /// composition. `args_json` are the non-stream args (a JSON array).
+    pub fn call_bidi_streaming_start(
+        &self,
+        method_index: usize,
+        items_json: &[u8],
+        args_json: &[u8],
+    ) -> Result<crate::stream::PythonStream, PythonCallError> {
+        let method = self.lookup_method(method_index, false)?;
+        let items: Vec<serde_json::Value> = serde_json::from_slice(items_json)
+            .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+        let args: serde_json::Value = serde_json::from_slice(args_json)
+            .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+
+        Python::with_gil(|py| {
+            let callable = method.callable.bind(py);
+            // First positional arg: the host-fed input iterator (CS2.4).
+            let stream = Py::new(
+                py,
+                HostFedStream {
+                    items: items.into_iter(),
+                },
+            )
+            .map_err(|e| PythonCallError::Plugin(pyerr_to_plugin_error(e)))?
+            .into_bound(py)
+            .into_any();
+            let mut py_args: Vec<Bound<'_, PyAny>> = vec![stream];
+            match &args {
+                serde_json::Value::Array(a) => {
+                    for v in a {
+                        py_args.push(
+                            value_to_pyobject(py, v)
+                                .map_err(|e| PythonCallError::InputDecode(e.to_string()))?,
+                        );
+                    }
+                }
+                serde_json::Value::Null => {}
+                other => py_args.push(
+                    value_to_pyobject(py, other)
+                        .map_err(|e| PythonCallError::InputDecode(e.to_string()))?,
+                ),
+            }
+            let args_tuple = PyTuple::new(py, py_args)
+                .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
+            let result = callable
+                .call(args_tuple, None::<&Bound<'_, PyDict>>)
+                .map_err(|e| PythonCallError::Plugin(pyerr_to_plugin_error(e)))?;
+            // The returned generator/iterable becomes the output stream (ST).
+            let iter = result.try_iter().map_err(|e| {
+                PythonCallError::OutputEncode(format!(
+                    "bidirectional method must return an iterable/generator, got: {e}"
+                ))
+            })?;
+            Ok(crate::stream::PythonStream::new(iter.into_any().unbind()))
+        })
+    }
+
     /// Start a server-streaming call (FIDIUS-I-0026). Calls the method to obtain
     /// its iterator/generator and wraps it in a [`crate::stream::PythonStream`]
     /// the host then pumps. Input is JSON like [`Self::call_typed_json`];
