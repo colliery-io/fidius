@@ -4,14 +4,14 @@ level: task
 title: "PC.3 — Guest HTTP RequestOptions + timeout"
 short_code: "FIDIUS-T-0154"
 created_at: 2026-06-20T15:39:21.522638+00:00
-updated_at: 2026-06-20T16:15:18.571505+00:00
+updated_at: 2026-06-20T16:19:59.376034+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Add request **timeouts** to the guest HTTP client (`crates/fidius-guest/src/http
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -137,4 +139,12 @@ Add request **timeouts** to the guest HTTP client (`crates/fidius-guest/src/http
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 3563d45).** `fidius-guest` `Request` gained `timeout: Option<Duration>`
++ a `.timeout()` builder; `send` builds a `wasi:http` `request-options` (set connect /
+first-byte / between-bytes, ns) and passes it to `outgoing-handler::handle` (was
+`None`). `get`/`post` stay no-timeout conveniences. E2E (`macro_egress_e2e`): added
+`mock_http_slow` (~2s stall) + `fetch_timeout` on the macro-fetcher fixture →
+`macro_connector_times_out_on_slow_upstream` asserts ERROR in <1.5s (fail-fast), and
+`…_timeout_allows_a_fast_response` asserts a quick upstream still succeeds. Existing
+egress matrix (allowed/denied/no-policy) green (5/5). wasi:http pin guards unaffected.
+Docs: `wasm-capabilities.md` documents the timeout. fmt + lint green.

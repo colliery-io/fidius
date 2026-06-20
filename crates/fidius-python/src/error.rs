@@ -41,6 +41,31 @@ pub fn pyerr_to_plugin_error(err: PyErr) -> PluginError {
     Python::with_gil(|py| {
         let value = err.value(py);
 
+        // fidius.PluginError-aware (FIDIUS-T-0155): a typed error raised by plugin
+        // code carries `code` / `message` / `details` — round-trip them intact
+        // rather than flattening to class-name / str / traceback.
+        if is_fidius_plugin_error(py, value) {
+            let code = value
+                .getattr("code")
+                .and_then(|c| c.extract::<String>())
+                .unwrap_or_else(|_| "PluginError".to_string());
+            let message = value
+                .getattr("message")
+                .and_then(|m| m.extract::<String>())
+                .or_else(|_| value.str().and_then(|s| s.extract::<String>()))
+                .unwrap_or_default();
+            let details = value
+                .getattr("details")
+                .ok()
+                .filter(|d| !d.is_none())
+                .and_then(|d| json_dumps(py, &d));
+            return PluginError {
+                code,
+                message,
+                details,
+            };
+        }
+
         // Class name → code. `__class__.__name__` in Python.
         let code = value
             .getattr("__class__")
@@ -76,6 +101,25 @@ fn format_traceback(py: Python<'_>, tb: Bound<'_, PyTraceback>) -> PyResult<Stri
     let frames = traceback_mod.call_method1("format_tb", (tb,))?;
     let parts: Vec<String> = frames.extract()?;
     Ok(parts.join(""))
+}
+
+/// Is `value` an instance of `fidius.PluginError` (the SDK's typed error)? Falls
+/// back to `false` if the SDK isn't importable, so other exceptions take the
+/// generic class-name/str/traceback path.
+fn is_fidius_plugin_error(py: Python<'_>, value: &Bound<'_, PyAny>) -> bool {
+    py.import("fidius")
+        .and_then(|m| m.getattr("PluginError"))
+        .and_then(|cls| value.is_instance(&cls))
+        .unwrap_or(false)
+}
+
+/// Serialize a Python object to a JSON string via `json.dumps`. Best-effort:
+/// returns `None` if the object isn't JSON-serialisable.
+fn json_dumps(py: Python<'_>, obj: &Bound<'_, PyAny>) -> Option<String> {
+    py.import("json")
+        .ok()
+        .and_then(|j| j.call_method1("dumps", (obj,)).ok())
+        .and_then(|s| s.extract::<String>().ok())
 }
 
 #[cfg(test)]

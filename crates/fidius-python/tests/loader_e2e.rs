@@ -241,18 +241,15 @@ fn plugin_error_round_trips_with_code_and_details() {
     let err = handle.call_typed_json(0, &input).unwrap_err();
     match err {
         PythonCallError::Plugin(pe) => {
-            // Today fidius.PluginError raises map under the generic Python
-            // error path: code = "PluginError" (the class name) and the
-            // details JSON object preserves a traceback. Flattening
-            // `pe.code`/`pe.details` from the raised PluginError into the
-            // host-side PluginError fields is a follow-on enhancement to
-            // pyerr_to_plugin_error (T-0086 hand-off).
-            assert_eq!(pe.code, "PluginError");
+            // FIDIUS-T-0155: a raised `fidius.PluginError` round-trips its fields
+            // intact — `code` and the structured `details` dict (JSON-encoded),
+            // not the class name + a traceback.
+            assert_eq!(pe.code, "BAD_INPUT");
             assert!(pe.message.contains("deliberate failure"));
             let details = pe.details.expect("details");
             assert!(
-                details.contains("traceback"),
-                "expected traceback in details, got: {details}"
+                details.contains("got") && details.contains("42"),
+                "expected the structured details dict (got=42), got: {details}"
             );
         }
         other => panic!("expected Plugin error, got {other:?}"),
