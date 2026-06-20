@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T12:55:36Z | 126 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T13:38:03Z | 135 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -70,7 +70,9 @@
 │   │   └── tests/
 │   │       ├── cdylib_streaming_e2e.rs
 │   │       ├── configured_cdylib_e2e.rs
+│   │       ├── configured_cdylib_stream_e2e.rs
 │   │       ├── configured_python_e2e.rs
+│   │       ├── configured_python_stream_e2e.rs
 │   │       ├── configured_wasm_e2e.rs
 │   │       ├── configured_wasm_stream_e2e.rs
 │   │       ├── e2e.rs
@@ -78,6 +80,7 @@
 │   │       ├── macro_egress_e2e.rs
 │   │       ├── macro_wasm.rs
 │   │       ├── macro_wasm_streaming.rs
+│   │       ├── multi_plugin_pipeline.rs
 │   │       ├── package_e2e.rs
 │   │       ├── plugin_dep_graph.rs
 │   │       ├── python_plugin_e2e.rs
@@ -138,6 +141,14 @@
 │       └── src/
 │           ├── generate.rs
 │           └── lib.rs
+├── examples/
+│   ├── examples/
+│   │   ├── 01_load_and_call.rs
+│   │   ├── 02_configure.rs
+│   │   ├── 03_streaming.rs
+│   │   └── 04_pipeline.rs
+│   └── src/
+│       └── lib.rs
 ├── python/
 │   ├── fidius/
 │   │   ├── __init__.py
@@ -148,6 +159,8 @@
 └── tests/
     ├── test-plugin-py-configured/
     │   └── configured_pipe.py
+    ├── test-plugin-py-configured-stream/
+    │   └── configured_ticker.py
     ├── test-plugin-py-greeter/
     │   └── byte_pipe.py
     ├── test-plugin-py-ticker/
@@ -973,25 +986,25 @@
 
 #### crates/fidius-host/src/stream.rs
 
-- pub `ChunkStream` struct L57-59 — `{ inner: Pin<Box<dyn Stream<Item = Result<Value, CallError>> + Send>> }` — Host-facing pull handle for a server-streaming plugin call.
-- pub `new` function L64-71 — `(stream: S) -> Self` — Wrap any item stream as a [`ChunkStream`].
-- pub `from_frame_bytes` function L95-127 — `(frames: S, decode_item: D) -> Self` — Build a [`ChunkStream`] from a stream of raw, length-delimited frame
-- pub `from_frames` function L133-142 — `(frames: Vec<Frame>, decode_item: D) -> Self` — Build a [`ChunkStream`] over a fixed, in-memory sequence of [`Frame`]s.
-- pub `StreamExecutor` interface L161-166 — `{ fn call_streaming() }` — Backends whose typed boundary can produce a **server-streaming** result.
--  `ChunkStream` type L61-143 — `= ChunkStream` — turns that byte sequence into the item stream every backend bridge feeds.
--  `ChunkStream` type L145-151 — `impl Stream for ChunkStream` — turns that byte sequence into the item stream every backend bridge feeds.
--  `Item` type L146 — `= Result<Value, CallError>` — turns that byte sequence into the item stream every backend bridge feeds.
--  `poll_next` function L148-150 — `(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>>` — turns that byte sequence into the item stream every backend bridge feeds.
--  `tests` module L169-267 — `-` — turns that byte sequence into the item stream every backend bridge feeds.
--  `item` function L176-178 — `(v: i64) -> Frame` — An ITEM frame carrying a concrete `i64` (bincode of a concrete type
--  `decode_i64` function L181-185 — `(b: &[u8]) -> Result<Value, CallError>` — The matching item decoder: concrete-bincode `i64` → `Value`.
--  `collect` function L187-193 — `(mut s: ChunkStream) -> Vec<Result<Value, CallError>>` — turns that byte sequence into the item stream every backend bridge feeds.
--  `items_then_clean_end` function L196-204 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `native_value_stream_via_new` function L207-218 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `error_frame_terminates_after_one_err` function L221-234 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `missing_terminal_is_abort` function L237-244 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `malformed_frame_surfaces_then_stops` function L247-260 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
--  `empty_stream_just_ends` function L263-266 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+- pub `ChunkStream` struct L58-60 — `{ inner: Pin<Box<dyn Stream<Item = Result<Value, CallError>> + Send>> }` — Host-facing pull handle for a server-streaming plugin call.
+- pub `new` function L65-72 — `(stream: S) -> Self` — Wrap any item stream as a [`ChunkStream`].
+- pub `from_frame_bytes` function L96-128 — `(frames: S, decode_item: D) -> Self` — Build a [`ChunkStream`] from a stream of raw, length-delimited frame
+- pub `from_frames` function L134-143 — `(frames: Vec<Frame>, decode_item: D) -> Self` — Build a [`ChunkStream`] over a fixed, in-memory sequence of [`Frame`]s.
+- pub `StreamExecutor` interface L162-167 — `{ fn call_streaming() }` — Backends whose typed boundary can produce a **server-streaming** result.
+-  `ChunkStream` type L62-144 — `= ChunkStream` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `ChunkStream` type L146-152 — `impl Stream for ChunkStream` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `Item` type L147 — `= Result<Value, CallError>` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `poll_next` function L149-151 — `(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>>` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `tests` module L170-268 — `-` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `item` function L177-179 — `(v: i64) -> Frame` — An ITEM frame carrying a concrete `i64` (bincode of a concrete type
+-  `decode_i64` function L182-186 — `(b: &[u8]) -> Result<Value, CallError>` — The matching item decoder: concrete-bincode `i64` → `Value`.
+-  `collect` function L188-194 — `(mut s: ChunkStream) -> Vec<Result<Value, CallError>>` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `items_then_clean_end` function L197-205 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `native_value_stream_via_new` function L208-219 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `error_frame_terminates_after_one_err` function L222-235 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `missing_terminal_is_abort` function L238-245 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `malformed_frame_surfaces_then_stops` function L248-261 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
+-  `empty_stream_just_ends` function L264-267 — `()` — turns that byte sequence into the item stream every backend bridge feeds.
 
 #### crates/fidius-host/src/types.rs
 
@@ -1142,6 +1155,17 @@
 -  `config_bound_once_and_used_in_methods` function L55-67 — `()` — differently-configured instances coexist in one host.
 -  `n_differently_configured_instances_coexist` function L70-90 — `()` — differently-configured instances coexist in one host.
 
+#### crates/fidius-host/tests/configured_cdylib_stream_e2e.rs
+
+- pub `Ticker` interface L34-36 — `{ fn tick() }` — configured cdylib plugin streams from its bound config.
+- pub `ConfTicker` struct L38-40 — `{ cfg: Cfg }` — configured cdylib plugin streams from its bound config.
+-  `Cfg` struct L29-31 — `{ base: u64 }` — configured cdylib plugin streams from its bound config.
+-  `ConfTicker` type L43-48 — `impl Ticker for ConfTicker` — configured cdylib plugin streams from its bound config.
+-  `tick` function L44-47 — `(&self, count: u32) -> fidius_core::Stream<u64>` — configured cdylib plugin streams from its bound config.
+-  `ConfTicker` type L50-54 — `= ConfTicker` — configured cdylib plugin streams from its bound config.
+-  `configure` function L51-53 — `(cfg: Cfg) -> Self` — configured cdylib plugin streams from its bound config.
+-  `configured_cdylib_streaming_reads_bound_config` function L59-69 — `()` — configured cdylib plugin streams from its bound config.
+
 #### crates/fidius-host/tests/configured_python_e2e.rs
 
 -  `PipeConfig` struct L31-33 — `{ display_name: String }` — macro-generated descriptor); `name()` returns the configured display name.
@@ -1150,6 +1174,15 @@
 -  `copy_dir` function L48-60 — `(src: &Path, dst: &Path)` — macro-generated descriptor); `name()` returns the configured display name.
 -  `stage` function L64-81 — `(tmp: &tempfile::TempDir) -> PathBuf` — Stage the configured fixture: copy it, vendor the SDK, and bake the real
 -  `config_bound_once_and_used_in_methods` function L84-106 — `()` — macro-generated descriptor); `name()` returns the configured display name.
+
+#### crates/fidius-host/tests/configured_python_stream_e2e.rs
+
+-  `Cfg` struct L30-32 — `{ base: u64 }` — config.
+-  `ticker_descriptor` function L34-36 — `() -> &'static PythonInterfaceDescriptor` — config.
+-  `repo_root` function L38-45 — `() -> PathBuf` — config.
+-  `copy_dir` function L47-59 — `(src: &Path, dst: &Path)` — config.
+-  `stage` function L61-80 — `(tmp: &tempfile::TempDir) -> PathBuf` — config.
+-  `configured_python_streaming_reads_bound_config` function L83-106 — `()` — config.
 
 #### crates/fidius-host/tests/configured_wasm_e2e.rs
 
@@ -1245,6 +1278,21 @@
 -  `macro_descriptor_marks_tick_streaming` function L82-91 — `()` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
 -  `macro_streaming_component_loads_and_streams` function L94-116 — `()` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
 -  `macro_streaming_bounded_and_cancellable` function L119-141 — `()` — Requires the wasm component toolchain (cargo + wasm32-wasip2).
+
+#### crates/fidius-host/tests/multi_plugin_pipeline.rs
+
+- pub `Reader` interface L29-31 — `{ fn read() }` — framework's `pump` helper exists for.
+- pub `Range` struct L32 — `-` — framework's `pump` helper exists for.
+- pub `Writer` interface L42-44 — `{ fn label() }` — framework's `pump` helper exists for.
+- pub `Labeler` struct L45 — `-` — framework's `pump` helper exists for.
+-  `Range` type L34-38 — `impl Reader for Range` — framework's `pump` helper exists for.
+-  `read` function L35-37 — `(&self, count: u32) -> fidius_core::Stream<u64>` — framework's `pump` helper exists for.
+-  `Labeler` type L47-51 — `impl Writer for Labeler` — framework's `pump` helper exists for.
+-  `label` function L48-50 — `(&self, value: u64) -> String` — framework's `pump` helper exists for.
+-  `PluginSink` struct L57-60 — `{ writer: PluginHandle, out: std::sync::Mutex<Vec<String>> }` — A `StreamSink` backed by a real plugin: each streamed item is fed to the
+-  `PluginSink` type L63-73 — `impl StreamSink for PluginSink` — framework's `pump` helper exists for.
+-  `accept` function L64-72 — `(&self, item: Value) -> Result<(), CallError>` — framework's `pump` helper exists for.
+-  `host_pipes_reader_stream_into_writer_plugin` function L76-97 — `()` — framework's `pump` helper exists for.
 
 #### crates/fidius-host/tests/package_e2e.rs
 
@@ -1612,9 +1660,10 @@
 
 #### crates/fidius-macro/tests/smoke_cdylib.rs
 
--  `load_cdylib_and_call_plugin` function L23-136 — `()` — loads it via dlopen/dlsym and verifies the registry and vtable work.
+-  `load_cdylib_and_call_plugin` function L23-139 — `()` — loads it via dlopen/dlsym and verifies the registry and vtable work.
 -  `AddInput` struct L96-99 — `{ a: i64, b: i64 }` — loads it via dlopen/dlsym and verifies the registry and vtable work.
 -  `AddOutput` struct L101-103 — `{ result: i64 }` — loads it via dlopen/dlsym and verifies the registry and vtable work.
+-  `AddFn` type L110-111 — `= unsafe extern "C" fn(*mut std::ffi::c_void, *const u8, u32, *mut *mut u8, *mut...` — loads it via dlopen/dlsym and verifies the registry and vtable work.
 
 #### crates/fidius-macro/tests/trybuild.rs
 
@@ -1899,6 +1948,49 @@
 -  `streaming_method_renders_a_resource` function L491-506 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
 -  `stream_item_type_detects_marker` function L509-517 — `()` — helper, and the `fidius wit` CLI can all share one implementation.
 
+### examples/examples
+
+> *Semantic summary to be generated by AI agent.*
+
+#### examples/examples/01_load_and_call.rs
+
+- pub `Greeter` interface L10-12 — `{ fn greet() }` — Run: `cargo run -p fidius-examples --example 01_load_and_call`
+- pub `Hello` struct L14 — `-` — Run: `cargo run -p fidius-examples --example 01_load_and_call`
+-  `Hello` type L17-21 — `impl Greeter for Hello` — Run: `cargo run -p fidius-examples --example 01_load_and_call`
+-  `greet` function L18-20 — `(&self, name: String) -> String` — Run: `cargo run -p fidius-examples --example 01_load_and_call`
+-  `main` function L25-33 — `()` — Run: `cargo run -p fidius-examples --example 01_load_and_call`
+
+#### examples/examples/02_configure.rs
+
+- pub `Config` struct L12-14 — `{ greeting: String }` — Run: `cargo run -p fidius-examples --example 02_configure`
+- pub `Greeter` interface L17-19 — `{ fn greet() }` — Run: `cargo run -p fidius-examples --example 02_configure`
+- pub `ConfGreeter` struct L21-23 — `{ cfg: Config }` — Run: `cargo run -p fidius-examples --example 02_configure`
+-  `ConfGreeter` type L26-31 — `impl Greeter for ConfGreeter` — Run: `cargo run -p fidius-examples --example 02_configure`
+-  `greet` function L27-30 — `(&self, name: String) -> String` — Run: `cargo run -p fidius-examples --example 02_configure`
+-  `ConfGreeter` type L33-37 — `= ConfGreeter` — Run: `cargo run -p fidius-examples --example 02_configure`
+-  `configure` function L34-36 — `(cfg: Config) -> Self` — Run: `cargo run -p fidius-examples --example 02_configure`
+-  `main` function L41-65 — `()` — Run: `cargo run -p fidius-examples --example 02_configure`
+
+#### examples/examples/03_streaming.rs
+
+- pub `Source` interface L12-14 — `{ fn read() }` — Run: `cargo run -p fidius-examples --example 03_streaming`
+- pub `Counter` struct L16 — `-` — Run: `cargo run -p fidius-examples --example 03_streaming`
+-  `Counter` type L19-23 — `impl Source for Counter` — Run: `cargo run -p fidius-examples --example 03_streaming`
+-  `read` function L20-22 — `(&self, count: u32) -> Stream<u64>` — Run: `cargo run -p fidius-examples --example 03_streaming`
+-  `main` function L28-43 — `()` — Run: `cargo run -p fidius-examples --example 03_streaming`
+
+#### examples/examples/04_pipeline.rs
+
+- pub `Reader` interface L15-17 — `{ fn read() }` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+- pub `Range` struct L19 — `-` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+- pub `Transformer` interface L30-32 — `{ fn transform() }` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+- pub `Labeler` struct L34 — `-` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+-  `Range` type L22-26 — `impl Reader for Range` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+-  `read` function L23-25 — `(&self, count: u32) -> Stream<u64>` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+-  `Labeler` type L37-41 — `impl Transformer for Labeler` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+-  `transform` function L38-40 — `(&self, value: u64) -> String` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+-  `main` function L46-73 — `()` — Run: `cargo run -p fidius-examples --example 04_pipeline`
+
 ### python/fidius
 
 > *Semantic summary to be generated by AI agent.*
@@ -1942,6 +2034,17 @@
 - pub `reverse` method L18-19 — `def reverse(self, data)`
 - pub `name` method L21-22 — `def name(self)`
 - pub `__fidius_configure__` function L25-27 — `def __fidius_configure__(config)` — Bind the config once and return the configured instance.
+
+### tests/test-plugin-py-configured-stream
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/test-plugin-py-configured-stream/configured_ticker.py
+
+- pub `ConfiguredTicker` class L8-14 — `{ __init__, tick }`
+- pub `__init__` method L9-10 — `def __init__(self, config)`
+- pub `tick` method L12-14 — `def tick(self, count)`
+- pub `__fidius_configure__` function L17-18 — `def __fidius_configure__(config)`
 
 ### tests/test-plugin-smoke/src
 

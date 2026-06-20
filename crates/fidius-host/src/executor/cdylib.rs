@@ -294,9 +294,11 @@ impl CdylibExecutor {
         index: usize,
         input_bytes: &[u8],
     ) -> Result<O, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const FfiFn;
-            *fn_ptrs.add(index)
+        // Read the slot as `Option<fn>`: an optional method the plugin did not
+        // implement has a NULL vtable slot — never call into it (would segfault).
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<FfiFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
@@ -379,9 +381,9 @@ impl CdylibExecutor {
         index: usize,
         input_bytes: &[u8],
     ) -> Result<O, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const ArenaFn;
-            *fn_ptrs.add(index)
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<ArenaFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut arena = acquire_arena(DEFAULT_ARENA_CAPACITY);
@@ -471,9 +473,11 @@ impl CdylibExecutor {
         index: usize,
         input_bytes: &[u8],
     ) -> Result<Vec<u8>, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const FfiFn;
-            *fn_ptrs.add(index)
+        // Read the slot as `Option<fn>`: an optional method the plugin did not
+        // implement has a NULL vtable slot — never call into it (would segfault).
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<FfiFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
@@ -550,9 +554,9 @@ impl CdylibExecutor {
     /// Arena raw path — same FFI shape as `call_arena`, success bytes
     /// returned as a `Vec<u8>` copied out of the arena.
     fn call_arena_raw(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const ArenaFn;
-            *fn_ptrs.add(index)
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<ArenaFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut arena = acquire_arena(DEFAULT_ARENA_CAPACITY);
@@ -664,8 +668,12 @@ impl CdylibExecutor {
             });
         }
 
-        // init: call the streaming method's vtable slot (FfiFn shape) → handle.
-        let init = unsafe { *(self.vtable as *const FfiFn).add(index) };
+        // init: the streaming method's vtable slot (FfiFn shape) → handle. Guard
+        // the null slot of an unimplemented optional method.
+        let init = match unsafe { *(self.vtable as *const Option<FfiFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
+        };
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
         let mut out_len: u32 = 0;
         let status = unsafe {

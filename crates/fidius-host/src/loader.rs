@@ -128,13 +128,9 @@ fn validate_descriptor(
     desc: &PluginDescriptor,
     library: &Arc<Library>,
 ) -> Result<LoadedPlugin, LoadError> {
-    // Check ABI version
-    if desc.abi_version != ABI_VERSION {
-        return Err(LoadError::IncompatibleAbiVersion {
-            got: desc.abi_version,
-            expected: ABI_VERSION,
-        });
-    }
+    // Check ABI version (a plugin built against a different fidius ABI is rejected
+    // at load — pre-1.0, every minor is an ABI break; see ADR-0002).
+    check_abi_version(desc.abi_version)?;
 
     // Copy FFI strings to owned
     let interface_name = unsafe { desc.interface_name_str() }.to_string();
@@ -187,4 +183,35 @@ pub fn validate_against_interface(
     }
 
     Ok(())
+}
+
+/// Reject a plugin whose descriptor was built against a different fidius ABI.
+/// Extracted from [`validate_descriptor`] so the rejection is unit-testable
+/// without a real (mismatched) dylib — the macro derives `abi_version` from the
+/// crate version, so a wrong value can't be produced by a normal build.
+fn check_abi_version(got: u32) -> Result<(), LoadError> {
+    if got != ABI_VERSION {
+        return Err(LoadError::IncompatibleAbiVersion {
+            got,
+            expected: ABI_VERSION,
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod abi_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_a_stale_abi_plugin() {
+        // A plugin built against the pre-0.5.0 ABI (400) is rejected at load.
+        let err = check_abi_version(400).unwrap_err();
+        assert!(
+            matches!(err, LoadError::IncompatibleAbiVersion { got: 400, expected } if expected == ABI_VERSION),
+            "expected IncompatibleAbiVersion {{ got: 400, expected: {ABI_VERSION} }}, got {err:?}"
+        );
+        // The current ABI loads.
+        assert!(check_abi_version(ABI_VERSION).is_ok());
+    }
 }
