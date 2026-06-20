@@ -40,7 +40,9 @@
 //! caller-supplied `bincode::<O>` decoder (the typed Client knows `O`).
 
 use core::ffi::c_void;
+use core::marker::PhantomData;
 
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 /// Per-stream handle returned by a cdylib streaming method's init shim. See the
@@ -117,5 +119,127 @@ impl<T: Serialize> StreamState<T> {
         }
         self.pending = None;
         NextStatus::Item(size)
+    }
+}
+
+/// Guest-side **consumer** of a host-produced stream — the client-streaming
+/// counterpart of [`StreamState`] (FIDIUS-I-0030 / ADR-0007). For a method that
+/// takes a `Stream<T>` argument, the host fills a [`FidiusStreamHandle`] from its
+/// producer and the guest pulls items by calling `next` and bincode-deserializing
+/// each into `T`. Yields items via [`Iterator`]; dropping it runs the host
+/// producer's `drop_fn` (cancel).
+pub struct HostStream<T> {
+    handle: *mut FidiusStreamHandle,
+    /// Grow hint carried across calls so a `TooSmall` retry uses a big-enough buffer.
+    cap: usize,
+    _marker: PhantomData<T>,
+}
+
+impl<T: DeserializeOwned> HostStream<T> {
+    /// Wrap a host-provided handle. The handle is owned by this consumer and freed
+    /// (via `drop_fn`) on drop.
+    ///
+    /// # Safety
+    /// `handle` must be a valid, exclusively-owned `FidiusStreamHandle` supplied by
+    /// the host for the duration of this consumer.
+    pub unsafe fn from_handle(handle: *mut FidiusStreamHandle) -> Self {
+        Self {
+            handle,
+            cap: 256,
+            _marker: PhantomData,
+        }
+    }
+
+    fn pull(&mut self) -> Option<T> {
+        let mut buf = vec![0u8; self.cap];
+        loop {
+            let mut out_len: u32 = 0;
+            // SAFETY: `handle` is valid; `buf` has `self.cap` writable bytes; `next`
+            // writes at most `cap` and reports the count in `out_len`.
+            let status = unsafe {
+                ((*self.handle).next)(self.handle, buf.as_mut_ptr(), self.cap as u32, &mut out_len)
+            };
+            match status {
+                crate::status::STATUS_OK => {
+                    return crate::wire::deserialize::<T>(&buf[..out_len as usize]).ok();
+                }
+                crate::status::STATUS_BUFFER_TOO_SMALL => {
+                    self.cap = (out_len as usize).max(self.cap * 2);
+                    buf = vec![0u8; self.cap];
+                }
+                // STREAM_END / PLUGIN_ERROR → end of stream for the consumer.
+                _ => return None,
+            }
+        }
+    }
+}
+
+impl<T: DeserializeOwned> Iterator for HostStream<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        self.pull()
+    }
+}
+
+impl<T> Drop for HostStream<T> {
+    fn drop(&mut self) {
+        // SAFETY: the handle is valid + owned; `drop_fn` is called exactly once.
+        unsafe { ((*self.handle).drop_fn)(self.handle) };
+    }
+}
+
+#[cfg(test)]
+mod host_stream_tests {
+    use super::*;
+
+    struct MockProducer {
+        items: Vec<u64>,
+        idx: usize,
+    }
+
+    unsafe extern "C" fn mock_next(
+        h: *mut FidiusStreamHandle,
+        buf: *mut u8,
+        cap: u32,
+        out_len: *mut u32,
+    ) -> i32 {
+        let p = &mut *((*h).state as *mut MockProducer);
+        if p.idx >= p.items.len() {
+            return crate::status::STATUS_STREAM_END;
+        }
+        let bytes = crate::wire::serialize(&p.items[p.idx]).unwrap();
+        if bytes.len() > cap as usize {
+            *out_len = bytes.len() as u32;
+            return crate::status::STATUS_BUFFER_TOO_SMALL;
+        }
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, bytes.len());
+        *out_len = bytes.len() as u32;
+        p.idx += 1;
+        crate::status::STATUS_OK
+    }
+
+    unsafe extern "C" fn mock_drop(h: *mut FidiusStreamHandle) {
+        drop(Box::from_raw((*h).state as *mut MockProducer));
+        drop(Box::from_raw(h));
+    }
+
+    fn mock_handle(items: Vec<u64>) -> *mut FidiusStreamHandle {
+        let producer = Box::into_raw(Box::new(MockProducer { items, idx: 0 }));
+        Box::into_raw(Box::new(FidiusStreamHandle {
+            next: mock_next,
+            drop_fn: mock_drop,
+            state: producer as *mut c_void,
+        }))
+    }
+
+    #[test]
+    fn host_stream_consumes_all_items_then_drops_cleanly() {
+        let h = mock_handle(vec![10u64, 20, 30]);
+        // SAFETY: `h` is a freshly-built, exclusively-owned handle.
+        let consumer = unsafe { HostStream::<u64>::from_handle(h) };
+        let got: Vec<u64> = consumer.collect();
+        assert_eq!(got, vec![10, 20, 30]);
+        // Dropping `consumer` ran `mock_drop` (freed producer + handle) — under
+        // Miri/ASAN this would catch a leak or double-free.
     }
 }

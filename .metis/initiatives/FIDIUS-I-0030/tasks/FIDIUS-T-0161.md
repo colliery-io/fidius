@@ -4,14 +4,14 @@ level: task
 title: "CS2.1 — macro/IR: accept Stream&lt;T&gt; in arg position + hash marker"
 short_code: "FIDIUS-T-0161"
 created_at: 2026-06-20T16:44:12.409472+00:00
-updated_at: 2026-06-20T16:58:47.407985+00:00
+updated_at: 2026-06-20T17:51:39.273682+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Accept `fidius::Stream<T>` in **argument** position in `#[plugin_interface]`/`#[
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -135,4 +137,12 @@ Accept `fidius::Stream<T>` in **argument** position in `#[plugin_interface]`/`#[
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 98333c4).** `signature_string` (fidius-guest/hash.rs) gained a
+`client_streaming` param → emits a `<stream` marker, distinct from server-streaming's
+`!stream`; unit test `streaming_markers_are_distinct` proves unary/server/client all
+hash differently. `MethodIR` gained `client_stream_item: Option<Type>`; `ir.rs` detects
+a `Stream<T>` arg, folds it into the hash, then rejects codegen with "recognized but no
+backend wired yet (CS2.2–CS2.4)" — keeping the compile-fail guard (regenerated
+`stream_in_arg_position.stderr`; renamed the ir unit test to
+`client_streaming_is_recognized_but_not_yet_wired`). Updated the 3 python_stub callers.
+Default suite 65 + lint green. Not flipped to compile-pass — that's CS2.5.

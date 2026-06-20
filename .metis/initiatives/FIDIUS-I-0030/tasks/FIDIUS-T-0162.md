@@ -4,14 +4,14 @@ level: task
 title: "CS2.2 — cdylib pull-callback ABI + Iterator wrapper + host producer + E2E"
 short_code: "FIDIUS-T-0162"
 created_at: 2026-06-20T16:44:13.823701+00:00
-updated_at: 2026-06-20T16:44:13.823701+00:00
+updated_at: 2026-06-20T17:52:08.534971+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ cdylib client-streaming: a host-provided **pull callback** the plugin invokes in
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -133,4 +135,22 @@ cdylib client-streaming: a host-provided **pull callback** the plugin invokes in
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**Design — reuse `FidiusStreamHandle`.** Shipped server-streaming
+(`fidius-guest/src/stream_ffi.rs`): `FidiusStreamHandle { next(handle, buf, cap,
+&out_len) -> status, drop_fn, state }` + `StreamState<T>` (guest PRODUCER).
+Client-streaming = the **inverse with the same handle struct** (host produces, guest
+consumes):
+1. Guest consumer `HostStream<T>` (stream_ffi): wraps `*mut FidiusStreamHandle`,
+   `impl Iterator` via `handle.next` + bincode-deserialize; `Drop` runs `drop_fn`.
+2. Host producer (fidius-host): builds a handle from a Rust iterator; its `next`
+   serializes each item (mirror of StreamState).
+3. Vtable shape `ClientStreamFn = (instance, *mut FidiusStreamHandle, *const u8 args,
+   u32 len, *mut *mut u8 out, *mut u32 out_len) -> i32`; macro emits it; descriptor
+   marks the method; host calls with the producer handle.
+4. Macro: for `fn m(&self, s: Stream<T>, ...) -> O`, build `HostStream<T>` → `Stream<T>`
+   from the handle, decode other args, call the user method, bincode O out.
+5. Host raw path here; typed `call_client_streaming` is CS2.5.
+6. E2E: `fn load(&self, rows: Stream<u64>) -> u64` (sum), host produces [1,2,3] → 6.
+
+Step order: (a) HostStream consumer + host producer + round-trip unit test;
+(b) ClientStreamFn shape + descriptor + macro shim; (c) host call path; (d) E2E.
