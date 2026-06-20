@@ -4,14 +4,14 @@ level: task
 title: "PC.5 — Docs + production-connector example"
 short_code: "FIDIUS-T-0156"
 created_at: 2026-06-20T15:39:23.504864+00:00
-updated_at: 2026-06-20T15:39:23.504864+00:00
+updated_at: 2026-06-20T16:25:39.003221+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Tie the arc together with docs + a runnable **production-connector example**: ex
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

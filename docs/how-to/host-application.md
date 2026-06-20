@@ -65,7 +65,9 @@ while let Some(item) = s.next().await {
     let r: Record = fidius::from_value(item?)?;
 }
 ```
-`examples/03_streaming`.
+`examples/03_streaming` (primitives); `examples/05_record_stream` (rich-typed
+records). For a full WASM connector — typed records + maps + time-boxed HTTP — see
+[Build a Production Connector](production-connector.md).
 
 ## Compose plugins (a pipeline)
 

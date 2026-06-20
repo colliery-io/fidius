@@ -67,6 +67,7 @@ nav:
     - Source Packages: tutorials/source-packages.md
   - How-To Guides:
     - Write a Host Application: how-to/host-application.md
+    - Build a Production Connector: how-to/production-connector.md
     - Scaffold a Project: how-to/scaffold-project.md
     - Test Plugins: how-to/test-plugins.md
     - Method Metadata: how-to/method-metadata.md

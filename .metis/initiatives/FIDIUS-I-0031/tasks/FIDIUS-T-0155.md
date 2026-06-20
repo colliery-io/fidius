@@ -4,14 +4,14 @@ level: task
 title: "PC.4 — Python structured PluginError round-trip"
 short_code: "FIDIUS-T-0155"
 created_at: 2026-06-20T15:39:22.463415+00:00
-updated_at: 2026-06-20T16:20:07.275019+00:00
+updated_at: 2026-06-20T16:25:06.279586+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Round-trip **structured `PluginError` fields** from Python plugins to the host. 
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -136,4 +138,13 @@ Round-trip **structured `PluginError` fields** from Python plugins to the host. 
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 4d6e098).** `pyerr_to_plugin_error` now detects a `fidius.PluginError`
+(`isinstance` against the SDK class imported by name) and maps `code←.code`,
+`message←.message`, `details←json.dumps(.details)` — round-tripping the structured
+fields instead of class-name/str/traceback. Plain exceptions still take the generic
+path (`maps_value_error_to_plugin_error` unregressed). Flipped the existing
+`loader_e2e::plugin_error_round_trips_with_code_and_details` from asserting the old
+flattened behavior to the real round-trip (`code=BAD_INPUT`, `details={"got":42}`).
+`python-test` (8) + `cargo test -p fidius-python` (loader_e2e 7) + lint green. The SDK
+docstring's promise ("the loader recognises this class and round-trips the fields") is
+now actually true.
