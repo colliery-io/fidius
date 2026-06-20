@@ -177,6 +177,11 @@ pub struct MethodIR {
     /// The per-item type `T` for a `streaming` method (the `T` in
     /// `fidius::Stream<T>`). `None` for non-streaming methods.
     pub stream_item_type: Option<Type>,
+    /// The per-item type `T` for a **client-streaming** method — a `Stream<T>` in
+    /// argument position (FIDIUS-I-0030). The signature string carries a `<stream`
+    /// marker so it hashes distinctly. `None` for non-client-streaming methods.
+    /// (Codegen is wired per backend in CS2.2–CS2.4.)
+    pub client_stream_item: Option<Type>,
 }
 
 impl MethodIR {
@@ -409,6 +414,7 @@ fn build_signature_string(
     method: &TraitItemFn,
     wire_raw: bool,
     stream_item: Option<&Type>,
+    client_streaming: bool,
 ) -> String {
     let name = method.sig.ident.to_string();
 
@@ -431,7 +437,14 @@ fn build_signature_string(
         },
     };
 
-    fidius_core::hash::signature_string(&name, &arg_types, &ret, wire_raw, stream_item.is_some())
+    fidius_core::hash::signature_string(
+        &name,
+        &arg_types,
+        &ret,
+        wire_raw,
+        stream_item.is_some(),
+        client_streaming,
+    )
 }
 
 /// Extract argument names from a method signature (excluding `self`).
@@ -514,21 +527,14 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
         let return_type = extract_return_type(method);
         let method_metas = parse_meta_attrs(&method.attrs, "method_meta")?;
 
-        // Server-streaming detection (FIDIUS-I-0026, D4): a method whose return
-        // type is `fidius::Stream<T>`. Argument-position `Stream<T>`
-        // (client-streaming / bidirectional) is rejected — v1 is server-streaming
-        // only.
-        for at in &arg_types {
-            if stream_item_type(at).is_some() {
-                return Err(syn::Error::new(
-                    at.span(),
-                    "fidius v1 supports server-streaming only: `Stream<T>` is not allowed in \
-                     argument position (client-streaming and bidirectional are deferred)",
-                ));
-            }
-        }
+        // Server-streaming (FIDIUS-I-0026, D4): a `-> fidius::Stream<T>` return.
         let stream_item = return_type.as_ref().and_then(stream_item_type);
         let streaming = stream_item.is_some();
+        // Client-streaming (FIDIUS-I-0030 / ADR-0007): a `Stream<T>` in ARGUMENT
+        // position. Recognized in the IR + folded into the interface hash here; the
+        // per-backend pull channel is wired in CS2.2–CS2.4, so for now a clear
+        // "not yet wired" error is returned below (keeps the compile-fail guard).
+        let client_stream_item: Option<Type> = arg_types.iter().find_map(stream_item_type);
 
         if wire_raw {
             if is_async {
@@ -543,7 +549,22 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             validate_raw_method_signature(method, &arg_types, return_type.as_ref())?;
         }
 
-        let signature_string = build_signature_string(method, wire_raw, stream_item.as_ref());
+        let signature_string = build_signature_string(
+            method,
+            wire_raw,
+            stream_item.as_ref(),
+            client_stream_item.is_some(),
+        );
+
+        // CS2.1: client-streaming is recognized + hashed, but no backend pull
+        // channel is wired yet (CS2.2–CS2.4). Reject with a clear message.
+        if client_stream_item.is_some() {
+            return Err(syn::Error::new(
+                method.sig.ident.span(),
+                "client-streaming (`Stream<T>` in argument position) is recognized but no \
+                 backend is wired for it yet (FIDIUS-I-0030, CS2.2–CS2.4)",
+            ));
+        }
 
         methods.push(MethodIR {
             name: method.sig.ident.clone(),
@@ -557,6 +578,7 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             wire_raw,
             streaming,
             stream_item_type: stream_item,
+            client_stream_item,
         });
     }
 
@@ -742,7 +764,10 @@ mod tests {
     }
 
     #[test]
-    fn rejects_stream_in_argument_position() {
+    fn client_streaming_is_recognized_but_not_yet_wired() {
+        // FIDIUS-I-0030 CS2.1: a `Stream<T>` argument is recognized as
+        // client-streaming (and folded into the hash), but codegen rejects it
+        // with a clear "not yet wired" message until CS2.2–CS2.4.
         let item: ItemTrait = syn::parse2(quote! {
             pub trait Bad: Send + Sync {
                 fn sink(&self, items: fidius::Stream<Row>) -> u32;
@@ -756,7 +781,7 @@ mod tests {
         };
         let err = parse_interface(attrs, &item).unwrap_err();
         assert!(
-            err.to_string().contains("server-streaming only"),
+            err.to_string().contains("client-streaming") && err.to_string().contains("wired"),
             "got: {err}"
         );
     }

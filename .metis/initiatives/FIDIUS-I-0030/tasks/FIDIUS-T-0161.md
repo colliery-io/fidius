@@ -4,14 +4,14 @@ level: task
 title: "CS2.1 — macro/IR: accept Stream&lt;T&gt; in arg position + hash marker"
 short_code: "FIDIUS-T-0161"
 created_at: 2026-06-20T16:44:12.409472+00:00
-updated_at: 2026-06-20T16:44:12.409472+00:00
+updated_at: 2026-06-20T16:58:47.407985+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Accept `fidius::Stream<T>` in **argument** position in `#[plugin_interface]`/`#[
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 

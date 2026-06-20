@@ -83,16 +83,21 @@ pub fn signature_string(
     ret: &str,
     wire_raw: bool,
     streaming: bool,
+    client_streaming: bool,
 ) -> String {
     let raw_marker = if wire_raw { "!raw" } else { "" };
     let stream_marker = if streaming { "!stream" } else { "" };
+    // Client-streaming (`Stream<T>` in argument position) hashes distinctly from a
+    // unary or server-streaming method of the same name/args (FIDIUS-I-0030 / ADR-0007).
+    let client_stream_marker = if client_streaming { "<stream" } else { "" };
     format!(
-        "{}:{}->{}{}{}",
+        "{}:{}->{}{}{}{}",
         name,
         arg_types.join(","),
         ret,
         raw_marker,
-        stream_marker
+        stream_marker,
+        client_stream_marker
     )
 }
 
@@ -134,6 +139,30 @@ mod tests {
         let a = interface_hash(&["name:->String"]);
         let b = interface_hash(&["name:->string"]); // lowercase 's'
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn streaming_markers_are_distinct() {
+        // unary vs server-streaming (`!stream`) vs client-streaming (`<stream`)
+        // of the same name/args must hash distinctly (FIDIUS-I-0030).
+        let args = ["u32".to_string()];
+        let unary = signature_string("read", &args, "Row", false, false, false);
+        let server = signature_string("read", &args, "Row", false, true, false);
+        let client = signature_string("read", &args, "Row", false, false, true);
+        assert!(server.ends_with("!stream"));
+        assert!(client.ends_with("<stream"));
+        assert_ne!(
+            interface_hash(&[unary.as_str()]),
+            interface_hash(&[server.as_str()])
+        );
+        assert_ne!(
+            interface_hash(&[unary.as_str()]),
+            interface_hash(&[client.as_str()])
+        );
+        assert_ne!(
+            interface_hash(&[server.as_str()]),
+            interface_hash(&[client.as_str()])
+        );
     }
 
     #[test]
