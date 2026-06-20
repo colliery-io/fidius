@@ -4,14 +4,14 @@ level: task
 title: "CS2.2 — cdylib pull-callback ABI + Iterator wrapper + host producer + E2E"
 short_code: "FIDIUS-T-0162"
 created_at: 2026-06-20T16:44:13.823701+00:00
-updated_at: 2026-06-20T17:52:08.534971+00:00
+updated_at: 2026-06-20T18:51:05.774875+00:00
 parent: FIDIUS-I-0030
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ cdylib client-streaming: a host-provided **pull callback** the plugin invokes in
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -154,3 +156,16 @@ consumes):
 
 Step order: (a) HostStream consumer + host producer + round-trip unit test;
 (b) ClientStreamFn shape + descriptor + macro shim; (c) host call path; (d) E2E.
+
+**DONE (commits c1ea7fa, 6778155, 0b8df43, 0ae8e88).** All steps landed:
+(a) `HostStream<T>` consumer + `host_producer_handle` + round-trip unit test (host
+produces → guest consumes). (b) `generate_vtable` emits a per-method `ClientStreamFn`
+slot; the macro cdylib shim builds `Stream::from_iter(HostStream::from_handle(handle))`,
+decodes non-stream args, calls the user method, bincodes the result; Client skips
+client-streaming methods. (c) `call_client_streaming_raw` on CdylibExecutor + PluginHandle
+(unsafe — takes the producer handle); WASM/Python return clear "not yet wired"; WASM
+adapter + Arena reject it. (d) E2E `cdylib_client_stream_e2e`: `fn load(&self, rows:
+Stream<u64>) -> u64` sums host-produced [1..=5] → 15. Removed the obsolete
+`stream_in_arg_position` compile-fail (now compiles). Default 66 + server-streaming +
+macro_wasm + clippy + lint green. **The cdylib client-streaming pull ABI is proven end
+to end.** Remaining in the arc: CS2.3 (WASM), CS2.4 (Python), CS2.5 (typed host API + docs).

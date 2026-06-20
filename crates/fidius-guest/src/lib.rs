@@ -37,6 +37,11 @@ pub mod hash;
 /// Only present in components built for `wasm32-wasip2`.
 #[cfg(target_family = "wasm")]
 pub mod http;
+
+/// Client-streaming guest consumer (`WasmHostStream`) over the `fidius:stream-pull`
+/// import (FIDIUS-I-0030 CS2.3). `wasm32-wasip2`-only.
+#[cfg(target_family = "wasm")]
+pub mod client_stream;
 pub mod python_descriptor;
 pub mod status;
 pub mod stream_ffi;

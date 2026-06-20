@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-20T18:45:33Z | 143 files | Go, JavaScript, Python, Rust
+> Generated: 2026-06-20T18:51:26Z | 143 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -69,6 +69,7 @@
 │   │   │   ├── stream.rs
 │   │   │   └── types.rs
 │   │   └── tests/
+│   │       ├── cdylib_client_stream_e2e.rs
 │   │       ├── cdylib_streaming_e2e.rs
 │   │       ├── configured_cdylib_e2e.rs
 │   │       ├── configured_cdylib_stream_e2e.rs
@@ -109,8 +110,7 @@
 │   │       │   ├── duplicate_method_meta_key.rs
 │   │       │   ├── missing_version.rs
 │   │       │   ├── mut_self.rs
-│   │       │   ├── reserved_fidius_namespace.rs
-│   │       │   └── stream_in_arg_position.rs
+│   │       │   └── reserved_fidius_namespace.rs
 │   │       ├── crate_path.rs
 │   │       ├── impl_basic.rs
 │   │       ├── interface_basic.rs
@@ -935,13 +935,14 @@
 - pub `call_method` function L137-165 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
 - pub `call_streaming` function L180-207 — `( &self, index: usize, input: &I, ) -> Result<crate::stream::ChunkStream, CallEr...` — Start a server-streaming method call by vtable index (FIDIUS-I-0026).
 - pub `call_method_raw` function L210-218 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
-- pub `has_capability` function L222-227 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
-- pub `info` function L230-238 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L243-252 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
-- pub `trait_metadata` function L256-264 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
+- pub `call_client_streaming_raw` function L230-251 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2): pass the host's producer
+- pub `has_capability` function L255-260 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
+- pub `info` function L263-271 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L276-285 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
+- pub `trait_metadata` function L289-297 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
 -  `Backend` enum L50-60 — `Cdylib | Python | Wasm` — The execution backend behind a [`PluginHandle`].
--  `PluginHandle` type L72-265 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
--  `cdylib_stream_decode` function L273-279 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
+-  `PluginHandle` type L72-298 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
+-  `cdylib_stream_decode` function L306-312 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
 
 #### crates/fidius-host/src/host.rs
 
@@ -1070,12 +1071,12 @@
 - pub `find_in_process_descriptor` function L214-228 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
 - pub `call_method` function L246-266 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
 - pub `call_method_raw` function L277-288 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
-- pub `call_client_streaming_raw` function L560-644 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2).
-- pub `call_streaming_raw` function L743-882 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
-- pub `has_capability` function L887-892 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L895-897 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L910-942 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
-- pub `trait_metadata` function L948-969 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
+- pub `call_client_streaming_raw` function L564-648 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2).
+- pub `call_streaming_raw` function L747-886 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
+- pub `has_capability` function L891-896 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L899-901 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L914-946 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
+- pub `trait_metadata` function L952-973 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
 -  `FfiFn` type L45 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut *mut u8, *mut u32) -> i...` — Type alias for the PluginAllocated FFI function pointer signature.
 -  `ArenaFn` type L48-49 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut u8, u32, *mut u32, *mut...` — Type alias for the Arena FFI function pointer signature.
 -  `construct_instance` function L56-61 — `(descriptor: *const PluginDescriptor, cfg: &[u8]) -> *mut c_void` — Construct the plugin instance via the descriptor's `construct` (FIDIUS-A-0006).
@@ -1083,21 +1084,21 @@
 -  `CdylibExecutor` type L107 — `impl Sync for CdylibExecutor` — (and future WASM) backends.
 -  `CdylibExecutor` type L109-118 — `impl Drop for CdylibExecutor` — (and future WASM) backends.
 -  `drop` function L110-117 — `(&mut self)` — (and future WASM) backends.
--  `CdylibExecutor` type L120-970 — `= CdylibExecutor` — (and future WASM) backends.
+-  `CdylibExecutor` type L120-974 — `= CdylibExecutor` — (and future WASM) backends.
 -  `new` function L123-145 — `( library: Arc<Library>, vtable: *const c_void, descriptor: *const PluginDescrip...` — Create a new CdylibExecutor.
 -  `call_plugin_allocated` function L292-373 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
 -  `call_arena` function L379-466 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
 -  `call_plugin_allocated_raw` function L471-552 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
--  `ClientStreamFn` type L572-579 — `= unsafe extern "C" fn( *mut c_void, *mut fidius_core::stream_ffi::FidiusStreamH...` — (and future WASM) backends.
--  `call_arena_raw` function L648-726 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
--  `STREAM_CHANNEL_CAP` variable L754 — `: usize` — Bounded backpressure/memory window between the pump thread and the
--  `SendHandle` struct L799 — `-` — (and future WASM) backends.
--  `SendHandle` type L800 — `impl Send for SendHandle` — (and future WASM) backends.
--  `INITIAL_ITEM_CAP` variable L815 — `: usize` — (and future WASM) backends.
--  `CdylibExecutor` type L972-988 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
--  `info` function L973-975 — `(&self) -> &PluginInfo` — (and future WASM) backends.
--  `method_count` function L977-979 — `(&self) -> u32` — (and future WASM) backends.
--  `call_raw` function L985-987 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
+-  `ClientStreamFn` type L576-583 — `= unsafe extern "C" fn( *mut c_void, *mut fidius_core::stream_ffi::FidiusStreamH...` — (and future WASM) backends.
+-  `call_arena_raw` function L652-730 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
+-  `STREAM_CHANNEL_CAP` variable L758 — `: usize` — Bounded backpressure/memory window between the pump thread and the
+-  `SendHandle` struct L803 — `-` — (and future WASM) backends.
+-  `SendHandle` type L804 — `impl Send for SendHandle` — (and future WASM) backends.
+-  `INITIAL_ITEM_CAP` variable L819 — `: usize` — (and future WASM) backends.
+-  `CdylibExecutor` type L976-992 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
+-  `info` function L977-979 — `(&self) -> &PluginInfo` — (and future WASM) backends.
+-  `method_count` function L981-983 — `(&self) -> u32` — (and future WASM) backends.
+-  `call_raw` function L989-991 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
 
 #### crates/fidius-host/src/executor/python.rs
 
@@ -1185,6 +1186,14 @@
 ### crates/fidius-host/tests
 
 > *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-host/tests/cdylib_client_stream_e2e.rs
+
+- pub `Sink` interface L29-32 — `{ fn load() }` — a real (in-process) plugin.
+- pub `Summer` struct L34 — `-` — a real (in-process) plugin.
+-  `Summer` type L37-45 — `impl Sink for Summer` — a real (in-process) plugin.
+-  `load` function L38-44 — `(&self, mut rows: fidius_core::Stream<u64>) -> u64` — a real (in-process) plugin.
+-  `cdylib_consumes_a_host_produced_stream` function L50-68 — `()` — a real (in-process) plugin.
 
 #### crates/fidius-host/tests/cdylib_streaming_e2e.rs
 
@@ -1784,11 +1793,6 @@
 
 - pub `BadPlugin` interface L7-10 — `{ fn do_thing() }`
 -  `main` function L12 — `()`
-
-#### crates/fidius-macro/tests/compile_fail/stream_in_arg_position.rs
-
-- pub `BadStream` interface L22-24 — `{ fn sink() }`
--  `main` function L26 — `()`
 
 ### crates/fidius-python
 
