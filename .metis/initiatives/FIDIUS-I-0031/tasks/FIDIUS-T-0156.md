@@ -4,14 +4,14 @@ level: task
 title: "PC.5 — Docs + production-connector example"
 short_code: "FIDIUS-T-0156"
 created_at: 2026-06-20T15:39:23.504864+00:00
-updated_at: 2026-06-20T16:25:39.003221+00:00
+updated_at: 2026-06-20T16:28:56.585291+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Tie the arc together with docs + a runnable **production-connector example**: ex
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -136,4 +138,14 @@ Tie the arc together with docs + a runnable **production-connector example**: ex
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit b3621ee).** Added `examples/05_record_stream` — a runnable host example
+streaming rich-typed records (an `Event` with a `HashMap` field) via `call_streaming`
+(covers PC.1 rich types + PC.2 record streaming at the host-composition level; runs
+green). New `docs/how-to/production-connector.md` ties the arc together: a WASM
+connector using rich types + typed-record streaming + time-boxed HTTP, each piece
+pointing at its worked fixture/test (records-greeter `tally`, records-stream, macro-fetcher
+`fetch_timeout`). Added to mkdocs nav; `examples/README` + the host-application how-to
+reference the new example + how-to. The "primitives only" streaming caveat was already
+removed in PC.2. Default suite (65) + lint + example run green. (Note: a single fully-
+runnable example can't combine the WASM-only HTTP piece with the in-process examples/
+style, so HTTP is shown via the how-to + the macro-fetcher test — documented honestly.)
