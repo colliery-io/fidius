@@ -138,17 +138,38 @@ pub fn wit_type_with(ty: &Type, known: &BTreeSet<String>) -> Result<String, Stri
                     let inner = single_generic(seg, "Option")?;
                     Ok(format!("option<{}>", wit_type_with(inner, known)?))
                 }
+                // Maps have no native WIT type; project to a list of key/value
+                // pairs — `list<tuple<k, v>>` — which round-trips any key type
+                // (not just strings). Insertion order is not preserved.
+                "HashMap" | "BTreeMap" => {
+                    let (k, v) = two_generics(seg, &ident)?;
+                    Ok(format!(
+                        "list<tuple<{}, {}>>",
+                        wit_type_with(k, known)?,
+                        wit_type_with(v, known)?
+                    ))
+                }
                 // A user type with `#[derive(WitType)]` → its kebab record/variant name.
                 other if known.contains(other) => Ok(to_kebab_case(other)),
                 other => Err(format!(
                     "type `{other}` is not supported in a WASM fidius interface \
                      (supported: bool, i8..i64, u8..u64, f32/f64, char, String, Vec<T>, \
-                     Option<T>, Result<T, PluginError>, and #[derive(WitType)] structs/enums)"
+                     Option<T>, HashMap/BTreeMap<K, V>, tuples, Result<T, PluginError>, \
+                     and #[derive(WitType)] structs/enums)"
                 )),
             }
         }
         Type::Tuple(t) if t.elems.is_empty() => {
             Err("unit `()` is not a valid argument type".to_string())
+        }
+        // Non-empty tuple `(A, B, …)` → WIT `tuple<a, b, …>`.
+        Type::Tuple(t) => {
+            let elems = t
+                .elems
+                .iter()
+                .map(|e| wit_type_with(e, known))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(format!("tuple<{}>", elems.join(", ")))
         }
         _ => Err("unsupported type in a WASM fidius interface".to_string()),
     }
@@ -362,6 +383,24 @@ fn first_generic(seg: &syn::PathSegment) -> Option<&Type> {
     None
 }
 
+/// Extract the first two type arguments (e.g. the key and value of a `Map<K, V>`).
+fn two_generics<'a>(seg: &'a syn::PathSegment, what: &str) -> Result<(&'a Type, &'a Type), String> {
+    if let PathArguments::AngleBracketed(ab) = &seg.arguments {
+        let types: Vec<&Type> = ab
+            .args
+            .iter()
+            .filter_map(|a| match a {
+                GenericArgument::Type(t) => Some(t),
+                _ => None,
+            })
+            .collect();
+        if types.len() >= 2 {
+            return Ok((types[0], types[1]));
+        }
+    }
+    Err(format!("`{what}` needs two type arguments (key, value)"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +421,29 @@ mod tests {
         assert_eq!(wit("Vec<u8>"), "list<u8>");
         assert_eq!(wit("Option<i32>"), "option<s32>");
         assert_eq!(wit("&[u8]"), "list<u8>");
+    }
+
+    #[test]
+    fn maps_tuples_and_nesting() {
+        // Maps → list<tuple<k, v>> (any key type, not just strings).
+        assert_eq!(wit("HashMap<String, i64>"), "list<tuple<string, s64>>");
+        assert_eq!(wit("BTreeMap<u32, String>"), "list<tuple<u32, string>>");
+        // Tuples → tuple<...>.
+        assert_eq!(wit("(i32, String)"), "tuple<s32, string>");
+        assert_eq!(wit("(u8, u8, bool)"), "tuple<u8, u8, bool>");
+        // Nesting composes recursively.
+        assert_eq!(wit("Vec<Option<i32>>"), "list<option<s32>>");
+        assert_eq!(wit("Option<Vec<u8>>"), "option<list<u8>>");
+        assert_eq!(
+            wit("HashMap<String, Vec<i64>>"),
+            "list<tuple<string, list<s64>>>"
+        );
+        // Map/tuple carrying a user record (kebab) via the known set.
+        let k = known(&["Row"]);
+        let wk = |s: &str| wit_type_with(&syn::parse_str::<Type>(s).unwrap(), &k).unwrap();
+        assert_eq!(wk("Vec<Row>"), "list<row>");
+        assert_eq!(wk("HashMap<String, Row>"), "list<tuple<string, row>>");
+        assert_eq!(wk("(Row, i32)"), "tuple<row, s32>");
     }
 
     #[test]

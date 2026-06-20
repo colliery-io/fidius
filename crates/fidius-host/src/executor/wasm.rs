@@ -759,17 +759,29 @@ impl ValueExecutor for WasmComponentExecutor {
     fn call(&self, method: usize, args: Value) -> Result<Value, CallError> {
         let m = self.method(method, false)?.clone();
 
-        // The host tuple-packs args into a `Value::List` of positional args.
-        let params: Vec<Val> = match args {
-            Value::List(items) => items.iter().map(value_to_val).collect::<Result<_, _>>()?,
-            // Unit / no args.
-            Value::Unit => Vec::new(),
-            // Single non-list arg — treat as one positional param.
-            single => vec![value_to_val(&single)?],
-        };
-
         self.with_store(|store, instance| {
             let func = self.func(store, instance, &m.name)?;
+            // Type-directed lowering: the WIT param types disambiguate a tuple from a
+            // list (PC.1). The host tuple-packs args into a `Value::List` of positionals.
+            let func_ty = func.ty(&*store);
+            let param_types: Vec<wasmtime::component::Type> =
+                func_ty.params().map(|(_name, t)| t).collect();
+            let params: Vec<Val> = match &args {
+                Value::List(items) => items
+                    .iter()
+                    .zip(param_types.iter())
+                    .map(|(v, t)| value_to_val_typed(v, t))
+                    .collect::<Result<_, _>>()?,
+                Value::Unit => Vec::new(),
+                single => {
+                    let t = param_types.first().ok_or_else(|| {
+                        CallError::Serialization(
+                            "plugin method takes no parameters but an argument was supplied".into(),
+                        )
+                    })?;
+                    vec![value_to_val_typed(single, t)?]
+                }
+            };
             let mut out = [Val::Bool(false)];
             func.call(&mut *store, &params, &mut out)
                 .map_err(|e| CallError::Backend {
@@ -1032,12 +1044,101 @@ fn value_to_val(v: &Value) -> Result<Val, CallError> {
             Val::Variant(to_kebab(name), payload)
         }
         Value::Unit => Val::Tuple(Vec::new()),
-        Value::Map(_) => {
-            return Err(CallError::Serialization(
-                "non-string-keyed maps are not yet supported across the WASM boundary".into(),
+        // A map has no native WIT type — it projects to `list<tuple<k, v>>`
+        // (FIDIUS-A-0008/PC.1), which is unambiguous from a `Value::Map`.
+        Value::Map(pairs) => Val::List(
+            pairs
+                .iter()
+                .map(|(k, v)| {
+                    Ok::<_, CallError>(Val::Tuple(vec![value_to_val(k)?, value_to_val(v)?]))
+                })
+                .collect::<Result<_, _>>()?,
+        ),
+    })
+}
+
+/// Type-directed lowering for the **argument** path. The structural [`value_to_val`]
+/// can't tell a Rust tuple (a `Value::List`) from a real list, so when the target WIT
+/// type is a `tuple<…>` we use the wasmtime [`Type`] to emit `Val::Tuple`. Lists,
+/// options, and maps recurse with their element type so nested tuples are caught;
+/// everything else falls back to the structural lowering.
+fn value_to_val_typed(v: &Value, ty: &wasmtime::component::Type) -> Result<Val, CallError> {
+    use wasmtime::component::Type;
+    match ty {
+        Type::Tuple(tt) => {
+            let types: Vec<Type> = tt.types().collect();
+            let items: Vec<Value> = match v {
+                Value::List(items) => items.clone(),
+                Value::Unit if types.is_empty() => Vec::new(),
+                other => {
+                    return Err(CallError::Serialization(format!(
+                        "expected a tuple value (got {other:?}) for a WIT tuple<…>"
+                    )))
+                }
+            };
+            if items.len() != types.len() {
+                return Err(CallError::Serialization(format!(
+                    "tuple arity mismatch: value has {}, WIT tuple has {}",
+                    items.len(),
+                    types.len()
+                )));
+            }
+            Ok(Val::Tuple(
+                items
+                    .iter()
+                    .zip(types.iter())
+                    .map(|(it, t)| value_to_val_typed(it, t))
+                    .collect::<Result<_, _>>()?,
             ))
         }
-    })
+        Type::List(lt) => {
+            let elem = lt.ty();
+            match v {
+                Value::List(items) => Ok(Val::List(
+                    items
+                        .iter()
+                        .map(|i| value_to_val_typed(i, &elem))
+                        .collect::<Result<_, _>>()?,
+                )),
+                Value::Bytes(b) => Ok(Val::List(b.iter().map(|x| Val::U8(*x)).collect())),
+                // A map lowered to `list<tuple<k, v>>`: each pair becomes a 2-tuple.
+                Value::Map(pairs) => Ok(Val::List(
+                    pairs
+                        .iter()
+                        .map(|(k, val)| {
+                            value_to_val_typed(&Value::List(vec![k.clone(), val.clone()]), &elem)
+                        })
+                        .collect::<Result<_, _>>()?,
+                )),
+                // A string-keyed map serializes to `Value::Record`; its field names
+                // are the (string) keys. Project to the same list-of-pairs.
+                Value::Record(fields) => Ok(Val::List(
+                    fields
+                        .iter()
+                        .map(|(k, val)| {
+                            value_to_val_typed(
+                                &Value::List(vec![Value::String(k.clone()), val.clone()]),
+                                &elem,
+                            )
+                        })
+                        .collect::<Result<_, _>>()?,
+                )),
+                other => Err(CallError::Serialization(format!(
+                    "expected a list/map value (got {other:?}) for a WIT list<…>"
+                ))),
+            }
+        }
+        Type::Option(ot) => match v {
+            Value::Option(None) => Ok(Val::Option(None)),
+            Value::Option(Some(inner)) => Ok(Val::Option(Some(Box::new(value_to_val_typed(
+                inner,
+                &ot.ty(),
+            )?)))),
+            _ => value_to_val(v),
+        },
+        // Records, primitives, variants, results: structural lowering is unambiguous.
+        _ => value_to_val(v),
+    }
 }
 
 /// wasmtime `Val` → fidius `Value` (structural; self-describing).

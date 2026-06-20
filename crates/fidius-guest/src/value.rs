@@ -570,9 +570,52 @@ impl<'de> de::Deserializer<'de> for Value {
         }
     }
 
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, ValueError>
+    where
+        V: de::Visitor<'de>,
+    {
+        match self {
+            Value::Map(entries) => visitor.visit_map(MapAccess {
+                iter: entries.into_iter(),
+                value: None,
+            }),
+            Value::Record(fields) => visitor.visit_map(RecordAccess {
+                iter: fields.into_iter(),
+                value: None,
+            }),
+            // A map projected across the WASM boundary arrives as `list<tuple<k, v>>`
+            // — a `Value::List` of 2-element pairs. Accept it as a map so
+            // `HashMap`/`BTreeMap` round-trips (PC.1). `Vec<(K, V)>` still reads the
+            // same value via `deserialize_seq`.
+            Value::List(items) => {
+                let mut entries = Vec::with_capacity(items.len());
+                for it in items {
+                    match it {
+                        Value::List(mut kv) if kv.len() == 2 => {
+                            let v = kv.pop().unwrap();
+                            let k = kv.pop().unwrap();
+                            entries.push((k, v));
+                        }
+                        other => {
+                            return Err(ValueError(format!(
+                                "expected a [key, value] pair reading a map from a list, found {}",
+                                other.kind()
+                            )))
+                        }
+                    }
+                }
+                visitor.visit_map(MapAccess {
+                    iter: entries.into_iter(),
+                    value: None,
+                })
+            }
+            other => Err(ValueError(format!("expected map, found {}", other.kind()))),
+        }
+    }
+
     serde::forward_to_deserialize_any! {
         bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf seq tuple tuple_struct map struct identifier
+        bytes byte_buf seq tuple tuple_struct struct identifier
         ignored_any
     }
 }
@@ -794,6 +837,27 @@ mod tests {
         let v = to_value(&value).expect("to_value");
         let back: T = from_value(v).expect("from_value");
         assert_eq!(back, value);
+    }
+
+    #[test]
+    fn map_deserializes_from_a_list_of_pairs() {
+        use std::collections::HashMap;
+        // PC.1: a map crosses the WASM boundary as `list<tuple<k,v>>`, i.e. a
+        // `Value::List` of 2-element pairs. It must deserialize into a `HashMap`...
+        let pairs = Value::List(vec![
+            Value::List(vec![Value::String("a".into()), Value::U32(1)]),
+            Value::List(vec![Value::String("b".into()), Value::U32(2)]),
+        ]);
+        let m: HashMap<String, u32> = from_value(pairs.clone()).expect("list-of-pairs → map");
+        assert_eq!(m.get("a"), Some(&1));
+        assert_eq!(m.get("b"), Some(&2));
+        // ...and the same value still reads as a `Vec<(K, V)>`.
+        let v: Vec<(String, u32)> = from_value(pairs).expect("list-of-pairs → vec");
+        assert_eq!(v.len(), 2);
+        // A non-string-keyed map also round-trips (via Value::Map).
+        let mut nk: HashMap<u32, String> = HashMap::new();
+        nk.insert(7, "seven".into());
+        round_trip(nk);
     }
 
     #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]

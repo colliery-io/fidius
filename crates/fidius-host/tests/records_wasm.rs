@@ -52,6 +52,11 @@ pub enum Shape {
 pub trait Geo: Send + Sync {
     fn midpoint(&self, a: Point, b: Point) -> Point;
     fn describe(&self, s: Shape) -> String;
+    fn tally(
+        &self,
+        counts: std::collections::HashMap<String, u32>,
+        bump: (i32, i32),
+    ) -> std::collections::HashMap<String, u32>;
 }
 
 fn records_greeter_component() -> &'static [u8] {
@@ -146,4 +151,29 @@ fn variant_in_round_trips_all_cases() {
 
     let dot: String = handle.call_method(1, &(Shape::Dot,)).unwrap();
     assert_eq!(dot, "dot");
+}
+
+#[test]
+fn maps_and_tuples_round_trip() {
+    use std::collections::HashMap;
+    let tmp = tempfile::TempDir::new().unwrap();
+    stage_pkg(tmp.path());
+    let host = PluginHost::builder()
+        .search_path(tmp.path())
+        .build()
+        .unwrap();
+    let handle = host
+        .load_wasm("records-greeter-pkg", &__fidius_Geo::Geo_WASM_DESCRIPTOR)
+        .unwrap();
+
+    // tally (method 2): HashMap arg + (i32,i32) tuple arg → HashMap return.
+    // Maps cross as `list<tuple<string, u32>>`; the tuple bump (2+3) is added to
+    // each value. Exercises type-directed tuple lowering + map round-trip.
+    let mut counts = HashMap::new();
+    counts.insert("a".to_string(), 1u32);
+    counts.insert("b".to_string(), 10u32);
+    let out: HashMap<String, u32> = handle.call_method(2, &(counts, (2i32, 3i32))).unwrap();
+    assert_eq!(out.get("a"), Some(&6));
+    assert_eq!(out.get("b"), Some(&15));
+    assert_eq!(out.len(), 2);
 }

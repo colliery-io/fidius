@@ -421,7 +421,7 @@ capabilities = ["env:FIDIUS_TEST_CAP"]
 #[test]
 fn unknown_capability_rejected_at_load() {
     let tmp = tempfile::TempDir::new().unwrap();
-    stage_wasm_package(tmp.path(), &["filesystem"]); // never grantable
+    stage_wasm_package(tmp.path(), &["gpu"]); // not a capability fidius knows
     let host = PluginHost::builder()
         .search_path(tmp.path())
         .build()

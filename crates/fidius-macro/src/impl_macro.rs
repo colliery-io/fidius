@@ -692,6 +692,20 @@ fn collect_user_idents(ty: &Type, out: &mut std::collections::BTreeSet<String>) 
 /// no user type (wit-bindgen uses the same Rust type), else the generated path
 /// `exports::fidius::<iface>::<iface>::<T>`, recursing through `Vec`/`Option`.
 fn gen_type(ty: &Type, known: &std::collections::BTreeSet<String>, pkg_seg: &Ident) -> TokenStream {
+    // Maps bind as `Vec<(K, V)>` — the wit-bindgen lowering of `list<tuple<k, v>>`.
+    // Handle before the user-type short-circuit (a `HashMap<String, u32>` has no
+    // `#[derive(WitType)]` inside but still needs its binding type).
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            if matches!(seg.ident.to_string().as_str(), "HashMap" | "BTreeMap") {
+                if let Some((k, v)) = wasm_two_generics(seg) {
+                    let gk = gen_type(k, known, pkg_seg);
+                    let gv = gen_type(v, known, pkg_seg);
+                    return quote! { ::std::vec::Vec<(#gk, #gv)> };
+                }
+            }
+        }
+    }
     if !crate::wit::contains_user_type(ty, known) {
         return quote! { #ty };
     }
@@ -725,6 +739,23 @@ fn wasm_first_generic(seg: &syn::PathSegment) -> Option<&Type> {
             if let syn::GenericArgument::Type(t) = a {
                 return Some(t);
             }
+        }
+    }
+    None
+}
+
+fn wasm_two_generics(seg: &syn::PathSegment) -> Option<(&Type, &Type)> {
+    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+        let types: Vec<&Type> = ab
+            .args
+            .iter()
+            .filter_map(|a| match a {
+                syn::GenericArgument::Type(t) => Some(t),
+                _ => None,
+            })
+            .collect();
+        if types.len() >= 2 {
+            return Some((types[0], types[1]));
         }
     }
     None

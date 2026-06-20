@@ -350,6 +350,24 @@ fn render_conversions(
 /// author→generated, since `From` is generated both ways. Public so the macro's
 /// adapter reuses the exact same boundary conversions.
 pub fn conv_expr(access: &str, ty: &Type, known: &BTreeSet<String>) -> String {
+    // Maps cross as `list<tuple<k, v>>` — a `Vec<(K, V)>` binding. Convert with
+    // `collect()` (bidirectional via type inference: `Vec`↔`HashMap`/`BTreeMap`).
+    // Handle before the user-type short-circuit so a `HashMap<String, u32>` (no
+    // `#[derive(WitType)]` inside) still converts to/from its binding.
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            if matches!(seg.ident.to_string().as_str(), "HashMap" | "BTreeMap") {
+                if let Some((k, v)) = two_generics(seg) {
+                    let kc = conv_expr("k", k, known);
+                    let vc = conv_expr("v", v, known);
+                    if kc == "k" && vc == "v" {
+                        return format!("{access}.into_iter().collect()");
+                    }
+                    return format!("{access}.into_iter().map(|(k, v)| ({kc}, {vc})).collect()");
+                }
+            }
+        }
+    }
     if !contains_user_type(ty, known) {
         return access.to_string();
     }
@@ -392,6 +410,11 @@ pub fn contains_user_type(ty: &Type, known: &BTreeSet<String>) -> bool {
                     return contains_user_type(inner, known);
                 }
             }
+            if matches!(ident.as_str(), "HashMap" | "BTreeMap") {
+                if let Some((k, v)) = two_generics(seg) {
+                    return contains_user_type(k, known) || contains_user_type(v, known);
+                }
+            }
         }
     }
     false
@@ -403,6 +426,23 @@ fn single_generic(seg: &syn::PathSegment) -> Option<&Type> {
             if let syn::GenericArgument::Type(t) = a {
                 return Some(t);
             }
+        }
+    }
+    None
+}
+
+fn two_generics(seg: &syn::PathSegment) -> Option<(&Type, &Type)> {
+    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+        let types: Vec<&Type> = ab
+            .args
+            .iter()
+            .filter_map(|a| match a {
+                syn::GenericArgument::Type(t) => Some(t),
+                _ => None,
+            })
+            .collect();
+        if types.len() >= 2 {
+            return Some((types[0], types[1]));
         }
     }
     None
@@ -512,9 +552,11 @@ mod tests {
 
     #[test]
     fn unsupported_type_errors() {
+        // `Box<T>` has no WIT projection (maps/tuples are now supported, so use a
+        // type that genuinely isn't).
         let src = r#"
             #[plugin_interface(version = 1)]
-            pub trait T { fn f(&self, x: std::collections::HashMap<String,String>) -> u32; }
+            pub trait T { fn f(&self, x: Box<String>) -> u32; }
         "#;
         assert!(generate(src).is_err());
     }

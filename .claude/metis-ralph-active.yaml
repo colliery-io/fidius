@@ -1,0 +1,15 @@
+# Metis Ralph Loop State - Multi-Task Serial Execution
+# Working through an explicit list of tasks
+project_path: "/Users/dstorey/Desktop/fidius/.metis"
+mode: tasks
+tasks:
+  - "FIDIUS-T-0152"
+  - "FIDIUS-T-0153"
+  - "FIDIUS-T-0154"
+  - "FIDIUS-T-0155"
+  - "FIDIUS-T-0156"
+current_task_index: 0
+iteration: 1
+max_iterations: 0
+completion_promise: "ALL TASKS COMPLETE"
+started_at: "2026-06-20T15:43:49Z"

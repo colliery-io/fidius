@@ -23,6 +23,12 @@ pub enum Shape {
 pub trait Geo: Send + Sync {
     fn midpoint(&self, a: Point, b: Point) -> Point;
     fn describe(&self, s: Shape) -> String;
+    // PC.1: a map arg + tuple arg + map return — maps cross as `list<tuple<k,v>>`.
+    fn tally(
+        &self,
+        counts: std::collections::HashMap<String, u32>,
+        bump: (i32, i32),
+    ) -> std::collections::HashMap<String, u32>;
 }
 
 pub struct MyGeo;
@@ -43,5 +49,14 @@ impl Geo for MyGeo {
             Shape::Triangle { base, height } => format!("triangle {base}x{height}"),
             Shape::Dot => "dot".to_string(),
         }
+    }
+
+    fn tally(
+        &self,
+        counts: std::collections::HashMap<String, u32>,
+        bump: (i32, i32),
+    ) -> std::collections::HashMap<String, u32> {
+        let add = (bump.0 + bump.1) as u32;
+        counts.into_iter().map(|(k, v)| (k, v + add)).collect()
     }
 }

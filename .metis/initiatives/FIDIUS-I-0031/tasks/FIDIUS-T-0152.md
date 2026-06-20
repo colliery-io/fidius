@@ -4,14 +4,14 @@ level: task
 title: "PC.1 — Rich WIT type mapping (maps, tuples, nesting)"
 short_code: "FIDIUS-T-0152"
 created_at: 2026-06-20T15:39:18.699224+00:00
-updated_at: 2026-06-20T15:39:18.699224+00:00
+updated_at: 2026-06-20T15:44:01.988061+00:00
 parent: FIDIUS-I-0031
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/todo"
+  - "#phase/active"
 
 
 exit_criteria_met: false
@@ -63,6 +63,8 @@ Extend `fidius-wit`'s type mapping (`crates/fidius-wit/src/lib.rs`, `wit_type_wi
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -135,4 +137,16 @@ Extend `fidius-wit`'s type mapping (`crates/fidius-wit/src/lib.rs`, `wit_type_wi
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**WIT side — DONE.** `crates/fidius-wit/src/lib.rs`: `HashMap`/`BTreeMap<K,V>` →
+`list<tuple<k,v>>`, non-empty tuples → `tuple<...>`, nesting already recursed.
+Added `two_generics` + `maps_tuples_and_nesting` test; fixed `generate.rs`
+`unsupported_type_errors` (HashMap→`Box`). `cargo test -p fidius-wit` green (16).
+
+**Marshalling — design.** `wasm.rs` `value_to_val`/`val_to_value` are structural/
+type-blind. Inherent ambiguities: a Rust tuple serializes to `Value::List` (no
+`Value::Tuple`) but WIT wants `Val::Tuple`; and WIT projects BOTH `HashMap<K,V>` and
+`Vec<(K,V)>` to `list<tuple>`. Plan: (1) args type-directed via `func.params()`
+(`Type::Tuple`→`Val::Tuple`, `Value::Map` vs `list<tuple>` type → `Val::List<Val::Tuple>`);
+remove the `Value::Map` rejection. (2) returns: keep `val_to_value` structural, override
+`deserialize_map` in `fidius-guest/src/value.rs` so a `Value::List` of pairs deserializes
+to a map (so `from_value::<HashMap>` + `<Vec<(K,V)>>` both work). (3) fixture/E2E + doc.

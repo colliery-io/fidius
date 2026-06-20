@@ -76,12 +76,17 @@ Model value space (FIDIUS-T-0096), so the mapping is close to 1:1:
 | `Unit` | `()`, unit structs | (empty tuple) | `Tuple([])` |
 
 Notes:
-- `Value::Map` (non-string-keyed maps) has no direct WIT type; encode as
-  `list<tuple<K, V>>`. Most fidius interfaces use structs (`Record`), so this is
-  rare.
+- **Maps** — `HashMap<K, V>` / `BTreeMap<K, V>` have no native WIT type; they
+  project to `list<tuple<K, V>>` (PC.1), with **any** key type, not just strings.
+  A string-keyed map may surface as a `Record`; both lower to the same `list<tuple>`,
+  and a returned `list<tuple>` deserializes back into either a `HashMap` or a
+  `Vec<(K, V)>`. Insertion order is not preserved.
+- **Tuples** — `(A, B, …)` map to WIT `tuple<a, b, …>`. Because a Rust tuple and a
+  `Vec` both surface as `Value::List`, the executor uses the export's wasmtime **param
+  types** to lower a tuple to `Val::Tuple` (vs a list to `Val::List`).
 - The executor derives each export's expected param/result **types** from the
   component's own type information (wasmtime exposes them), and uses those to
-  drive the `Value → Val` lowering (e.g. knowing a `u32` param vs `s64`).
+  drive the `Value → Val` lowering (e.g. a `u32` param vs `s64`, or a tuple vs a list).
 
 ## User-defined types — records & variants (FIDIUS-I-0023)
 
