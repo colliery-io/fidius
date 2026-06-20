@@ -181,6 +181,12 @@ impl<T: DeserializeOwned> Iterator for HostStream<T> {
     }
 }
 
+// SAFETY: a `HostStream` owns its handle and is consumed on a single thread within
+// one client-streaming method call (the host never shares the handle concurrently).
+// The `Send` bound lets the macro wrap it in a `Stream<T>` (whose iterator is
+// `Send`) for the user method to consume.
+unsafe impl<T> Send for HostStream<T> {}
+
 impl<T> Drop for HostStream<T> {
     fn drop(&mut self) {
         // SAFETY: the handle is valid + owned; `drop_fn` is called exactly once.
