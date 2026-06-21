@@ -24,9 +24,12 @@ how it stays consistent with the cdylib and Python backends.
   by-index `call_method(index, ..)` model and avoids a build-time codegen step
   in the host.
 
-**Deferred to Phase 3 (T-0013):** the `#[plugin_interface]` macro emitting the
-`.wit` from the Rust trait, so Rust authors get WIT for free. The dynamic host
-path is unaffected by that — it consumes any conforming component.
+**Implemented (FIDIUS-I-0023):** Rust authors get their `.wit` for free — a
+`build.rs` calling `fidius_build::emit_wit()` (or the `fidius wit` CLI) renders the
+WIT **and** the generated↔author conversions from the trait + `#[derive(WitType)]`
+types, which `#[plugin_impl]`'s adapter consumes. (A proc-macro can't read external
+type definitions, so this runs from `build.rs` rather than the macro itself.) The
+dynamic host path is unaffected — it still consumes any conforming component by index.
 
 Rationale: dynamic `Val` keeps the host generic over interfaces (one code path
 for all plugins, dispatched by index), mirrors the cdylib/Python dispatch, and

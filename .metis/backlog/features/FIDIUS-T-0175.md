@@ -4,15 +4,15 @@ level: task
 title: "WASM: record output items + record-in-WIT-position for client/bidi streaming"
 short_code: "FIDIUS-T-0175"
 created_at: 2026-06-20T23:53:54.048903+00:00
-updated_at: 2026-06-20T23:53:54.048903+00:00
+updated_at: 2026-06-21T00:09:25.566192+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#phase/backlog"
   - "#feature"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -29,7 +29,11 @@ initiative_id: NULL
 
 ## Objective **[REQUIRED]**
 
-{Clear statement of what this task accomplishes}
+Close the remaining WASM streaming user-type gaps left by T-0171: a bidi method with a
+**record OUTPUT** item (crosses via the WIT resource), and client/bidi methods where a
+record is used in a **WIT-typed non-stream arg/return** alongside a stream. Add client/bidi
+codegen to the macro's user-type (`has_user`/build.rs) branch + make fidius-wit skip the
+`Stream<T>` arg, so the WIT matches the guest adapter.
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -64,6 +68,12 @@ initiative_id: NULL
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -134,4 +144,15 @@ initiative_id: NULL
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 92ab8cc).** The macro's user-type (`has_user`/build.rs) branch now generates
+client- and bidi-streaming methods (it previously rejected them). The bincode `Stream<T>`
+input arg is excluded from the WIT params; non-stream args and the bidi **output** item use
+the generated WIT types + `conv_expr` conversions, mirroring the primitives-branch codegen.
+`fidius-wit` (build.rs WIT) skips the `Stream<T>` arg too, so the generated WIT matches the
+guest adapter. Removed the obsolete rejection. New `record-stream-user-types` fixture +
+`wasm_record_stream_user_types` E2E covering all three new shapes: a **record-output bidi**
+(primitive in → `Stream<Row>`), a **client method with a user-typed WIT arg** alongside a
+primitive stream, and a **record stream item** (bincode) where `Row` is also a WIT type.
+Default 74 + full wasm user-type/streaming regression + lint green; streaming.md caveats
+lifted. **The WASM streaming user-type matrix is now complete** (server/client/bidi × record
+items, WIT args).

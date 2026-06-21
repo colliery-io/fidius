@@ -88,3 +88,8 @@ Architecture, design decisions, and the reasoning behind the system.
 - [Interface Evolution and ABI Safety](explanation/interface-evolution.md)
 - [Buffer Strategies Explained](explanation/buffer-strategies.md)
 - [Wire Format](explanation/wire-format.md)
+- [Streaming (server, client, bidirectional)](explanation/streaming.md)
+- [Configured Plugin Instances](explanation/configured-instances.md)
+- [WASM Component ABI](explanation/wasm-component-abi.md)
+- [Capabilities & the WASM Sandbox](explanation/wasm-capabilities.md)
+- [Performance — plugins vs a microservice](explanation/performance.md)

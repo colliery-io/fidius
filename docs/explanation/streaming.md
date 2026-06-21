@@ -14,14 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# Server-Streaming
+# Streaming
 
-A normal plugin method is request/response: one call, one return value. Some
-plugins instead produce a *sequence* — a connector paginating an API, a query
-that returns rows, a tail of a log. Buffering all of it into one `Vec` return is
-wasteful (unbounded memory) and high-latency (nothing is usable until everything
-is ready). **Server-streaming** lets a method yield items one at a time, with the
-consumer pulling them lazily.
+A normal plugin method is request/response: one call, one return value. Some plugins
+instead work with *sequences*. fidius streams in **three directions**, all pull-based,
+backpressured, and drop-to-cancel, on cdylib, WASM, and Python:
+
+- **Server-streaming** — the plugin produces (`Stream<T>` return).
+- **Client-streaming** — the host produces (`Stream<T>` argument).
+- **Bidirectional** — both (`Stream` in *and* out): a plugin-owned transform.
+
+## Server-streaming
+
+A connector paginating an API, a query returning rows, a tail of a log: buffering all
+of it into one `Vec` return is wasteful (unbounded memory) and high-latency (nothing is
+usable until everything is ready). **Server-streaming** lets a method yield items one at
+a time, with the consumer pulling them lazily.
 
 ## Declaring a streaming method
 
