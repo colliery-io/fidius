@@ -138,8 +138,13 @@ pub use fidius_core::async_runtime;
 // Host-side API surface — only present when the `host` feature is enabled.
 // Plugin crates (cdylibs) do not enable this feature and therefore do not
 // pull libloading or other host-only dependencies.
+// Mirror `fidius_host`'s full host-app public surface so a host application never has to
+// reach into `fidius-host` directly (FIDIUS-T-0176 facade-completeness audit).
 #[cfg(feature = "host")]
-pub use fidius_host::{CallError, LoadError, LoadPolicy, PluginHandle, PluginHost, PluginInfo};
+pub use fidius_host::{
+    CallError, LoadError, LoadPolicy, LoadedLibrary, LoadedPlugin, PluginExecutor, PluginHandle,
+    PluginHost, PluginHostBuilder, PluginInfo, PluginRuntimeKind,
+};
 
 // Server-streaming host handle (FIDIUS-I-0026). The generated Client's streaming
 // methods return this; consumers pull items with `.next().await`.
@@ -147,9 +152,11 @@ pub use fidius_host::{CallError, LoadError, LoadPolicy, PluginHandle, PluginHost
 pub use fidius_host::{ChunkStream, StreamExecutor};
 
 // WASM egress contract (FIDIUS-I-0027): name these to implement a per-request egress
-// policy for `PluginHost::builder().egress(..)`. Requires the `wasm` feature.
+// policy for `PluginHost::builder().egress(..)`. `http_types` is the `http` crate, so an
+// `EgressPolicy::authorize` impl can name `http_types::request::Parts` without depending on
+// `http` directly. Requires the `wasm` feature.
 #[cfg(feature = "wasm")]
-pub use fidius_host::{EgressDenied, EgressPolicy};
+pub use fidius_host::{http_types, EgressDenied, EgressPolicy};
 
 // Re-export inventory so fidius_plugin_registry!() works via fidius_core
 pub use fidius_core::inventory;
@@ -164,10 +171,37 @@ pub use fidius_core::registry;
 //   fidius::fidius_plugin_registry!();
 pub use fidius_core::fidius_plugin_registry;
 
+// Regression guard (FIDIUS-T-0176): the full host-app surface must be nameable through the
+// facade so white-label downstreams never reach into `fidius-host` directly. Each fn just
+// names the re-exported types in its signature — it compiles iff every re-export resolves.
+#[cfg(all(test, feature = "host"))]
+#[allow(dead_code)]
+mod facade_host_surface {
+    fn names(
+        _host: &crate::PluginHost,
+        _builder: &crate::PluginHostBuilder,
+        _handle: &crate::PluginHandle,
+        _info: &crate::PluginInfo,
+        _kind: crate::PluginRuntimeKind,
+        _policy: crate::LoadPolicy,
+        _loaded: &crate::LoadedPlugin,
+        _lib: &crate::LoadedLibrary,
+        _exec: &dyn crate::PluginExecutor,
+        _call_err: &crate::CallError,
+        _load_err: &crate::LoadError,
+    ) {
+    }
+}
+
 #[cfg(all(test, feature = "wasm"))]
-mod facade_wasm_reexports {
-    // Regression guard: the WASM egress contract must be nameable through the facade
-    // (white-label downstreams reach it as `<their-crate>::fidius::EgressPolicy`).
-    #[allow(dead_code)]
-    fn names(_policy: &dyn crate::EgressPolicy, _denied: crate::EgressDenied) {}
+#[allow(dead_code)]
+mod facade_wasm_surface {
+    fn names(
+        _policy: &dyn crate::EgressPolicy,
+        _denied: crate::EgressDenied,
+        // the `http` crate, for `EgressPolicy::authorize`'s `&mut http::request::Parts`.
+        _parts: &crate::http_types::request::Parts,
+        _uri: &crate::http_types::Uri,
+    ) {
+    }
 }

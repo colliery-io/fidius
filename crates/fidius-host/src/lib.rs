@@ -30,7 +30,7 @@ pub mod types;
 pub use error::{CallError, LoadError};
 pub use executor::PluginExecutor;
 pub use handle::PluginHandle;
-pub use host::PluginHost;
+pub use host::{PluginHost, PluginHostBuilder};
 pub use loader::{LoadedLibrary, LoadedPlugin};
 #[cfg(feature = "streaming")]
 pub use stream::{ChunkStream, StreamExecutor};
@@ -40,3 +40,7 @@ pub use types::{LoadPolicy, PluginInfo, PluginRuntimeKind};
 // downstreams (incl. the `fidius` facade) can name them without the internal module path.
 #[cfg(feature = "wasm")]
 pub use executor::wasm::{EgressDenied, EgressPolicy};
+// The `http` crate, re-exported so an embedder can name `http::request::Parts` (+ `Uri`,
+// `HeaderMap`, …) in their `EgressPolicy::authorize` impl without a separate `http` dep.
+#[cfg(feature = "wasm")]
+pub use ::http as http_types;
