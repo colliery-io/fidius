@@ -1,0 +1,32 @@
+# WASM author fixture (FIDIUS-T-0177): a plugin whose user types use WIT reserved
+# keywords for field names (`record`, `stream`, `from`, `type`), variant case
+# names (`Stream`, `Record`, `List`), and the method/param names. build.rs
+# (fidius_build::emit_wit) must emit these as `%record`, … or the generated wit/
+# fails to parse and the component never builds. Proves the keyword-escaping end
+# to end on wasm32-wasip2.
+[workspace]
+
+[package]
+name = "keyword-fields"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[build-dependencies]
+fidius-build = { path = "../../../crates/fidius-build" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

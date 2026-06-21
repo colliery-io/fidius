@@ -10,3 +10,8 @@ repository = "https://github.com/colliery-io/fidius"
 syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
+
+[dev-dependencies]
+# Round-trip the generated WIT through the same parser wit-bindgen uses, so the
+# keyword-escaping is validated at the parser level without the wasm toolchain.
+wit-parser = "0.236"
