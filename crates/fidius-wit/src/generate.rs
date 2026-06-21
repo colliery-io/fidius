@@ -222,6 +222,36 @@ fn author_path(mod_path: &[String], name: &str) -> String {
     }
 }
 
+/// The keywords wit-bindgen's `to_rust_ident` escapes with a trailing `_` (its
+/// `wit-bindgen-rust` source, in turn the Rust reference keyword list). When a
+/// WIT field name collides with one of these, wit-bindgen names the generated
+/// struct field `<kw>_` (e.g. `type` → `type_`) — *not* the raw ident `r#type`
+/// the author wrote. The conversion code must address the generated field by
+/// that mangled name, or it fails to compile (FIDIUS-T-0177).
+const RUST_KEYWORDS: &[&str] = &[
+    "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for",
+    "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return",
+    "self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where",
+    "while", "async", "await", "dyn", "abstract", "become", "box", "do", "final", "macro",
+    "override", "priv", "typeof", "unsized", "virtual", "yield", "try",
+];
+
+/// The author's field ident (`record`, or the raw `r#type`) paired with the name
+/// wit-bindgen gives the *generated* mirror field. They differ only when the
+/// field name is a Rust keyword: the author writes `r#type`, wit-bindgen emits
+/// `type_`. For every other name the two are identical (the author field is
+/// already snake_case, which is what wit-bindgen produces).
+fn field_idents(fl: &syn::Field) -> (String, String) {
+    let author = fl.ident.as_ref().unwrap().to_string();
+    let bare = author.strip_prefix("r#").unwrap_or(&author);
+    let generated = if RUST_KEYWORDS.contains(&bare) {
+        format!("{bare}_")
+    } else {
+        author.clone()
+    };
+    (author, generated)
+}
+
 /// Render `From` impls (both directions) between each user type and its
 /// wit-bindgen-generated mirror. Emitted into the adapter module, where the
 /// generated types live (flat) at `exports::fidius::<iface>::<iface>::<Type>`
@@ -244,33 +274,32 @@ fn render_conversions(
         let name = s.ident.to_string();
         let g = format!("{gen_path}::{name}");
         let a = author_path(path, &name);
-        let fields: Vec<String> = match &s.fields {
+        // (author-name, generated-name, type) per named field. The two names
+        // differ only for Rust-keyword fields (`r#type` vs `type_`).
+        let fields: Vec<(String, String, &Type)> = match &s.fields {
             syn::Fields::Named(f) => f
                 .named
                 .iter()
-                .map(|fl| fl.ident.as_ref().unwrap().to_string())
+                .map(|fl| {
+                    let (au, gen) = field_idents(fl);
+                    (au, gen, &fl.ty)
+                })
                 .collect(),
             _ => Vec::new(),
         };
-        let field_types: Vec<&Type> = match &s.fields {
-            syn::Fields::Named(f) => f.named.iter().map(|fl| &fl.ty).collect(),
-            _ => Vec::new(),
-        };
-        // generated -> author
+        // generated -> author: build the author struct, reading the generated `v`.
         let to_author: Vec<String> = fields
             .iter()
-            .zip(&field_types)
-            .map(|(f, ty)| format!("{f}: {}", conv_expr(&format!("v.{f}"), ty, known)))
+            .map(|(au, gen, ty)| format!("{au}: {}", conv_expr(&format!("v.{gen}"), ty, known)))
             .collect();
         out.push_str(&format!(
             "impl ::core::convert::From<{g}> for {a} {{ fn from(v: {g}) -> Self {{ {a} {{ {} }} }} }}\n",
             to_author.join(", ")
         ));
-        // author -> generated
+        // author -> generated: build the generated struct, reading the author `v`.
         let to_gen: Vec<String> = fields
             .iter()
-            .zip(&field_types)
-            .map(|(f, ty)| format!("{f}: {}", conv_expr(&format!("v.{f}"), ty, known)))
+            .map(|(au, gen, ty)| format!("{gen}: {}", conv_expr(&format!("v.{au}"), ty, known)))
             .collect();
         out.push_str(&format!(
             "impl ::core::convert::From<{a}> for {g} {{ fn from(v: {a}) -> Self {{ {g} {{ {} }} }} }}\n",
@@ -308,26 +337,36 @@ fn render_conversions(
                     // (`<Enum><Case>`, e.g. `ShapeRect`); the author side is a
                     // struct variant with inline fields.
                     let gen_rec = format!("{gen_path}::{ename}{case}");
-                    let fnames: Vec<String> = f
+                    // (author-name, generated-name, type) per payload field.
+                    let fnames: Vec<(String, String, &Type)> = f
                         .named
                         .iter()
-                        .map(|fl| fl.ident.as_ref().unwrap().to_string())
+                        .map(|fl| {
+                            let (au, gen) = field_idents(fl);
+                            (au, gen, &fl.ty)
+                        })
                         .collect();
+                    // generated -> author: read the generated record `__r`, build
+                    // the author struct variant.
                     let g2a_inits = fnames
                         .iter()
-                        .zip(f.named.iter())
-                        .map(|(n, fl)| {
-                            format!("{n}: {}", conv_expr(&format!("__r.{n}"), &fl.ty, known))
+                        .map(|(au, gen, ty)| {
+                            format!("{au}: {}", conv_expr(&format!("__r.{gen}"), ty, known))
                         })
                         .collect::<Vec<_>>()
                         .join(", ");
                     g2a.push(format!("{g}::{case}(__r) => {a}::{case} {{ {g2a_inits} }}"));
 
-                    let binds = fnames.join(", ");
+                    // author -> generated: destructure the author variant (author
+                    // field names bind the locals), build the generated record.
+                    let binds = fnames
+                        .iter()
+                        .map(|(au, ..)| au.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     let a2g_inits = fnames
                         .iter()
-                        .zip(f.named.iter())
-                        .map(|(n, fl)| format!("{n}: {}", conv_expr(n, &fl.ty, known)))
+                        .map(|(au, gen, ty)| format!("{gen}: {}", conv_expr(au, ty, known)))
                         .collect::<Vec<_>>()
                         .join(", ");
                     a2g.push(format!(
@@ -566,5 +605,72 @@ mod tests {
             pub trait T { fn f(&self, x: Box<String>) -> u32; }
         "#;
         assert!(generate(src).is_err());
+    }
+
+    /// FIDIUS-T-0177: a guest interface whose types, fields, cases, methods, and
+    /// params all use WIT reserved keywords. Before escaping, the generated WIT
+    /// is rejected by the parser (the `emit_wit` build failure); after escaping,
+    /// it both contains the `%`-escaped identifiers and round-trips through the
+    /// same parser wit-bindgen uses — without the wasm toolchain.
+    const KEYWORD_SRC: &str = r#"
+        #[derive(WitType)]
+        pub struct DeadLetter { pub record: String, pub stream: u64, pub from: bool, pub r#type: u8 }
+
+        #[derive(WitType)]
+        pub enum Variant { Stream, Record(u32), List { from: u8 } }
+
+        #[plugin_interface(version = 1, crate = "fidius_guest")]
+        pub trait Stream: Send + Sync {
+            fn record(&self, list: DeadLetter, option: Variant) -> DeadLetter;
+        }
+    "#;
+
+    #[test]
+    fn keyword_heavy_interface_escapes_every_identifier() {
+        let g = generate(KEYWORD_SRC).unwrap();
+        // interface name (trait `Stream`) is a keyword.
+        assert!(g.wit.contains("interface %stream {"), "{}", g.wit);
+        assert!(g.wit.contains("package fidius:%stream@0.1.0;"));
+        assert!(g.wit.contains("export %stream;"));
+        // record + keyword fields (`record`, `stream`, `from`, `r#type`).
+        assert!(g.wit.contains("record dead-letter {"));
+        assert!(g.wit.contains("%record: string,"));
+        assert!(g.wit.contains("%stream: u64,"));
+        assert!(g.wit.contains("%from: bool,"));
+        assert!(g.wit.contains("%type: u8,"));
+        // variant (type named `Variant`) + keyword cases; the synthetic struct-
+        // variant payload record (`variant-list`) is compound so it is not escaped.
+        assert!(g.wit.contains("variant %variant {"));
+        assert!(g.wit.contains("%stream,"));
+        assert!(g.wit.contains("%record(u32),"));
+        assert!(g.wit.contains("%list(variant-list),"));
+        assert!(g.wit.contains("record variant-list {"));
+        // method name + param names that are keywords, with a keyword type ref.
+        assert!(g
+            .wit
+            .contains("%record: func(%list: dead-letter, %option: %variant) -> dead-letter;"));
+    }
+
+    #[test]
+    fn keyword_field_conversions_use_wit_bindgen_mangling() {
+        // A Rust-keyword field (`r#type`) is named `type_` on the wit-bindgen
+        // side but `r#type` on the author side; the `From` impls must bridge the
+        // two (regression for the missing-`type` keyword bug).
+        let c = &generate(KEYWORD_SRC).unwrap().conversions;
+        // generated -> author: author field `r#type` reads generated `v.type_`.
+        assert!(c.contains("r#type: v.type_"), "{c}");
+        // author -> generated: generated field `type_` reads author `v.r#type`.
+        assert!(c.contains("type_: v.r#type"), "{c}");
+        // non-keyword fields stay identical on both sides.
+        assert!(c.contains("record: v.record") && c.contains("stream: v.stream"));
+    }
+
+    #[test]
+    fn keyword_heavy_interface_parses() {
+        let g = generate(KEYWORD_SRC).unwrap();
+        // Syntactic parse only (no dep resolution): exactly what fails today when
+        // the keywords are emitted bare.
+        wit_parser::UnresolvedPackageGroup::parse("keyword.wit", &g.wit)
+            .unwrap_or_else(|e| panic!("generated WIT must parse: {e}\n---\n{}", g.wit));
     }
 }

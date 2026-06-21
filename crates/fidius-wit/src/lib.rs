@@ -32,7 +32,15 @@ pub use generate::{contains_user_type, conv_expr, generate, generate_from_path, 
 
 /// Convert a Rust identifier (CamelCase or snake_case) to kebab-case, the WIT
 /// naming convention. `BytePipe` → `byte-pipe`, `echo_bytes` → `echo-bytes`.
+///
+/// A leading `r#` raw-ident prefix is stripped first: it is Rust source syntax
+/// for using a keyword as an identifier (`r#type`), and denotes the bare name
+/// (`type`). Stripping it lets WIT keywords that are *also* Rust keywords
+/// (`type`, `enum`, `use`, `static`, `as`, `async`) reach [`wit_ident`] as their
+/// real name so they can be `%`-escaped. The result is the *semantic* WIT name
+/// (no `%`); apply [`wit_ident`] when writing it into WIT source.
 pub fn to_kebab_case(s: &str) -> String {
+    let s = s.strip_prefix("r#").unwrap_or(s);
     let mut out = String::new();
     for (i, ch) in s.chars().enumerate() {
         if ch == '_' {
@@ -47,6 +55,83 @@ pub fn to_kebab_case(s: &str) -> String {
         }
     }
     out
+}
+
+/// The reserved keywords of the WIT grammar (mirrors wit-parser 0.236's
+/// `ast::lex` keyword table). A generated identifier that collides with one of
+/// these is rejected by the WIT parser unless written with a leading `%`.
+/// Kebab-cased forms are included where the keyword is itself kebab
+/// (`error-context`).
+///
+/// Over-/under-inclusion is safe for consistency — both the host descriptor WIT
+/// and the guest `emit_wit` WIT run through [`wit_ident`], so they always agree —
+/// but this set is kept faithful to the parser so output stays minimal.
+const WIT_KEYWORDS: &[&str] = &[
+    "use",
+    "type",
+    "func",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "s8",
+    "s16",
+    "s32",
+    "s64",
+    "f32",
+    "f64",
+    "char",
+    "resource",
+    "own",
+    "borrow",
+    "record",
+    "flags",
+    "variant",
+    "enum",
+    "bool",
+    "string",
+    "option",
+    "result",
+    "future",
+    "stream",
+    "error-context",
+    "list",
+    "as",
+    "from",
+    "static",
+    "interface",
+    "tuple",
+    "world",
+    "import",
+    "export",
+    "package",
+    "constructor",
+    "include",
+    "with",
+    "async",
+];
+
+/// Whether `ident` (an already-kebab-cased WIT identifier) is a reserved WIT
+/// keyword and so must be `%`-escaped when written into WIT source.
+pub fn is_wit_keyword(ident: &str) -> bool {
+    WIT_KEYWORDS.contains(&ident)
+}
+
+/// Escape a generated WIT identifier so it is valid even when it collides with a
+/// WIT keyword: `stream` → `%stream`, `row` → `row`.
+///
+/// The leading `%` is WIT *source syntax* only — `parse_id` strips it and the
+/// identifier it denotes is unchanged. So this is applied **only** when
+/// rendering WIT text; runtime export-name lookups and the interface hash use
+/// the un-escaped name (and the hash derives from Rust signatures regardless).
+/// This is the single source of truth shared by the host descriptor WIT and the
+/// guest `emit_wit` output, so the two can never disagree on a keyword field.
+pub fn wit_ident(ident: &str) -> String {
+    if is_wit_keyword(ident) {
+        format!("%{ident}")
+    } else {
+        ident.to_string()
+    }
 }
 
 /// Extract the `T` from `Result<T, _>`, if `ty` is a `Result`.
@@ -149,8 +234,9 @@ pub fn wit_type_with(ty: &Type, known: &BTreeSet<String>) -> Result<String, Stri
                         wit_type_with(v, known)?
                     ))
                 }
-                // A user type with `#[derive(WitType)]` → its kebab record/variant name.
-                other if known.contains(other) => Ok(to_kebab_case(other)),
+                // A user type with `#[derive(WitType)]` → its kebab record/variant
+                // name (escaped to match its `%`-escaped declaration).
+                other if known.contains(other) => Ok(wit_ident(&to_kebab_case(other))),
                 other => Err(format!(
                     "type `{other}` is not supported in a WASM fidius interface \
                      (supported: bool, i8..i64, u8..u64, f32/f64, char, String, Vec<T>, \
@@ -224,12 +310,12 @@ pub fn struct_to_record(item: &ItemStruct, known: &BTreeSet<String>) -> Result<S
             item.ident
         ));
     };
-    let mut out = format!("    record {name} {{\n");
+    let mut out = format!("    record {} {{\n", wit_ident(&name));
     for f in &fields.named {
         let fname = to_kebab_case(&f.ident.as_ref().unwrap().to_string());
         let fty = wit_type_with(&f.ty, known)
             .map_err(|e| format!("field `{}` of `{}`: {e}", fname, item.ident))?;
-        out.push_str(&format!("        {fname}: {fty},\n"));
+        out.push_str(&format!("        {}: {fty},\n", wit_ident(&fname)));
     }
     out.push_str("    }\n");
     Ok(out)
@@ -250,29 +336,32 @@ pub fn enum_to_wit(
     let ename = item.ident.to_string();
     let name = to_kebab_case(&ename);
     let mut records = Vec::new();
-    let mut out = format!("    variant {name} {{\n");
+    let mut out = format!("    variant {} {{\n", wit_ident(&name));
     for v in &item.variants {
         let case = to_kebab_case(&v.ident.to_string());
         match &v.fields {
-            Fields::Unit => out.push_str(&format!("        {case},\n")),
+            Fields::Unit => out.push_str(&format!("        {},\n", wit_ident(&case))),
             Fields::Unnamed(u) if u.unnamed.len() == 1 => {
                 let payload = wit_type_with(&u.unnamed[0].ty, known)
                     .map_err(|e| format!("variant `{ename}::{}`: {e}", v.ident))?;
-                out.push_str(&format!("        {case}({payload}),\n"));
+                out.push_str(&format!("        {}({payload}),\n", wit_ident(&case)));
             }
             Fields::Named(f) => {
                 // Synthesize `record <enum>-<case> { .. }` for the case payload.
+                // The compound `<name>-<case>` cannot collide with a keyword (it
+                // always contains a `-`), so it needs no escaping — but its own
+                // field names do.
                 let rec_name = format!("{name}-{case}");
                 let mut rec = format!("    record {rec_name} {{\n");
                 for fl in &f.named {
                     let fname = to_kebab_case(&fl.ident.as_ref().unwrap().to_string());
                     let fty = wit_type_with(&fl.ty, known)
                         .map_err(|e| format!("field `{fname}` of `{ename}::{}`: {e}", v.ident))?;
-                    rec.push_str(&format!("        {fname}: {fty},\n"));
+                    rec.push_str(&format!("        {}: {fty},\n", wit_ident(&fname)));
                 }
                 rec.push_str("    }\n");
                 records.push(rec);
-                out.push_str(&format!("        {case}({rec_name}),\n"));
+                out.push_str(&format!("        {}({rec_name}),\n", wit_ident(&case)));
             }
             Fields::Unnamed(_) => {
                 return Err(format!(
@@ -293,9 +382,14 @@ pub fn enum_to_wit(
 /// `fidius-interface-hash` carrier) + the `<iface>-plugin` world. `type_defs`
 /// are pre-rendered (see [`struct_to_record`] / [`enum_to_variant`]).
 pub fn render_wit_full(iface_kebab: &str, type_defs: &[String], methods: &[WitMethod]) -> String {
+    // The interface name (derived from the trait) is itself an emitted identifier
+    // — a trait named e.g. `Stream` kebabs to a keyword. Escape it everywhere it
+    // appears bare (package name, interface decl, `export`); the `<iface>-plugin`
+    // world name is compound and cannot collide.
+    let iface = wit_ident(iface_kebab);
     let mut s = String::new();
-    s.push_str(&format!("package fidius:{iface_kebab}@0.1.0;\n\n"));
-    s.push_str(&format!("interface {iface_kebab} {{\n"));
+    s.push_str(&format!("package fidius:{iface}@0.1.0;\n\n"));
+    s.push_str(&format!("interface {iface} {{\n"));
     s.push_str("    record plugin-error {\n");
     s.push_str("        code: string,\n");
     s.push_str("        message: string,\n");
@@ -319,19 +413,22 @@ pub fn render_wit_full(iface_kebab: &str, type_defs: &[String], methods: &[WitMe
         let params = m
             .params
             .iter()
-            .map(|(n, t)| format!("{n}: {t}"))
+            .map(|(n, t)| format!("{}: {t}", wit_ident(n)))
             .collect::<Vec<_>>()
             .join(", ");
+        // Func name is a bare identifier (escape); the `<name>-stream` resource
+        // reference is compound and cannot collide.
+        let fname = wit_ident(&m.name);
         if m.stream_item.is_some() {
             // Streaming: the func returns the owned stream resource.
             s.push_str(&format!(
-                "    {}: func({params}) -> {}-stream;\n",
-                m.name, m.name
+                "    {fname}: func({params}) -> {}-stream;\n",
+                m.name
             ));
         } else {
             match &m.ret {
-                Some(r) => s.push_str(&format!("    {}: func({params}) -> {r};\n", m.name)),
-                None => s.push_str(&format!("    {}: func({params});\n", m.name)),
+                Some(r) => s.push_str(&format!("    {fname}: func({params}) -> {r};\n")),
+                None => s.push_str(&format!("    {fname}: func({params});\n")),
             }
         }
     }
@@ -343,7 +440,7 @@ pub fn render_wit_full(iface_kebab: &str, type_defs: &[String], methods: &[WitMe
     s.push_str("    fidius-configure: func(config: list<u8>);\n");
     s.push_str("}\n\n");
     s.push_str(&format!(
-        "world {iface_kebab}-plugin {{\n    export {iface_kebab};\n}}\n"
+        "world {iface_kebab}-plugin {{\n    export {iface};\n}}\n"
     ));
     s
 }
@@ -565,6 +662,65 @@ mod tests {
         assert!(doc.contains("tick: func(count: u32) -> tick-stream;"));
         // Resource precedes the func that returns it.
         assert!(doc.find("resource tick-stream").unwrap() < doc.find("tick: func").unwrap());
+    }
+
+    #[test]
+    fn keyword_idents_are_escaped_others_untouched() {
+        assert_eq!(wit_ident("stream"), "%stream");
+        assert_eq!(wit_ident("record"), "%record");
+        assert_eq!(wit_ident("from"), "%from");
+        assert_eq!(wit_ident("error-context"), "%error-context");
+        assert_eq!(wit_ident("row"), "row");
+        assert_eq!(wit_ident("dead-letter"), "dead-letter");
+        assert!(is_wit_keyword("result") && !is_wit_keyword("results"));
+    }
+
+    #[test]
+    fn raw_idents_lose_their_prefix_then_escape() {
+        // `r#type` is a WIT keyword that is *also* a Rust keyword.
+        assert_eq!(to_kebab_case("r#type"), "type");
+        assert_eq!(wit_ident(&to_kebab_case("r#type")), "%type");
+        assert_eq!(wit_ident(&to_kebab_case("r#async")), "%async");
+        // a raw ident that isn't a WIT keyword still drops `r#`.
+        assert_eq!(to_kebab_case("r#match"), "match");
+    }
+
+    #[test]
+    fn record_with_keyword_fields_escapes_field_and_record_names() {
+        // `record`, `stream`, `from`, `type` are all WIT keywords.
+        let item: ItemStruct =
+            syn::parse_str("struct Record { record: String, stream: u64, from: bool, r#type: u8 }")
+                .unwrap();
+        let rec = struct_to_record(&item, &BTreeSet::new()).unwrap();
+        assert!(rec.contains("record %record {"), "got: {rec}");
+        assert!(rec.contains("%record: string,"));
+        assert!(rec.contains("%stream: u64,"));
+        assert!(rec.contains("%from: bool,"));
+        assert!(rec.contains("%type: u8,"));
+    }
+
+    #[test]
+    fn variant_with_keyword_cases_escapes_them() {
+        let item: ItemEnum =
+            syn::parse_str("enum Variant { Stream, Record(u32), List { from: u8 } }").unwrap();
+        let (records, var) = enum_to_wit(&item, &BTreeSet::new()).unwrap();
+        assert!(var.contains("variant %variant {"), "got: {var}");
+        assert!(var.contains("%stream,"));
+        assert!(var.contains("%record(u32),"));
+        // struct-variant payload record is compound (`variant-list`) → not escaped,
+        // but its keyword field is.
+        assert!(var.contains("%list(variant-list),"));
+        assert!(records[0].contains("record variant-list {"));
+        assert!(records[0].contains("%from: u8,"));
+    }
+
+    #[test]
+    fn keyword_user_type_reference_matches_its_declaration() {
+        // A field whose *type* is a keyword-named user record must reference the
+        // same `%`-escaped name the record is declared with.
+        let k = known(&["Record"]);
+        let ty: Type = syn::parse_str("Vec<Record>").unwrap();
+        assert_eq!(wit_type_with(&ty, &k).unwrap(), "list<%record>");
     }
 
     #[test]
