@@ -98,3 +98,28 @@ async fn python_bidi_doubles_a_host_produced_stream() {
     }
     assert_eq!(got, vec![2, 4, 6, 8, 10]);
 }
+
+#[tokio::test]
+async fn python_bidi_pulls_lazily_from_an_unbounded_input() {
+    // FIDIUS-T-0174: the Python input bridge is lazy too — each item is converted only as
+    // the generator pulls it. So an UNBOUNDED input (0, 1, 2, …) flows with bounded memory
+    // (eager-collecting into a JSON array would hang/OOM). Take 3 outputs, then drop.
+    let tmp = tempfile::TempDir::new().unwrap();
+    let plugins = stage(&tmp);
+    let host = PluginHost::builder().search_path(&plugins).build().unwrap();
+    let handle = host
+        .load_python("py-bidi-stream", transformer_descriptor())
+        .expect("load_python");
+
+    let mut stream = handle
+        .call_bidi_streaming::<u64, (), u64>(0, 0u64.., &())
+        .await
+        .expect("call_bidi_streaming over an unbounded input");
+
+    let mut got = Vec::new();
+    for _ in 0..3 {
+        got.push(from_value::<u64>(stream.next().await.expect("item").expect("ok")).expect("u64"));
+    }
+    assert_eq!(got, vec![0, 2, 4]);
+    drop(stream); // tears down — the infinite tail is never produced
+}

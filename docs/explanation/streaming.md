@@ -112,9 +112,9 @@ input.next_item().map(transform)))` in Rust, or `for r in rows: yield f(r)` in P
 > Two WASM-only caveats: a record used as a stream item cannot *also* appear in a WIT-typed
 > non-stream arg/return, and a bidi **output** item (which crosses via the WIT resource)
 > must still be a primitive/`String` for now (a record output is a follow-on). The host
-> producer is **lazy** on cdylib and WASM — each input item is encoded only as the plugin
-> pulls it, so an *unbounded* input streams with bounded memory (FIDIUS-T-0172); the Python
-> bridge still collects its input eagerly. And a truly concurrent two-pump (independent
+> producer is **lazy on all three backends** — each input item is encoded/converted only as
+> the plugin pulls it, so an *unbounded* input streams with bounded memory (FIDIUS-T-0172
+> for cdylib/WASM, FIDIUS-T-0174 for Python). And a truly concurrent two-pump (independent
 > in/out rates without internal buffering) was deliberately rejected — see ADR-0010.
 
 ## The host side: `ChunkStream`

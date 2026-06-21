@@ -54,16 +54,14 @@ impl Pyo3Executor {
     pub fn call_client_streaming(
         &self,
         method: usize,
-        items: Vec<Value>,
+        items: Box<dyn Iterator<Item = serde_json::Value> + Send>,
         args: Value,
     ) -> Result<Value, CallError> {
-        let items_json =
-            serde_json::to_vec(&items).map_err(|e| CallError::Serialization(e.to_string()))?;
         let args_json =
             serde_json::to_vec(&args).map_err(|e| CallError::Serialization(e.to_string()))?;
         let out = self
             .py
-            .call_client_streaming_json(method, &items_json, &args_json)
+            .call_client_streaming_json(method, items, &args_json)
             .map_err(CallError::from)?;
         serde_json::from_slice(&out).map_err(|e| CallError::Deserialization(e.to_string()))
     }
@@ -136,16 +134,14 @@ impl Pyo3Executor {
     pub fn call_bidi_streaming(
         &self,
         method: usize,
-        items: Vec<Value>,
+        items: Box<dyn Iterator<Item = serde_json::Value> + Send>,
         args: Value,
     ) -> Result<crate::stream::ChunkStream, CallError> {
-        let items_json =
-            serde_json::to_vec(&items).map_err(|e| CallError::Serialization(e.to_string()))?;
         let args_json =
             serde_json::to_vec(&args).map_err(|e| CallError::Serialization(e.to_string()))?;
         let stream = self
             .py
-            .call_bidi_streaming_start(method, &items_json, &args_json)
+            .call_bidi_streaming_start(method, items, &args_json)
             .map_err(CallError::from)?;
         Ok(pump_python_stream(stream))
     }

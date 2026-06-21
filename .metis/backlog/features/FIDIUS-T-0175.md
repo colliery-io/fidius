@@ -1,25 +1,25 @@
 ---
-id: lazy-host-producer-for-client-bidi
+id: wasm-record-output-items-record-in
 level: task
-title: "Lazy host producer for client/bidi streaming (stop eager-collecting input)"
-short_code: "FIDIUS-T-0172"
-created_at: 2026-06-20T23:08:01.642265+00:00
-updated_at: 2026-06-20T23:51:30.511160+00:00
+title: "WASM: record output items + record-in-WIT-position for client/bidi streaming"
+short_code: "FIDIUS-T-0175"
+created_at: 2026-06-20T23:53:54.048903+00:00
+updated_at: 2026-06-20T23:53:54.048903+00:00
 parent: 
 blocked_by: []
 archived: false
 
 tags:
   - "#task"
-  - "#tech-debt"
-  - "#phase/completed"
+  - "#phase/backlog"
+  - "#feature"
 
 
 exit_criteria_met: false
 initiative_id: NULL
 ---
 
-# Lazy host producer for client/bidi streaming (stop eager-collecting input)
+# WASM: record output items + record-in-WIT-position for client/bidi streaming
 
 *This template includes sections for various types of tasks. Delete sections that don't apply to your specific use case.*
 
@@ -29,16 +29,7 @@ initiative_id: NULL
 
 ## Objective **[REQUIRED]**
 
-`PluginHandle::call_client_streaming` / `call_bidi_streaming` eager-collect the input items
-into a `Vec<Vec<u8>>` (`bincode_items`) before the call — so the **host side** of a
-client-/bidi-streaming transform materializes the whole input in memory, the exact
-unbounded-buffering hazard ADR-0007 warned about (the plugin-side *pull* is lazy via
-`from_fn` / generators; only host production is eager). This task makes the host producer
-**lazy**: encode each item only when the plugin pulls it, so an unbounded/large input
-stream flows with bounded memory. Likely shape: thread the item iterator (not a collected
-`Vec`) into `host_producer_handle` with `IntoIter: Send + 'static` bounds (cdylib/WASM
-encode on pull); add a lazy/infinite-input E2E (plugin takes N of an unbounded producer,
-no hang). Affects client-streaming (FIDIUS-I-0030) and bidirectional (FIDIUS-I-0032).
+{Clear statement of what this task accomplishes}
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -73,12 +64,6 @@ no hang). Affects client-streaming (FIDIUS-I-0030) and bidirectional (FIDIUS-I-0
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
-
-## Acceptance Criteria
-
-## Acceptance Criteria
-
-## Acceptance Criteria
 
 ## Acceptance Criteria **[REQUIRED]**
 
@@ -149,20 +134,4 @@ no hang). Affects client-streaming (FIDIUS-I-0030) and bidirectional (FIDIUS-I-0
 
 ## Status Updates **[REQUIRED]**
 
-**DONE (commit a462893).** The host producer is now lazy on cdylib + WASM — input items are
-bincode-encoded only as the plugin pulls them, so an unbounded input streams with bounded
-memory (the hazard ADR-0007 set out to avoid).
-- `client_stream.rs`: `ProducerState` holds a boxed `next_encoded` closure (pull + encode on
-  demand); `host_producer_handle_typed<I>` wraps a typed iterator and encodes per pull,
-  surfacing an encode failure as `STATUS_SERIALIZATION_ERROR` (never a panic across FFI). The
-  pre-encoded `host_producer_handle` stays for the raw API.
-- wasm executor: the producer is a `Box<dyn Iterator<Item=Vec<u8>> + Send>` the import pulls
-  lazily (built via filter-map-on-pull).
-- `handle.rs`: the typed calls take `impl IntoIterator<Item=I, IntoIter: Send + 'static>` (an
-  associated-type bound — keeps the 3 turbofish generics, so no caller churn) and thread the
-  lazy producer. **Python stays eager** (its JSON bridge collects) — documented.
-- New E2E `cdylib_bidi_pulls_lazily_from_an_unbounded_input` (`0u64..` → take 3 → [0,2,4], no
-  hang/OOM). All streaming E2Es + the example + default 73 + lint green; streaming.md updated.
-
-Follow-on (small, deferred): make the **Python** input bridge lazy too (it currently
-collects into a JSON array) — see also FIDIUS-T-0173 territory.
+*To be added during implementation*

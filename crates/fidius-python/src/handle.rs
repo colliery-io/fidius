@@ -165,22 +165,20 @@ impl PythonPluginHandle {
     pub fn call_client_streaming_json(
         &self,
         method_index: usize,
-        items_json: &[u8],
+        items: Box<dyn Iterator<Item = serde_json::Value> + Send>,
         args_json: &[u8],
     ) -> Result<Vec<u8>, PythonCallError> {
         let method = self.lookup_method(method_index, false)?;
-        let items: Vec<serde_json::Value> = serde_json::from_slice(items_json)
-            .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
         let args: serde_json::Value = serde_json::from_slice(args_json)
             .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
 
         let result_value = Python::with_gil(|py| -> Result<serde_json::Value, PythonCallError> {
             let callable = method.callable.bind(py);
-            // The stream argument: a host-fed Python iterator (first positional).
+            // The stream argument: a host-fed Python iterator (first positional, lazy).
             let stream = Py::new(
                 py,
                 HostFedStream {
-                    items: items.into_iter(),
+                    items: std::sync::Mutex::new(items),
                 },
             )
             .map_err(|e| PythonCallError::Plugin(pyerr_to_plugin_error(e)))?
@@ -220,22 +218,20 @@ impl PythonPluginHandle {
     pub fn call_bidi_streaming_start(
         &self,
         method_index: usize,
-        items_json: &[u8],
+        items: Box<dyn Iterator<Item = serde_json::Value> + Send>,
         args_json: &[u8],
     ) -> Result<crate::stream::PythonStream, PythonCallError> {
         let method = self.lookup_method(method_index, false)?;
-        let items: Vec<serde_json::Value> = serde_json::from_slice(items_json)
-            .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
         let args: serde_json::Value = serde_json::from_slice(args_json)
             .map_err(|e| PythonCallError::InputDecode(e.to_string()))?;
 
         Python::with_gil(|py| {
             let callable = method.callable.bind(py);
-            // First positional arg: the host-fed input iterator (CS2.4).
+            // First positional arg: the host-fed input iterator (CS2.4, lazy).
             let stream = Py::new(
                 py,
                 HostFedStream {
-                    items: items.into_iter(),
+                    items: std::sync::Mutex::new(items),
                 },
             )
             .map_err(|e| PythonCallError::Plugin(pyerr_to_plugin_error(e)))?
@@ -387,7 +383,11 @@ fn build_call_args<'py>(
 /// PyO3 surfaces as `StopIteration` — so plain `for x in rows:` works.
 #[pyclass]
 struct HostFedStream {
-    items: std::vec::IntoIter<serde_json::Value>,
+    // Lazy: the host streams items in on demand (FIDIUS-T-0174), so an unbounded input
+    // isn't materialized up front. Boxed so the typed item iterator stays generic upstream;
+    // the `Mutex` makes the `#[pyclass]` `Sync` (PyO3 requires it) without forcing the
+    // upstream iterator to be `Sync` — it's pulled only under the GIL, so uncontended.
+    items: std::sync::Mutex<Box<dyn Iterator<Item = serde_json::Value> + Send>>,
 }
 
 #[pymethods]
@@ -396,8 +396,9 @@ impl HostFedStream {
         slf
     }
 
-    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        match self.items.next() {
+    fn __next__(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        let next = self.items.lock().unwrap().next();
+        match next {
             Some(v) => Ok(Some(value_to_pyobject(py, &v)?.unbind())),
             None => Ok(None),
         }

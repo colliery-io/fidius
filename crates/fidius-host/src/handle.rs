@@ -237,15 +237,11 @@ impl PluginHandle {
             }
             #[cfg(feature = "python")]
             Backend::Python(e) => {
-                // Python crosses via the self-describing `Value` currency (eager bridge).
-                let item_values: Vec<fidius_core::Value> = items
-                    .into_iter()
-                    .map(|i| fidius_core::to_value(&i))
-                    .collect::<Result<_, _>>()
-                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                // Python crosses via the self-describing `Value` currency, streamed lazily.
+                let producer = lazy_json_producer(items);
                 let arg_value = fidius_core::to_value(args)
                     .map_err(|err| CallError::Serialization(err.to_string()))?;
-                e.call_bidi_streaming(index, item_values, arg_value)
+                e.call_bidi_streaming(index, producer, arg_value)
             }
             #[cfg(feature = "wasm")]
             Backend::Wasm(e) => {
@@ -340,18 +336,14 @@ impl PluginHandle {
                 fidius_core::from_value(out)
                     .map_err(|err| CallError::Deserialization(err.to_string()))
             }
-            // Python crosses via the self-describing `Value` currency (eager — its bridge
-            // collects into a JSON array; lazy Python streaming is a follow-on).
+            // Python crosses via the self-describing `Value` currency, streamed lazily
+            // (FIDIUS-T-0174) — each item is converted only as the Python iterator pulls it.
             #[cfg(feature = "python")]
             Backend::Python(e) => {
-                let item_values: Vec<fidius_core::Value> = items
-                    .into_iter()
-                    .map(|i| fidius_core::to_value(&i))
-                    .collect::<Result<_, _>>()
-                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let producer = lazy_json_producer(items);
                 let arg_value = fidius_core::to_value(args)
                     .map_err(|err| CallError::Serialization(err.to_string()))?;
-                let out = e.call_client_streaming(method, item_values, arg_value)?;
+                let out = e.call_client_streaming(method, producer, arg_value)?;
                 fidius_core::from_value(out)
                     .map_err(|err| CallError::Deserialization(err.to_string()))
             }
@@ -433,4 +425,20 @@ fn lazy_bincode_producer<I: Serialize + 'static>(
             .into_iter()
             .filter_map(|i| fidius_core::wire::serialize(&i).ok()),
     )
+}
+
+/// A lazy, boxed producer of `Value`-shaped JSON for the Python client/bidi streaming
+/// input path (FIDIUS-T-0174): each item is converted (`I` → `Value` → `serde_json`) only
+/// as the Python iterator pulls it, so an unbounded input stays bounded in host memory. An
+/// item that fails to convert is skipped (effectively infallible for real types; a panic
+/// must not cross into the interpreter).
+#[cfg(all(feature = "streaming", feature = "python"))]
+fn lazy_json_producer<I: Serialize + 'static>(
+    items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
+) -> Box<dyn Iterator<Item = serde_json::Value> + Send> {
+    Box::new(items.into_iter().filter_map(|i| {
+        fidius_core::to_value(&i)
+            .ok()
+            .and_then(|v| serde_json::to_value(v).ok())
+    }))
 }
