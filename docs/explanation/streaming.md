@@ -106,16 +106,19 @@ output resource), and Python (a host-fed iterator argument **and** a returned ge
 The guest writes a plain lazy adapter — e.g. `Stream::from_iter(std::iter::from_fn(move ||
 input.next_item().map(transform)))` in Rust, or `for r in rows: yield f(r)` in Python.
 
-> **Limitations.** An **input** stream item (client-streaming, and the input side of
-> bidirectional) can be any `Serialize`/`Deserialize` type — primitives, `String`, or a
-> record — because it crosses as bincode (FIDIUS-T-0171); no `#[derive(WitType)]` needed.
-> Two WASM-only caveats: a record used as a stream item cannot *also* appear in a WIT-typed
-> non-stream arg/return, and a bidi **output** item (which crosses via the WIT resource)
-> must still be a primitive/`String` for now (a record output is a follow-on). The host
-> producer is **lazy on all three backends** — each input item is encoded/converted only as
-> the plugin pulls it, so an *unbounded* input streams with bounded memory (FIDIUS-T-0172
-> for cdylib/WASM, FIDIUS-T-0174 for Python). And a truly concurrent two-pump (independent
-> in/out rates without internal buffering) was deliberately rejected — see ADR-0010.
+> **Stream item types.** An **input** item (client-streaming, and the input side of
+> bidirectional) crosses as bincode, so it can be any `Serialize`/`Deserialize` type —
+> primitives, `String`, or a record — with no `#[derive(WitType)]` needed (FIDIUS-T-0171).
+> An **output** item (server-streaming, and the output side of bidirectional) crosses via a
+> WIT resource, so a record output needs `#[derive(WitType)]` like any other WIT-typed
+> return (FIDIUS-T-0175). A record may be both an input stream item and a WIT-typed
+> arg/return (derive both `WitType` and `Serialize`/`Deserialize`).
+>
+> **Memory & concurrency.** The host producer is **lazy on all three backends** — each
+> input item is encoded/converted only as the plugin pulls it, so an *unbounded* input
+> streams with bounded memory (FIDIUS-T-0172 for cdylib/WASM, FIDIUS-T-0174 for Python). A
+> truly concurrent two-pump (independent in/out rates without internal buffering) was
+> deliberately rejected — see ADR-0010.
 
 ## The host side: `ChunkStream`
 

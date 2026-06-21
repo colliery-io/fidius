@@ -4,7 +4,7 @@ level: task
 title: "Lazy Python input bridge for client/bidi streaming"
 short_code: "FIDIUS-T-0174"
 created_at: 2026-06-20T23:53:53.134843+00:00
-updated_at: 2026-06-20T23:54:46.461187+00:00
+updated_at: 2026-06-21T00:01:08.373552+00:00
 parent: 
 blocked_by: []
 archived: false
@@ -12,7 +12,7 @@ archived: false
 tags:
   - "#task"
   - "#tech-debt"
-  - "#phase/todo"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -29,7 +29,9 @@ initiative_id: NULL
 
 ## Objective **[REQUIRED]**
 
-{Clear statement of what this task accomplishes}
+Make the **Python** client-/bidi-streaming input bridge lazy, matching cdylib/WASM (T-0172).
+The Python path collected items into a JSON array up front (`HostFedStream` over a `Vec`);
+this streams each item in on demand so an unbounded input flows with bounded memory.
 
 ## Backlog Item Details **[CONDITIONAL: Backlog Item]**
 
@@ -64,6 +66,10 @@ initiative_id: NULL
 - **Current Problems**: {What's difficult/slow/buggy now}
 - **Benefits of Fixing**: {What improves after refactoring}
 - **Risk Assessment**: {Risks of not addressing this}
+
+## Acceptance Criteria
+
+## Acceptance Criteria
 
 ## Acceptance Criteria
 
@@ -136,4 +142,12 @@ initiative_id: NULL
 
 ## Status Updates **[REQUIRED]**
 
-*To be added during implementation*
+**DONE (commit 68e7a14).** The Python input bridge is lazy. `HostFedStream` now holds
+`Mutex<Box<dyn Iterator<Item=serde_json::Value> + Send>>` (the `Mutex` makes the `#[pyclass]`
+`Sync` — PyO3's requirement — without forcing the upstream iterator to be `Sync`; it's pulled
+only under the GIL, so uncontended). `call_client_streaming_json` / `call_bidi_streaming_start`
+take the lazy iterator instead of `items_json` bytes; `Pyo3Executor` + `PluginHandle` thread it
+(`lazy_json_producer`, converting `I → Value → serde_json` per pull). Args stay eager (small).
+New E2E `python_bidi_pulls_lazily_from_an_unbounded_input` (`0u64..` → take 3 → [0,2,4], no
+hang). Default 73 + python (12) + lint green; streaming.md updated. **All three backends now
+stream input lazily** (cdylib/WASM = T-0172, Python = this).

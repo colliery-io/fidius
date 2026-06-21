@@ -159,6 +159,13 @@ fn assemble(acc: Collected) -> Result<Generated, String> {
         let mut params = Vec::new();
         for arg in &f.sig.inputs {
             let FnArg::Typed(pt) = arg else { continue }; // skip &self
+
+            // Client-/bidi-streaming: the `Stream<T>` input arg crosses as bincode via the
+            // `fidius:stream-pull` import, not a WIT param — exclude it (FIDIUS-T-0175). The
+            // return-side handling below renders a `Stream` *return* as a resource (bidi).
+            if crate::stream_item_type(&pt.ty).is_some() {
+                continue;
+            }
             let name = match pt.pat.as_ref() {
                 Pat::Ident(id) => to_kebab_case(&id.ident.to_string()),
                 _ => "arg".to_string(),

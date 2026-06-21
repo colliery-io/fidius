@@ -1,0 +1,30 @@
+# WASM fixture (FIDIUS-T-0175): client/bidi streaming WITH user types — a record OUTPUT
+# (bidi, crosses via the WIT resource), a user-typed WIT non-stream arg alongside a stream,
+# and a record stream ITEM (bincode) that is ALSO a WIT type. Uses build.rs/emit_wit.
+[workspace]
+
+[package]
+name = "record-stream-user-types"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+serde = { version = "1", features = ["derive"] }
+wit-bindgen = "0.44"
+
+[build-dependencies]
+fidius-build = { path = "../../../crates/fidius-build" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

@@ -1,0 +1,25 @@
+package fidius:pipe@0.1.0;
+
+interface pipe {
+    record plugin-error {
+        code: string,
+        message: string,
+        details: option<string>,
+    }
+    record row {
+        id: u64,
+        label: string,
+    }
+    resource rows-stream {
+        next: func() -> result<option<row>, plugin-error>;
+    }
+    rows: func() -> rows-stream;
+    count-from: func(base: row) -> u64;
+    ingest: func() -> u64;
+    fidius-interface-hash: func() -> u64;
+    fidius-configure: func(config: list<u8>);
+}
+
+world pipe-plugin {
+    export pipe;
+}
