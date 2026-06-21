@@ -146,6 +146,11 @@ pub use fidius_host::{CallError, LoadError, LoadPolicy, PluginHandle, PluginHost
 #[cfg(feature = "streaming")]
 pub use fidius_host::{ChunkStream, StreamExecutor};
 
+// WASM egress contract (FIDIUS-I-0027): name these to implement a per-request egress
+// policy for `PluginHost::builder().egress(..)`. Requires the `wasm` feature.
+#[cfg(feature = "wasm")]
+pub use fidius_host::{EgressDenied, EgressPolicy};
+
 // Re-export inventory so fidius_plugin_registry!() works via fidius_core
 pub use fidius_core::inventory;
 
@@ -158,3 +163,11 @@ pub use fidius_core::registry;
 // re-exports the necessary modules. Plugin authors call it as:
 //   fidius::fidius_plugin_registry!();
 pub use fidius_core::fidius_plugin_registry;
+
+#[cfg(all(test, feature = "wasm"))]
+mod facade_wasm_reexports {
+    // Regression guard: the WASM egress contract must be nameable through the facade
+    // (white-label downstreams reach it as `<their-crate>::fidius::EgressPolicy`).
+    #[allow(dead_code)]
+    fn names(_policy: &dyn crate::EgressPolicy, _denied: crate::EgressDenied) {}
+}

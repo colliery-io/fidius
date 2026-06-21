@@ -35,3 +35,8 @@ pub use loader::{LoadedLibrary, LoadedPlugin};
 #[cfg(feature = "streaming")]
 pub use stream::{ChunkStream, StreamExecutor};
 pub use types::{LoadPolicy, PluginInfo, PluginRuntimeKind};
+// The WASM egress contract (FIDIUS-I-0027): an embedder names these to implement an
+// `EgressPolicy` for `PluginHost::builder().egress(..)`. Lifted to the crate root so
+// downstreams (incl. the `fidius` facade) can name them without the internal module path.
+#[cfg(feature = "wasm")]
+pub use executor::wasm::{EgressDenied, EgressPolicy};

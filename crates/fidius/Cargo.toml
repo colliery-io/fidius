@@ -17,6 +17,10 @@ host = ["dep:fidius-host"]
 # Implies `host`. An interface crate with a `-> fidius::Stream<T>` method must
 # enable this for host consumers.
 streaming = ["host", "fidius-host/streaming"]
+# Sandboxed WASM backend surface (FIDIUS-I-0021): enables `fidius-host`'s wasm
+# executor and re-exports the WASM egress contract (`EgressPolicy`/`EgressDenied`)
+# so host consumers can name them through the facade. Implies `host`.
+wasm = ["host", "fidius-host/wasm"]
 
 [dependencies]
 fidius-core = { path = "../fidius-core", version = "0.5.0" }
