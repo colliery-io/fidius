@@ -1,6 +1,6 @@
 [package]
 name = "fidius-test"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2021"
 description = "Testing helpers for Fidius plugin authors and hosts"
 license = "Apache-2.0"
@@ -14,9 +14,9 @@ repository = "https://github.com/colliery-io/fidius"
 streaming = ["fidius-host/streaming", "dep:futures", "dep:async-trait"]
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.5.3" }
-fidius-host = { path = "../fidius-host", version = "0.5.3" }
-fidius-macro = { path = "../fidius-macro", version = "0.5.3" }
+fidius-core = { path = "../fidius-core", version = "0.5.4" }
+fidius-host = { path = "../fidius-host", version = "0.5.4" }
+fidius-macro = { path = "../fidius-macro", version = "0.5.4" }
 ed25519-dalek = { workspace = true }
 futures = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
