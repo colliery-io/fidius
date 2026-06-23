@@ -1,0 +1,23 @@
+// Copyright 2026 Colliery, Inc. Licensed under Apache 2.0
+//
+// FIDIUS-I-0033 (E2): a sandboxed connector making an OUTBOUND TCP connection via
+// std::net::TcpStream — which on wasm32-wasip2 is wasi:sockets. The wasi:sockets
+// imports are contributed by the target's std/wasi-libc automatically (no
+// vendored WIT, unlike the wasi:http fetcher), so this world only declares the
+// export. Egress is host-gated (tcp capability + embedder EgressPolicy::authorize_tcp).
+package fidius:tcp-echo@1.0.0;
+
+interface tcp-echo {
+    /// Connect to `addr` (host:port), write `payload`, read `payload`-many bytes
+    /// back, and return them. On any failure (incl. a denied/blocked egress)
+    /// returns an empty list — a denied connect is indistinguishable from an
+    /// unreachable peer, by design.
+    connect-and-echo: func(addr: string, payload: list<u8>) -> list<u8>;
+    /// Interface-hash carrier (parity with fidius plugins) — lets the high-level
+    /// `PluginHost::load_wasm` path load this fixture as a package.
+    fidius-interface-hash: func() -> u64;
+}
+
+world tcp-echo-plugin {
+    export tcp-echo;
+}

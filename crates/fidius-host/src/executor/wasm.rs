@@ -27,7 +27,7 @@
 //! from the package manifest's allow-list.
 
 use std::future::Future;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -35,6 +35,7 @@ use fidius_core::Value;
 use wasmtime::component::{Component, InstancePre, Linker, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::add_to_linker_sync;
+use wasmtime_wasi::sockets::SocketAddrUse;
 use wasmtime_wasi::{
     DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
 };
@@ -84,6 +85,29 @@ impl EgressDenied {
 pub trait EgressPolicy: Send + Sync + 'static {
     /// Authorize (and optionally decorate) one outbound request before dispatch.
     fn authorize(&self, parts: &mut http::request::Parts) -> Result<(), EgressDenied>;
+
+    /// Authorize one outbound **TCP** connection before `connect` (FIDIUS-I-0033).
+    /// The second key of the same two-key gate as [`authorize`](Self::authorize):
+    /// the guest's package must declare the `tcp` capability **and** the host must
+    /// supply a policy whose `authorize_tcp` returns `Ok` for the target.
+    ///
+    /// This is the seam a database/warehouse connector reaches the wire through —
+    /// a pure-Rust sync driver over `std::net::TcpStream` (which on
+    /// `wasm32-wasip2` is `wasi:sockets`) becomes reachable only for the
+    /// `host:port`s this method allows.
+    ///
+    /// `addr` is the **resolved** peer (`IP:port`). A hostname the guest dialed
+    /// (`std::net::TcpStream::connect(("db.internal", 5432))`) is resolved via
+    /// `wasi:sockets` name-lookup *first*, so — exactly as the `http` path leaves
+    /// SSRF/DNS-rebinding to the embedder — the policy sees the IP it will
+    /// actually connect to and closes rebinding with resolve-and-pin if it cares.
+    /// Only `TcpConnect` reaches here; bind/listen and UDP are denied outright.
+    ///
+    /// **Defaults to deny.** An existing HTTP-only [`EgressPolicy`] therefore
+    /// never silently grants raw TCP; an embedder opts in by overriding this.
+    fn authorize_tcp(&self, _addr: &SocketAddr) -> Result<(), EgressDenied> {
+        Err(EgressDenied::new("tcp egress not permitted by this policy"))
+    }
 }
 
 /// fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
@@ -153,6 +177,13 @@ const KNOWN_CAPABILITIES: &[&str] = &[
     // egress also requires the embedder to supply an `EgressPolicy` (two-key);
     // handled in `build`, not `build_wasi_ctx`.
     "http",
+    // FIDIUS-I-0033: declares the guest *wants* policy-gated outbound TCP
+    // (`std::net::TcpStream` → `wasi:sockets`, for raw-wire DB/warehouse drivers).
+    // Like `http` it is the first of a two-key gate: actual reachability needs the
+    // embedder's `EgressPolicy::authorize_tcp` to allow the resolved host:port —
+    // handled in `build_wasi_ctx`. Distinct from the coarse `network`/`sockets`
+    // grant, which is per-IP SSRF-floored but has no per-target embedder policy.
+    "tcp",
     // NOTE: `env` is intentionally absent — it is grantable ONLY in the scoped
     // form `env:VAR_NAME` (FIDIUS-T-0142). Bare `env` (inherit ALL host env vars,
     // i.e. all secrets) is rejected by `validate_capabilities`.
@@ -228,7 +259,7 @@ fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
 /// inherits nothing and has no preopens) and grants only what's listed.
 /// Filesystem is granted only per `fs:ro:<path>` / `fs:rw:<path>` — a path-scoped
 /// preopen, never the whole filesystem (FIDIUS-A-0008).
-fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
+fn build_wasi_ctx(caps: &[String], egress: Option<Arc<dyn EgressPolicy>>) -> WasiCtx {
     let mut b = WasiCtxBuilder::new();
     for c in caps {
         let c = c.as_str();
@@ -263,6 +294,34 @@ fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
             // Egress is wired at the linker level (two-key with the embedder's
             // EgressPolicy), not via the WasiCtx — no-op here.
             "http" => {}
+            // FIDIUS-I-0033: policy-gated outbound TCP — the second key is the
+            // embedder's `EgressPolicy::authorize_tcp`. We grant `wasi:sockets`
+            // narrowly: TCP only (no UDP), name-lookup on (so the guest can dial a
+            // hostname — `std::net::TcpStream::connect(("db", 5432))` resolves via
+            // wasi:sockets first), and a per-connection check that routes every
+            // *resolved* peer through the policy. Bind/listen and UDP are rejected
+            // outright, so this is strictly outbound `tcp.connect`.
+            //
+            // Two-key, fail-closed: with no policy we install NO socket check, so
+            // the deny-all default stands and every connect is refused — granting
+            // `tcp` without a host policy reaches nothing (the `wasi:http` analog:
+            // there the imports are simply absent).
+            "tcp" => {
+                if let Some(policy) = egress.clone() {
+                    b.allow_tcp(true);
+                    b.allow_udp(false);
+                    b.allow_ip_name_lookup(true);
+                    b.socket_addr_check(move |addr, use_| {
+                        // Only outbound TCP connects are policy-checkable; anything
+                        // else (bind/listen, UDP) is denied. The policy decides the
+                        // rest — fidius ships mechanism, not the allow-list.
+                        let allowed = matches!(use_, SocketAddrUse::TcpConnect)
+                            && policy.authorize_tcp(&addr).is_ok();
+                        Box::pin(async move { allowed })
+                            as Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+                    });
+                }
+            }
             // Scoped env (FIDIUS-T-0142, ADR FIDIUS-A-0009): `env:VAR_NAME` exposes
             // exactly that one host variable (skipped silently if unset on the host)
             // — never the whole environment. Bare `env` is rejected in
@@ -727,7 +786,7 @@ impl WasmComponentExecutor {
     /// already paid in `build` (FIDIUS-I-0024).
     fn instantiate(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError> {
         let host = HostState {
-            ctx: build_wasi_ctx(&self.capabilities),
+            ctx: build_wasi_ctx(&self.capabilities, self.egress.clone()),
             table: ResourceTable::new(),
             http_ctx: WasiHttpCtx::new(),
             hooks: EgressHooks {
@@ -1445,7 +1504,66 @@ mod fs_capability_tests {
         // then see exactly that dir).
         let tmp = tempfile::TempDir::new().unwrap();
         let cap = format!("fs:rw:{}", tmp.path().display());
-        let _ctx = build_wasi_ctx(&[cap]);
+        let _ctx = build_wasi_ctx(&[cap], None);
+    }
+}
+
+#[cfg(test)]
+mod tcp_egress_tests {
+    use super::*;
+
+    /// A reference embedder policy: allow TCP to one allow-listed `host:port`
+    /// (here keyed on the resolved peer), deny HTTP. Mirrors what the docs say an
+    /// embedder writes for a DB connector — fidius ships none of this.
+    struct AllowOnePort(u16);
+    impl EgressPolicy for AllowOnePort {
+        fn authorize(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied> {
+            Err(EgressDenied::new("http denied by tcp-only policy"))
+        }
+        fn authorize_tcp(&self, addr: &SocketAddr) -> Result<(), EgressDenied> {
+            if addr.port() == self.0 {
+                Ok(())
+            } else {
+                Err(EgressDenied::new("port not allow-listed"))
+            }
+        }
+    }
+
+    #[test]
+    fn tcp_is_a_known_capability() {
+        assert!(validate_capabilities(&["tcp".into()]).is_ok());
+        assert!(validate_capabilities(&["tcp".into(), "stdout".into()]).is_ok());
+    }
+
+    #[test]
+    fn default_authorize_tcp_denies() {
+        // A policy that only implements the (required) http `authorize` must NOT
+        // accidentally grant TCP — the default is deny (fail-closed).
+        struct HttpOnly;
+        impl EgressPolicy for HttpOnly {
+            fn authorize(&self, _p: &mut http::request::Parts) -> Result<(), EgressDenied> {
+                Ok(())
+            }
+        }
+        let addr: SocketAddr = "93.184.216.34:5432".parse().unwrap();
+        assert!(HttpOnly.authorize_tcp(&addr).is_err());
+    }
+
+    #[test]
+    fn tcp_grant_with_policy_builds_a_ctx() {
+        // The two-key happy path: `tcp` cap + a policy installs a socket check
+        // without panicking (the guest would then connect only to allow-listed
+        // peers). The no-policy path is the fail-closed default (no check → all
+        // connects denied), covered by the e2e fixture.
+        let policy: Arc<dyn EgressPolicy> = Arc::new(AllowOnePort(5432));
+        let _ctx = build_wasi_ctx(&["tcp".into()], Some(policy));
+    }
+
+    #[test]
+    fn tcp_grant_without_policy_builds_a_ctx() {
+        // `tcp` declared but no policy: no socket check is installed, so the
+        // deny-all default stands — building the ctx must still succeed.
+        let _ctx = build_wasi_ctx(&["tcp".into()], None);
     }
 }
 

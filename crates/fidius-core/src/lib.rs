@@ -32,6 +32,10 @@ pub use fidius_guest::{
 #[cfg(target_family = "wasm")]
 pub use fidius_guest::http;
 
+/// Capability-gated outbound TCP for sandboxed WASM connectors (FIDIUS-I-0033).
+/// Portable (backed by `std::net` → `wasi:sockets`), so present in host builds too.
+pub use fidius_guest::sockets;
+
 pub use descriptor::*;
 pub use error::PluginError;
 pub use status::*;

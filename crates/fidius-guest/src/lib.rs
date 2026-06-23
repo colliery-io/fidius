@@ -38,6 +38,12 @@ pub mod hash;
 #[cfg(target_family = "wasm")]
 pub mod http;
 
+/// Capability-gated outbound TCP for sandboxed WASM connectors (FIDIUS-I-0033) —
+/// the raw-wire counterpart of [`http`], for DB/warehouse drivers. Backed by
+/// `std::net::TcpStream` (which is `wasi:sockets` on `wasm32-wasip2`), so it is
+/// portable: present on the host too (a normal socket), no `cfg(wasm)` gate.
+pub mod sockets;
+
 /// Client-streaming guest consumer (`WasmHostStream`) over the `fidius:stream-pull`
 /// import (FIDIUS-I-0030 CS2.3). `wasm32-wasip2`-only.
 #[cfg(target_family = "wasm")]
