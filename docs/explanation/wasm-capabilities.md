@@ -69,6 +69,7 @@ plugin.
 | `network` / `sockets` | Raw outbound sockets + DNS (coarse; SSRF floor applied — see below) |
 | `http`              | Brokered outbound HTTP via `wasi:http` — **only** with a host `EgressPolicy` (see below) |
 | `tcp`               | Policy-gated outbound **TCP** via `wasi:sockets` (`std::net::TcpStream`) — **only** with a host `EgressPolicy` whose `authorize_tcp` allows the peer (see below) |
+| `udp`               | Policy-gated outbound **UDP** via `wasi:sockets` — the symmetric counterpart of `tcp`, gated per-datagram by `authorize_udp` (see below) |
 | `clocks`            | Wall/monotonic clocks (always available; accepted as a no-op) |
 | `random`            | Secure randomness (always available; accepted as a no-op)     |
 
@@ -394,6 +395,18 @@ Both reach TCP, but they are different tiers:
 - **`tcp`** — TCP-connect only, every connect routed through the embedder's
   `authorize_tcp`, no ambient reach. "This plugin may talk to exactly the
   endpoints my policy allows." The right choice for an untrusted DB connector.
+
+There is also **`udp`** — the symmetric counterpart of `tcp`, gated per-datagram
+by `EgressPolicy::authorize_udp` (also default-deny). `tcp` and `udp` are the same
+policy-gated tier and **compose** (one connector may declare both; they share a
+single dispatching check).
+
+The policy-gated tier (`tcp`/`udp`) and the coarse tier (`network`/`sockets`) are
+**mutually exclusive**: a package declares one tier *or* the other, not both.
+Internally each installs the same single `socket_addr_check`, so granting both
+would silently keep only one gate (the SSRF floor or the per-peer policy)
+depending on capability order — load fails loudly instead, so the gate an operator
+vets is the gate that runs.
 
 ### The guest side: `fidius_guest::sockets`
 

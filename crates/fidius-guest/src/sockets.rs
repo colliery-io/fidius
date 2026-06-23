@@ -65,7 +65,7 @@
 pub mod tcp {
     use std::io::{self, Read, Write};
     use std::net::{SocketAddr, TcpStream as StdTcpStream, ToSocketAddrs};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     /// A connected, blocking TCP stream. A thin newtype over
     /// [`std::net::TcpStream`] — on `wasm32-wasip2` that is `wasi:sockets`, so the
@@ -101,14 +101,23 @@ pub mod tcp {
             StdTcpStream::connect(addr).map(|inner| TcpStream { inner })
         }
 
-        /// Connect with a bound on how long the connect may take, resolving
-        /// `host` first and trying each candidate address until one connects (or
-        /// the timeout elapses). Use this so a slow/blocked peer fails fast
+        /// Connect with a bound on the **total** connect time, resolving `host`
+        /// first and trying each candidate address until one connects (or the
+        /// timeout elapses). `timeout` is a budget across *all* candidates, not
+        /// per-address — a name resolving to several dead addresses (e.g. dual-stack
+        /// A/AAAA) still fails within `timeout`, so a slow/blocked peer fails fast
         /// instead of hanging the blocking call.
         pub fn connect_timeout(host: &str, port: u16, timeout: Duration) -> io::Result<TcpStream> {
+            let deadline = Instant::now() + timeout;
             let mut last_err = None;
             for addr in (host, port).to_socket_addrs()? {
-                match StdTcpStream::connect_timeout(&addr, timeout) {
+                // Split the remaining budget across candidates; once it's spent,
+                // stop rather than starting another full-`timeout` attempt.
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    break;
+                }
+                match StdTcpStream::connect_timeout(&addr, remaining) {
                     Ok(inner) => return Ok(TcpStream { inner }),
                     Err(e) => last_err = Some(e),
                 }
