@@ -230,7 +230,7 @@ mod tests {
         );
         let got = collect(s).await;
         assert_eq!(got.len(), 2);
-        assert!(matches!(got[0], Ok(_)));
+        assert!(got[0].is_ok());
         assert!(matches!(got[1], Err(CallError::Plugin(_))));
     }
 
@@ -240,7 +240,7 @@ mod tests {
         let s = ChunkStream::from_frames(vec![item(7)], decode_i64);
         let got = collect(s).await;
         assert_eq!(got.len(), 2);
-        assert!(matches!(got[0], Ok(_)));
+        assert!(got[0].is_ok());
         assert!(matches!(got[1], Err(CallError::StreamAborted)));
     }
 
@@ -256,7 +256,7 @@ mod tests {
         );
         let got = collect(s).await;
         assert_eq!(got.len(), 2);
-        assert!(matches!(got[0], Ok(_)));
+        assert!(got[0].is_ok());
         assert!(matches!(got[1], Err(CallError::MalformedFrame(_))));
     }
 

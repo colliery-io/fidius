@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn detects_pe() {
         let mut bytes = vec![0u8; 16];
-        bytes[0..2].copy_from_slice(&[b'M', b'Z']);
+        bytes[0..2].copy_from_slice(b"MZ");
 
         let tmp = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(tmp.path(), &bytes).unwrap();
