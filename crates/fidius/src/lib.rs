@@ -115,6 +115,12 @@ pub use fidius_core::wire;
 #[cfg(target_family = "wasm")]
 pub use fidius_core::http;
 
+/// Capability-gated outbound TCP (`sockets::tcp::connect`) for sandboxed WASM
+/// connectors (FIDIUS-I-0033) — the raw-wire seam for DB/warehouse drivers. The
+/// host's `EgressPolicy::authorize_tcp` gates each connect by `host:port`.
+/// Portable (backed by `std::net` → `wasi:sockets`), so present in host builds too.
+pub use fidius_core::sockets;
+
 // Also re-export key types at the crate root for convenience
 pub use fidius_core::descriptor::{
     BufferStrategyKind, PluginDescriptor, PluginRegistry, ABI_VERSION, FIDIUS_MAGIC,

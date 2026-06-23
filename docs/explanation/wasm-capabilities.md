@@ -68,6 +68,8 @@ plugin.
 | `stdin`             | Read the host's standard input                                |
 | `network` / `sockets` | Raw outbound sockets + DNS (coarse; SSRF floor applied — see below) |
 | `http`              | Brokered outbound HTTP via `wasi:http` — **only** with a host `EgressPolicy` (see below) |
+| `tcp`               | Policy-gated outbound **TCP** via `wasi:sockets` (`std::net::TcpStream`) — **only** with a host `EgressPolicy` whose `authorize_tcp` allows the peer (see below) |
+| `udp`               | Policy-gated outbound **UDP** via `wasi:sockets` — the symmetric counterpart of `tcp`, gated per-datagram by `authorize_udp` (see below) |
 | `clocks`            | Wall/monotonic clocks (always available; accepted as a no-op) |
 | `random`            | Secure randomness (always available; accepted as a no-op)     |
 
@@ -320,6 +322,118 @@ bare `env` (inherit-all) is rejected: a connector you broker HTTP for can't reac
 your other secrets through the environment. The one rule that remains yours: don't
 grant a connector `env:THE_SECRET_VAR` for the very token you're injecting on its
 behalf — broker it in the hook *or* expose it via `env`, not both.
+
+## Policy-gated outbound TCP (`wasi:sockets`)
+
+Some connectors don't speak HTTP. A database or warehouse driver speaks a **raw
+binary wire protocol over TCP** — Postgres on `:5432`, MySQL on `:3306`, a
+message broker — which a host cannot broker as HTTP. The `tcp` capability opens
+exactly that seam: outbound TCP through `wasi:sockets`, under the **same two-key,
+fail-closed gate** as `http`.
+
+The crucial enabler is that on `wasm32-wasip2`, Rust's `std::net::TcpStream`
+**is** `wasi:sockets` (std's net layer calls wasi-libc's socket functions). So a
+**pure-Rust, sync** driver built on `std::net::TcpStream` — with `rustls` layered
+on top for TLS — compiles to a component and runs fully sandboxed. No tokio/mio
+(no epoll/kqueue in wasm), no libpq (C won't cross-compile to wasip2): a sync
+driver over `std::net` is the shape that fits, and sync/blocking semantics suit
+the engine's off-tokio `block_on` model.
+
+### Two-key, fail-closed
+
+```toml
+# package.toml — key #1: the package declares intent
+[wasm]
+capabilities = ["tcp"]
+```
+
+```rust
+// host — key #2: the EgressPolicy decides actual reachability, per connect
+use fidius_host::executor::{EgressPolicy, EgressDenied};
+use std::net::SocketAddr;
+
+struct DbEgress;
+impl EgressPolicy for DbEgress {
+    // http is required by the trait; a TCP-only connector denies it.
+    fn authorize(&self, _p: &mut http::request::Parts) -> Result<(), EgressDenied> {
+        Err(EgressDenied::new("http not used by this connector"))
+    }
+    // The TCP gate: allow exactly the database endpoint, deny everything else.
+    fn authorize_tcp(&self, addr: &SocketAddr) -> Result<(), EgressDenied> {
+        let allow: SocketAddr = "203.0.113.10:5432".parse().unwrap();
+        if *addr == allow { Ok(()) } else { Err(EgressDenied::new("not allow-listed")) }
+    }
+}
+```
+
+`authorize_tcp` is called for **every** outbound connect, on the **resolved**
+peer (`IP:port`). A hostname the guest dialed
+(`std::net::TcpStream::connect(("db.internal", 5432))`) is resolved via
+`wasi:sockets` name-lookup *first*, then the resolved address is gated — so, just
+as with `http`, **DNS-rebinding is the embedder's residual to close** with
+resolve-and-pin. Only `TcpConnect` reaches the policy; `bind`/`listen` and UDP
+are refused outright, so the grant is strictly outbound `tcp.connect`.
+
+> `authorize_tcp` **defaults to deny**. An existing HTTP-only `EgressPolicy`
+> therefore never silently gains TCP reach — you opt in by overriding it.
+
+Miss either key and the connect is refused: with no policy (or no `tcp`
+capability) **no socket check is installed**, so the deny-all `WasiCtx` rejects
+every connect. (One difference from `http`: because `wasi:sockets` is always
+present in the linker, this fail-closed is at **connect time**, not instantiate
+time — but the guest still reaches nothing.) The guest sees a normal
+`std::io::Error`; a denied egress is indistinguishable from an unreachable host,
+by design.
+
+### `tcp` vs `network`/`sockets`
+
+Both reach TCP, but they are different tiers:
+
+- **`network`/`sockets`** — coarse raw sockets (TCP **and** UDP), no per-target
+  embedder policy, with only the built-in **SSRF floor**. "This plugin may talk
+  to the public internet." For trusted plugins.
+- **`tcp`** — TCP-connect only, every connect routed through the embedder's
+  `authorize_tcp`, no ambient reach. "This plugin may talk to exactly the
+  endpoints my policy allows." The right choice for an untrusted DB connector.
+
+There is also **`udp`** — the symmetric counterpart of `tcp`, gated per-datagram
+by `EgressPolicy::authorize_udp` (also default-deny). `tcp` and `udp` are the same
+policy-gated tier and **compose** (one connector may declare both; they share a
+single dispatching check).
+
+The policy-gated tier (`tcp`/`udp`) and the coarse tier (`network`/`sockets`) are
+**mutually exclusive**: a package declares one tier *or* the other, not both.
+Internally each installs the same single `socket_addr_check`, so granting both
+would silently keep only one gate (the SSRF floor or the per-peer policy)
+depending on capability order — load fails loudly instead, so the gate an operator
+vets is the gate that runs.
+
+### The guest side: `fidius_guest::sockets`
+
+A connector reaches the wire through **`fidius_guest::sockets::tcp`** — a thin,
+blocking wrapper over `std::net::TcpStream` that implements `Read` + `Write`, so a
+byte-oriented driver and a TLS stack compose directly:
+
+```rust
+use std::io::{Read, Write};
+use fidius_guest::sockets::tcp;
+
+// Allowed only if the host's authorize_tcp permits the resolved db:5432.
+let mut conn = tcp::connect("db.internal", 5432)?;
+
+// TLS over the sandboxed stream (rustls needs Read + Write — TcpStream has both):
+let mut tls = rustls::Stream::new(&mut client_conn, &mut conn);
+tls.write_all(startup_packet)?;
+```
+
+Unlike `fidius_guest::http`, this module is **not** `wasm32-wasip2`-only — it is
+backed by `std::net`, so the identical source compiles for the host too (a normal
+socket). *Unify the contract, not the capabilities.*
+
+> **TLS note.** Production Postgres usually wants TLS. Use `rustls` with a
+> wasm-friendly crypto provider; `ring`/`aws-lc-rs` can be awkward on wasm, so
+> this is a layer to clear in the driver, independent of the egress mechanism
+> above.
 
 ## How a deployer reasons about it
 

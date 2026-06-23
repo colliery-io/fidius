@@ -30,7 +30,10 @@ struct TestSchema {
     description: String,
 }
 
+// Fields exist only so serde can attempt to deserialize into them — the test
+// asserts on the deserialize result, never reads the fields back.
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct StrictSchema {
     category: String,
     description: String,

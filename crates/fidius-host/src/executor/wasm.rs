@@ -27,7 +27,7 @@
 //! from the package manifest's allow-list.
 
 use std::future::Future;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -35,6 +35,7 @@ use fidius_core::Value;
 use wasmtime::component::{Component, InstancePre, Linker, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::add_to_linker_sync;
+use wasmtime_wasi::sockets::SocketAddrUse;
 use wasmtime_wasi::{
     DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
 };
@@ -84,6 +85,48 @@ impl EgressDenied {
 pub trait EgressPolicy: Send + Sync + 'static {
     /// Authorize (and optionally decorate) one outbound request before dispatch.
     fn authorize(&self, parts: &mut http::request::Parts) -> Result<(), EgressDenied>;
+
+    /// Authorize one outbound **TCP** connection before `connect` (FIDIUS-I-0033).
+    /// The second key of the same two-key gate as [`authorize`](Self::authorize):
+    /// the guest's package must declare the `tcp` capability **and** the host must
+    /// supply a policy whose `authorize_tcp` returns `Ok` for the target.
+    ///
+    /// This is the seam a database/warehouse connector reaches the wire through —
+    /// a pure-Rust sync driver over `std::net::TcpStream` (which on
+    /// `wasm32-wasip2` is `wasi:sockets`) becomes reachable only for the
+    /// `host:port`s this method allows.
+    ///
+    /// `addr` is the **resolved** peer (`IP:port`). A hostname the guest dialed
+    /// (`std::net::TcpStream::connect(("db.internal", 5432))`) is resolved via
+    /// `wasi:sockets` name-lookup *first*, so — exactly as the `http` path leaves
+    /// SSRF/DNS-rebinding to the embedder — the policy sees the IP it will
+    /// actually connect to and closes rebinding with resolve-and-pin if it cares.
+    /// Only `TcpConnect` reaches here; bind/listen and UDP are denied outright.
+    ///
+    /// **Defaults to deny.** An existing HTTP-only [`EgressPolicy`] therefore
+    /// never silently grants raw TCP; an embedder opts in by overriding this.
+    fn authorize_tcp(&self, _addr: &SocketAddr) -> Result<(), EgressDenied> {
+        Err(EgressDenied::new("tcp egress not permitted by this policy"))
+    }
+
+    /// Authorize one outbound **UDP** datagram before it leaves (FIDIUS-I-0033) —
+    /// the symmetric counterpart of [`authorize_tcp`](Self::authorize_tcp). The
+    /// second key of the same two-key gate: the guest's package must declare the
+    /// `udp` capability **and** the host must supply a policy whose `authorize_udp`
+    /// returns `Ok` for the target.
+    ///
+    /// `addr` is the **resolved** remote peer (`IP:port`) of a `connect` or a
+    /// one-shot `send_to` — name resolution happens *first*, exactly as for TCP, so
+    /// the policy sees the IP the datagram will actually reach (resolve-and-pin
+    /// closes DNS-rebinding if the embedder cares). Binding the local source socket
+    /// is permitted as setup and never reaches this method; inbound and TCP uses
+    /// are denied outright.
+    ///
+    /// **Defaults to deny.** An existing policy never silently gains UDP reach; an
+    /// embedder opts in by overriding this.
+    fn authorize_udp(&self, _addr: &SocketAddr) -> Result<(), EgressDenied> {
+        Err(EgressDenied::new("udp egress not permitted by this policy"))
+    }
 }
 
 /// fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
@@ -153,6 +196,17 @@ const KNOWN_CAPABILITIES: &[&str] = &[
     // egress also requires the embedder to supply an `EgressPolicy` (two-key);
     // handled in `build`, not `build_wasi_ctx`.
     "http",
+    // FIDIUS-I-0033: declares the guest *wants* policy-gated outbound TCP
+    // (`std::net::TcpStream` → `wasi:sockets`, for raw-wire DB/warehouse drivers).
+    // Like `http` it is the first of a two-key gate: actual reachability needs the
+    // embedder's `EgressPolicy::authorize_tcp` to allow the resolved host:port —
+    // handled in `build_wasi_ctx`. Distinct from the coarse `network`/`sockets`
+    // grant, which is per-IP SSRF-floored but has no per-target embedder policy.
+    "tcp",
+    // FIDIUS-I-0033: the UDP counterpart of `tcp` — policy-gated outbound UDP via
+    // `EgressPolicy::authorize_udp`. Same two-key gate; composes with `tcp` (one
+    // dispatching socket check) and is mutually exclusive with `network`/`sockets`.
+    "udp",
     // NOTE: `env` is intentionally absent — it is grantable ONLY in the scoped
     // form `env:VAR_NAME` (FIDIUS-T-0142). Bare `env` (inherit ALL host env vars,
     // i.e. all secrets) is rejected by `validate_capabilities`.
@@ -161,6 +215,26 @@ const KNOWN_CAPABILITIES: &[&str] = &[
 /// Reject unknown capability names early (at load) so a typo fails closed and
 /// loud rather than silently granting nothing.
 fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
+    // FIDIUS-I-0033: the policy-gated egress tier (`tcp`/`udp`) and the coarse
+    // `network`/`sockets` grant both install a single `socket_addr_check` in
+    // `build_wasi_ctx`, and that builder field is last-call-wins. Declaring both
+    // tiers would silently keep only one check (which one depends on capability
+    // order) — either discarding the embedder's per-peer policy or the SSRF floor.
+    // Reject the combination outright so the gate an operator vets is the gate that
+    // runs. (`tcp` and `udp` *do* compose — they share one dispatching check.)
+    let wants_policy_egress = caps.iter().any(|c| c == "tcp" || c == "udp");
+    let wants_network = caps.iter().any(|c| c == "network" || c == "sockets");
+    if wants_policy_egress && wants_network {
+        return Err(CallError::Backend {
+            runtime: "wasm".into(),
+            message: "wasm capabilities 'tcp'/'udp' and 'network'/'sockets' are \
+                      mutually exclusive: 'tcp'/'udp' are per-peer policy-gated \
+                      (EgressPolicy::authorize_tcp/authorize_udp) while \
+                      'network'/'sockets' is coarse SSRF-floored access — granting \
+                      both would silently keep only one gate. Pick one tier."
+                .into(),
+        });
+    }
     for c in caps {
         // Bare `env` (inherit ALL host env vars — i.e. every secret) is no longer
         // grantable (FIDIUS-T-0142). Point the author at the scoped form.
@@ -228,8 +302,16 @@ fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
 /// inherits nothing and has no preopens) and grants only what's listed.
 /// Filesystem is granted only per `fs:ro:<path>` / `fs:rw:<path>` — a path-scoped
 /// preopen, never the whole filesystem (FIDIUS-A-0008).
-fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
+fn build_wasi_ctx(caps: &[String], egress: Option<Arc<dyn EgressPolicy>>) -> WasiCtx {
     let mut b = WasiCtxBuilder::new();
+    // FIDIUS-I-0033: the policy-gated egress tier (`tcp`/`udp`) shares ONE
+    // `socket_addr_check`, which is last-call-wins on the builder. We accumulate
+    // the grants here and install a single dispatching check after the loop, so
+    // declaring both `tcp` and `udp` composes instead of one silently clobbering
+    // the other. (The coarse `network`/`sockets` tier installs its own check and
+    // is mutually exclusive with these — rejected in `validate_capabilities`.)
+    let mut wants_tcp = false;
+    let mut wants_udp = false;
     for c in caps {
         let c = c.as_str();
         match c {
@@ -263,6 +345,31 @@ fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
             // Egress is wired at the linker level (two-key with the embedder's
             // EgressPolicy), not via the WasiCtx — no-op here.
             "http" => {}
+            // FIDIUS-I-0033: policy-gated outbound TCP — the second key is the
+            // embedder's `EgressPolicy::authorize_tcp`. We grant `wasi:sockets`
+            // narrowly: TCP only (no UDP), name-lookup on (so the guest can dial a
+            // hostname — `std::net::TcpStream::connect(("db", 5432))` resolves via
+            // wasi:sockets first), and a per-connection check that routes every
+            // *resolved* peer through the policy. Bind/listen and UDP are rejected
+            // outright, so this is strictly outbound `tcp.connect`.
+            //
+            // Two-key, fail-closed: with no policy we install NO socket check, so
+            // the deny-all default stands and every connect is refused — granting
+            // `tcp` without a host policy reaches nothing (the `wasi:http` analog:
+            // there the imports are simply absent).
+            "tcp" => {
+                wants_tcp = true;
+            }
+            // FIDIUS-I-0033: policy-gated outbound UDP — the symmetric counterpart
+            // of `tcp`. The second key is the embedder's
+            // `EgressPolicy::authorize_udp`, consulted on the resolved peer of every
+            // outbound datagram (`UdpConnect`/`UdpOutgoingDatagram`). The local
+            // `UdpBind` (binding an ephemeral source socket, the addr is local, not
+            // a peer) is permitted as setup; inbound and TCP uses are refused. Same
+            // two-key fail-closed shape: no policy → no check installed → deny-all.
+            "udp" => {
+                wants_udp = true;
+            }
             // Scoped env (FIDIUS-T-0142, ADR FIDIUS-A-0009): `env:VAR_NAME` exposes
             // exactly that one host variable (skipped silently if unset on the host)
             // — never the whole environment. Bare `env` is rejected in
@@ -286,6 +393,43 @@ fn build_wasi_ctx(caps: &[String]) -> WasiCtx {
                 let _ = b.preopened_dir(path, path, DirPerms::all(), FilePerms::all());
             }
             _ => {}
+        }
+    }
+    // FIDIUS-I-0033: install the single policy-gated egress check for `tcp`/`udp`.
+    // Two-key, fail-closed: only when a grant is present AND the embedder supplied
+    // an `EgressPolicy`. With no policy we install NO check, so the deny-all
+    // default stands and every connect/datagram is refused — granting `tcp`/`udp`
+    // without a host policy reaches nothing.
+    if wants_tcp || wants_udp {
+        if let Some(policy) = egress.clone() {
+            // Set the use-flags precisely (both default to `true` in wasmtime-wasi,
+            // so a `tcp`-only grant must explicitly turn UDP off, and vice versa).
+            b.allow_tcp(wants_tcp);
+            b.allow_udp(wants_udp);
+            // The guest may dial a hostname — std resolves via wasi:sockets first,
+            // then the resolved peer is gated below.
+            b.allow_ip_name_lookup(true);
+            b.socket_addr_check(move |addr, use_| {
+                // Route each resolved peer through the matching hook; fidius ships
+                // the mechanism, the embedder's policy is the allow-list.
+                let allowed = match use_ {
+                    // Outbound TCP connect → authorize_tcp.
+                    SocketAddrUse::TcpConnect => wants_tcp && policy.authorize_tcp(&addr).is_ok(),
+                    // Outbound UDP (connected send or one-shot datagram) →
+                    // authorize_udp, on the remote peer.
+                    SocketAddrUse::UdpConnect | SocketAddrUse::UdpOutgoingDatagram => {
+                        wants_udp && policy.authorize_udp(&addr).is_ok()
+                    }
+                    // Binding the local UDP source socket is setup, not a peer; allow
+                    // it only as part of an active `udp` grant (the actual peer is
+                    // gated on connect/send above).
+                    SocketAddrUse::UdpBind => wants_udp,
+                    // Inbound TCP (bind/listen) is never reachable through this tier.
+                    SocketAddrUse::TcpBind => false,
+                };
+                Box::pin(async move { allowed })
+                    as Pin<Box<dyn Future<Output = bool> + Send + Sync>>
+            });
         }
     }
     b.build()
@@ -621,12 +765,6 @@ impl WasmComponentExecutor {
                 runtime: "wasm".into(),
                 message: e.to_string(),
             })?;
-        typed
-            .post_return(&mut store)
-            .map_err(|e| CallError::Backend {
-                runtime: "wasm".into(),
-                message: e.to_string(),
-            })?;
         self.configured = Some(std::sync::Mutex::new(ConfiguredStore { store, instance }));
         self.config_bytes = Some(cfg.to_vec());
         Ok(())
@@ -727,7 +865,7 @@ impl WasmComponentExecutor {
     /// already paid in `build` (FIDIUS-I-0024).
     fn instantiate(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError> {
         let host = HostState {
-            ctx: build_wasi_ctx(&self.capabilities),
+            ctx: build_wasi_ctx(&self.capabilities, self.egress.clone()),
             table: ResourceTable::new(),
             http_ctx: WasiHttpCtx::new(),
             hooks: EgressHooks {
@@ -847,12 +985,6 @@ impl PluginExecutor for WasmComponentExecutor {
                         runtime: "wasm".into(),
                         message: e.to_string(),
                     })?;
-            typed
-                .post_return(&mut *store)
-                .map_err(|e| CallError::Backend {
-                    runtime: "wasm".into(),
-                    message: e.to_string(),
-                })?;
             Ok(out)
         })
     }
@@ -963,12 +1095,6 @@ impl WasmComponentExecutor {
                 })?;
             typed
                 .call(&mut store, (cfg.clone(),))
-                .map_err(|e| CallError::Backend {
-                    runtime: "wasm".into(),
-                    message: e.to_string(),
-                })?;
-            typed
-                .post_return(&mut store)
                 .map_err(|e| CallError::Backend {
                     runtime: "wasm".into(),
                     message: e.to_string(),
@@ -1445,7 +1571,114 @@ mod fs_capability_tests {
         // then see exactly that dir).
         let tmp = tempfile::TempDir::new().unwrap();
         let cap = format!("fs:rw:{}", tmp.path().display());
-        let _ctx = build_wasi_ctx(&[cap]);
+        let _ctx = build_wasi_ctx(&[cap], None);
+    }
+}
+
+#[cfg(test)]
+mod tcp_egress_tests {
+    use super::*;
+
+    /// A reference embedder policy: allow TCP to one allow-listed `host:port`
+    /// (here keyed on the resolved peer), deny HTTP. Mirrors what the docs say an
+    /// embedder writes for a DB connector — fidius ships none of this.
+    struct AllowOnePort(u16);
+    impl EgressPolicy for AllowOnePort {
+        fn authorize(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied> {
+            Err(EgressDenied::new("http denied by tcp-only policy"))
+        }
+        fn authorize_tcp(&self, addr: &SocketAddr) -> Result<(), EgressDenied> {
+            if addr.port() == self.0 {
+                Ok(())
+            } else {
+                Err(EgressDenied::new("port not allow-listed"))
+            }
+        }
+    }
+
+    #[test]
+    fn tcp_is_a_known_capability() {
+        assert!(validate_capabilities(&["tcp".into()]).is_ok());
+        assert!(validate_capabilities(&["tcp".into(), "stdout".into()]).is_ok());
+    }
+
+    #[test]
+    fn udp_is_a_known_capability() {
+        assert!(validate_capabilities(&["udp".into()]).is_ok());
+        // `tcp` and `udp` are the same policy-gated tier — they compose.
+        assert!(validate_capabilities(&["tcp".into(), "udp".into()]).is_ok());
+    }
+
+    #[test]
+    fn policy_egress_and_network_are_mutually_exclusive() {
+        // The policy-gated tier (`tcp`/`udp`) and the coarse `network`/`sockets`
+        // tier both install a single (last-wins) `socket_addr_check`; declaring
+        // both would silently keep only one gate depending on order. Reject at
+        // load, regardless of order or which member of each tier appears.
+        for combo in [
+            vec!["tcp".to_string(), "network".to_string()],
+            vec!["network".to_string(), "tcp".to_string()],
+            vec!["tcp".to_string(), "sockets".to_string()],
+            vec!["udp".to_string(), "network".to_string()],
+            vec!["sockets".to_string(), "udp".to_string()],
+            vec![
+                "sockets".to_string(),
+                "stdout".to_string(),
+                "tcp".to_string(),
+            ],
+        ] {
+            assert!(
+                validate_capabilities(&combo).is_err(),
+                "expected {combo:?} to be rejected as a conflicting grant"
+            );
+        }
+        // Each tier alone (and `tcp`+`udp` together) is still fine.
+        assert!(validate_capabilities(&["network".into()]).is_ok());
+        assert!(validate_capabilities(&["sockets".into()]).is_ok());
+        assert!(validate_capabilities(&["tcp".into(), "udp".into()]).is_ok());
+    }
+
+    #[test]
+    fn default_authorize_tcp_and_udp_deny() {
+        // A policy that only implements the (required) http `authorize` must NOT
+        // accidentally grant TCP or UDP — both default to deny (fail-closed).
+        struct HttpOnly;
+        impl EgressPolicy for HttpOnly {
+            fn authorize(&self, _p: &mut http::request::Parts) -> Result<(), EgressDenied> {
+                Ok(())
+            }
+        }
+        let addr: SocketAddr = "93.184.216.34:5432".parse().unwrap();
+        assert!(HttpOnly.authorize_tcp(&addr).is_err());
+        assert!(HttpOnly.authorize_udp(&addr).is_err());
+    }
+
+    #[test]
+    fn tcp_grant_with_policy_builds_a_ctx() {
+        // The two-key happy path: `tcp` cap + a policy installs a socket check
+        // without panicking (the guest would then connect only to allow-listed
+        // peers). The no-policy path is the fail-closed default (no check → all
+        // connects denied), covered by the e2e fixture.
+        let policy: Arc<dyn EgressPolicy> = Arc::new(AllowOnePort(5432));
+        let _ctx = build_wasi_ctx(&["tcp".into()], Some(policy));
+    }
+
+    #[test]
+    fn tcp_grant_without_policy_builds_a_ctx() {
+        // `tcp` declared but no policy: no socket check is installed, so the
+        // deny-all default stands — building the ctx must still succeed.
+        let _ctx = build_wasi_ctx(&["tcp".into()], None);
+    }
+
+    #[test]
+    fn udp_and_combined_grants_build_a_ctx() {
+        // `udp` alone, and `tcp`+`udp` together (one dispatching check), each build
+        // a ctx without panicking — with and without a policy (fail-closed default).
+        let policy: Arc<dyn EgressPolicy> = Arc::new(AllowOnePort(5432));
+        let _ = build_wasi_ctx(&["udp".into()], Some(policy.clone()));
+        let _ = build_wasi_ctx(&["udp".into()], None);
+        let _ = build_wasi_ctx(&["tcp".into(), "udp".into()], Some(policy));
+        let _ = build_wasi_ctx(&["tcp".into(), "udp".into()], None);
     }
 }
 

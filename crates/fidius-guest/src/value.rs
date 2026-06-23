@@ -825,142 +825,6 @@ impl<'de> de::VariantAccess<'de> for VariantAccess {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde::{Deserialize, Serialize};
-
-    fn round_trip<T>(value: T)
-    where
-        T: Serialize + de::DeserializeOwned + PartialEq + fmt::Debug + Clone,
-    {
-        let v = to_value(&value).expect("to_value");
-        let back: T = from_value(v).expect("from_value");
-        assert_eq!(back, value);
-    }
-
-    #[test]
-    fn map_deserializes_from_a_list_of_pairs() {
-        use std::collections::HashMap;
-        // PC.1: a map crosses the WASM boundary as `list<tuple<k,v>>`, i.e. a
-        // `Value::List` of 2-element pairs. It must deserialize into a `HashMap`...
-        let pairs = Value::List(vec![
-            Value::List(vec![Value::String("a".into()), Value::U32(1)]),
-            Value::List(vec![Value::String("b".into()), Value::U32(2)]),
-        ]);
-        let m: HashMap<String, u32> = from_value(pairs.clone()).expect("list-of-pairs → map");
-        assert_eq!(m.get("a"), Some(&1));
-        assert_eq!(m.get("b"), Some(&2));
-        // ...and the same value still reads as a `Vec<(K, V)>`.
-        let v: Vec<(String, u32)> = from_value(pairs).expect("list-of-pairs → vec");
-        assert_eq!(v.len(), 2);
-        // A non-string-keyed map also round-trips (via Value::Map).
-        let mut nk: HashMap<u32, String> = HashMap::new();
-        nk.insert(7, "seven".into());
-        round_trip(nk);
-    }
-
-    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-    struct Greeting {
-        name: String,
-        times: u32,
-        loud: bool,
-    }
-
-    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-    struct Wrapper(u64);
-
-    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-    enum Shape {
-        Unit,
-        Newtype(i32),
-        Tuple(i32, i32),
-        Struct { w: u16, h: u16 },
-    }
-
-    #[test]
-    fn primitives() {
-        round_trip(true);
-        round_trip(-5i8);
-        round_trip(40000u16);
-        round_trip(u64::MAX);
-        round_trip(i64::MIN);
-        round_trip(3.5f32);
-        round_trip(2.718281828f64);
-        round_trip('λ');
-        round_trip("hello".to_string());
-    }
-
-    #[test]
-    fn collections() {
-        round_trip(vec![1i32, 2, 3]);
-        round_trip(Some(7u8));
-        round_trip(Option::<u8>::None);
-        round_trip((1i32, "two".to_string(), false));
-        round_trip(vec![Some(1u32), None, Some(3)]);
-    }
-
-    #[test]
-    fn structs_and_maps() {
-        round_trip(Greeting {
-            name: "ada".to_string(),
-            times: 3,
-            loud: true,
-        });
-        round_trip(Wrapper(99));
-
-        use std::collections::BTreeMap;
-        let mut m = BTreeMap::new();
-        m.insert("a".to_string(), 1i32);
-        m.insert("b".to_string(), 2);
-        round_trip(m);
-
-        let mut numkeys = BTreeMap::new();
-        numkeys.insert(1u32, "one".to_string());
-        numkeys.insert(2u32, "two".to_string());
-        round_trip(numkeys);
-    }
-
-    #[test]
-    fn enums() {
-        round_trip(Shape::Unit);
-        round_trip(Shape::Newtype(-9));
-        round_trip(Shape::Tuple(3, 4));
-        round_trip(Shape::Struct { w: 10, h: 20 });
-    }
-
-    #[test]
-    fn nested() {
-        #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-        struct Outer {
-            shapes: Vec<Shape>,
-            tag: Option<String>,
-        }
-        round_trip(Outer {
-            shapes: vec![Shape::Unit, Shape::Tuple(1, 2), Shape::Newtype(5)],
-            tag: Some("x".to_string()),
-        });
-    }
-
-    #[test]
-    fn struct_shape_is_record() {
-        let v = to_value(&Greeting {
-            name: "z".into(),
-            times: 1,
-            loud: false,
-        })
-        .unwrap();
-        match v {
-            Value::Record(fields) => {
-                assert_eq!(fields[0].0, "name");
-                assert_eq!(fields[1].0, "times");
-                assert_eq!(fields[2].0, "loud");
-            }
-            other => panic!("expected record, got {other:?}"),
-        }
-    }
-}
-
 // `Value` is itself serde-serializable so it can be embedded in other
 // structures and round-tripped through any format when needed.
 impl Serialize for Value {
@@ -1110,5 +974,141 @@ impl<'de> Deserialize<'de> for Value {
             }
         }
         deserializer.deserialize_any(ValueVisitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::{Deserialize, Serialize};
+
+    fn round_trip<T>(value: T)
+    where
+        T: Serialize + de::DeserializeOwned + PartialEq + fmt::Debug + Clone,
+    {
+        let v = to_value(&value).expect("to_value");
+        let back: T = from_value(v).expect("from_value");
+        assert_eq!(back, value);
+    }
+
+    #[test]
+    fn map_deserializes_from_a_list_of_pairs() {
+        use std::collections::HashMap;
+        // PC.1: a map crosses the WASM boundary as `list<tuple<k,v>>`, i.e. a
+        // `Value::List` of 2-element pairs. It must deserialize into a `HashMap`...
+        let pairs = Value::List(vec![
+            Value::List(vec![Value::String("a".into()), Value::U32(1)]),
+            Value::List(vec![Value::String("b".into()), Value::U32(2)]),
+        ]);
+        let m: HashMap<String, u32> = from_value(pairs.clone()).expect("list-of-pairs → map");
+        assert_eq!(m.get("a"), Some(&1));
+        assert_eq!(m.get("b"), Some(&2));
+        // ...and the same value still reads as a `Vec<(K, V)>`.
+        let v: Vec<(String, u32)> = from_value(pairs).expect("list-of-pairs → vec");
+        assert_eq!(v.len(), 2);
+        // A non-string-keyed map also round-trips (via Value::Map).
+        let mut nk: HashMap<u32, String> = HashMap::new();
+        nk.insert(7, "seven".into());
+        round_trip(nk);
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+    struct Greeting {
+        name: String,
+        times: u32,
+        loud: bool,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+    struct Wrapper(u64);
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+    enum Shape {
+        Unit,
+        Newtype(i32),
+        Tuple(i32, i32),
+        Struct { w: u16, h: u16 },
+    }
+
+    #[test]
+    fn primitives() {
+        round_trip(true);
+        round_trip(-5i8);
+        round_trip(40000u16);
+        round_trip(u64::MAX);
+        round_trip(i64::MIN);
+        round_trip(3.5f32);
+        round_trip(123.456_789_012_345f64);
+        round_trip('λ');
+        round_trip("hello".to_string());
+    }
+
+    #[test]
+    fn collections() {
+        round_trip(vec![1i32, 2, 3]);
+        round_trip(Some(7u8));
+        round_trip(Option::<u8>::None);
+        round_trip((1i32, "two".to_string(), false));
+        round_trip(vec![Some(1u32), None, Some(3)]);
+    }
+
+    #[test]
+    fn structs_and_maps() {
+        round_trip(Greeting {
+            name: "ada".to_string(),
+            times: 3,
+            loud: true,
+        });
+        round_trip(Wrapper(99));
+
+        use std::collections::BTreeMap;
+        let mut m = BTreeMap::new();
+        m.insert("a".to_string(), 1i32);
+        m.insert("b".to_string(), 2);
+        round_trip(m);
+
+        let mut numkeys = BTreeMap::new();
+        numkeys.insert(1u32, "one".to_string());
+        numkeys.insert(2u32, "two".to_string());
+        round_trip(numkeys);
+    }
+
+    #[test]
+    fn enums() {
+        round_trip(Shape::Unit);
+        round_trip(Shape::Newtype(-9));
+        round_trip(Shape::Tuple(3, 4));
+        round_trip(Shape::Struct { w: 10, h: 20 });
+    }
+
+    #[test]
+    fn nested() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+        struct Outer {
+            shapes: Vec<Shape>,
+            tag: Option<String>,
+        }
+        round_trip(Outer {
+            shapes: vec![Shape::Unit, Shape::Tuple(1, 2), Shape::Newtype(5)],
+            tag: Some("x".to_string()),
+        });
+    }
+
+    #[test]
+    fn struct_shape_is_record() {
+        let v = to_value(&Greeting {
+            name: "z".into(),
+            times: 1,
+            loud: false,
+        })
+        .unwrap();
+        match v {
+            Value::Record(fields) => {
+                assert_eq!(fields[0].0, "name");
+                assert_eq!(fields[1].0, "times");
+                assert_eq!(fields[2].0, "loud");
+            }
+            other => panic!("expected record, got {other:?}"),
+        }
     }
 }
