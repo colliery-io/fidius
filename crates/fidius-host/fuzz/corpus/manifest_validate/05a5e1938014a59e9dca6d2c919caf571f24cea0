@@ -1,0 +1,4 @@
+[package]
+name = "example-.1.0"
+interface = "example"
+interfaersiities = ["tcp"]

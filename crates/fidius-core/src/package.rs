@@ -1693,4 +1693,217 @@ mod tests {
             other => panic!("expected ArchiveError, got {other:?}"),
         }
     }
+
+    // ── FIDIUS-I-0033 Phase 3: tests that pin behaviour cargo-mutants found
+    // unguarded (boundary `>` vs `>=`/`==`, the runtime match arm, and the
+    // pack file-collection filter). Each kills a surviving mutant.
+
+    fn header_with_runtime(rt: Option<&str>) -> PackageHeader {
+        PackageHeader {
+            name: "p".into(),
+            version: "1".into(),
+            interface: "i".into(),
+            interface_version: 1,
+            extension: None,
+            runtime: rt.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn runtime_string_maps_to_each_variant() {
+        // Pins every arm of `PackageHeader::runtime` — in particular the
+        // `Some("wasm") => Wasm` arm (deleting it was a surviving mutant).
+        assert_eq!(header_with_runtime(None).runtime(), PackageRuntime::Rust);
+        assert_eq!(
+            header_with_runtime(Some("rust")).runtime(),
+            PackageRuntime::Rust
+        );
+        assert_eq!(
+            header_with_runtime(Some("python")).runtime(),
+            PackageRuntime::Python
+        );
+        assert_eq!(
+            header_with_runtime(Some("wasm")).runtime(),
+            PackageRuntime::Wasm
+        );
+        // Unknown values fall back to Rust (lenient `runtime()`).
+        assert_eq!(
+            header_with_runtime(Some("bogus")).runtime(),
+            PackageRuntime::Rust
+        );
+    }
+
+    #[test]
+    fn unpack_entry_count_is_an_exact_boundary() {
+        // An archive with exactly `max_entries` entries must UNPACK; the guard is
+        // `count > max_entries`, so `==`/`>=` mutants (which reject the boundary)
+        // are killed by the success case.
+        let n: u32 = 6;
+        let tmp = TempDir::new().unwrap();
+        let archive = tmp.path().join("entries.fid");
+        build_archive(&archive, |tar| {
+            append_regular(tar, "pkg/package.toml", b"[package]\nname = \"p\"\n");
+            for i in 0..(n - 1) {
+                append_regular(tar, &format!("pkg/f-{i}.txt"), b"x");
+            }
+        });
+
+        let at_limit = UnpackOptions {
+            max_entries: n,
+            max_decompressed: u64::MAX,
+            max_ratio: u64::MAX,
+        };
+        let dest_ok = TempDir::new().unwrap();
+        unpack_package_with_options(&archive, dest_ok.path(), &at_limit)
+            .expect("exactly max_entries entries must unpack");
+
+        // One fewer than the entry count is rejected (real behaviour).
+        let below = UnpackOptions {
+            max_entries: n - 1,
+            max_decompressed: u64::MAX,
+            max_ratio: u64::MAX,
+        };
+        let dest_bad = TempDir::new().unwrap();
+        let err = unpack_package_with_options(&archive, dest_bad.path(), &below).unwrap_err();
+        assert!(
+            matches!(err, PackageError::TooManyEntries { .. }),
+            "got {err:?}"
+        );
+    }
+
+    #[test]
+    fn unpack_size_budget_is_an_exact_boundary() {
+        // Declared total exactly at the cap must unpack (guard is
+        // `total > max_decompressed`); one byte under is rejected. Kills the
+        // `==`/`>=` mutants on the size check.
+        let manifest = b"[package]\nname = \"p\"\n";
+        let filler = b"0123456789";
+        let total = manifest.len() as u64 + filler.len() as u64;
+
+        let tmp = TempDir::new().unwrap();
+        let archive = tmp.path().join("size.fid");
+        build_archive(&archive, |tar| {
+            append_regular(tar, "pkg/package.toml", manifest);
+            append_regular(tar, "pkg/data.bin", filler);
+        });
+
+        let at_cap = UnpackOptions {
+            max_decompressed: total,
+            max_ratio: u64::MAX,
+            max_entries: u32::MAX,
+        };
+        let dest_ok = TempDir::new().unwrap();
+        unpack_package_with_options(&archive, dest_ok.path(), &at_cap)
+            .expect("declared size exactly at the cap must unpack");
+
+        let under = UnpackOptions {
+            max_decompressed: total - 1,
+            max_ratio: u64::MAX,
+            max_entries: u32::MAX,
+        };
+        let dest_bad = TempDir::new().unwrap();
+        let err = unpack_package_with_options(&archive, dest_bad.path(), &under).unwrap_err();
+        assert!(
+            matches!(err, PackageError::SizeLimitExceeded { .. }),
+            "got {err:?}"
+        );
+    }
+
+    #[test]
+    fn unpack_zero_max_ratio_disables_ratio_check() {
+        // `max_ratio == 0` disables the ratio check. The guard is `max_ratio > 0`;
+        // the `>=` mutant would treat 0 as "enabled", compute ratio_cap = 0, and
+        // reject every non-empty archive — so a legit package unpacking kills it.
+        let pkg_dir = TempDir::new().unwrap();
+        make_package(pkg_dir.path());
+        let out_dir = TempDir::new().unwrap();
+        let fid = out_dir.path().join("z.fid");
+        pack_package(pkg_dir.path(), Some(&fid)).unwrap();
+
+        let extract = TempDir::new().unwrap();
+        let options = UnpackOptions {
+            max_decompressed: u64::MAX,
+            max_ratio: 0,
+            max_entries: u32::MAX,
+        };
+        unpack_package_with_options(&fid, extract.path(), &options)
+            .expect("max_ratio = 0 must disable the ratio check, not reject everything");
+    }
+
+    #[test]
+    fn pack_collects_nested_non_excluded_dirs() {
+        // `collect_files` skips only `target`/`.git`; a `==`→`!=` mutant inverts
+        // that and would drop normal subdirs like `src/`. Packing `make_package`
+        // (which has `src/lib.rs`) and checking the file survives kills it.
+        let pkg_dir = TempDir::new().unwrap();
+        make_package(pkg_dir.path());
+        let out_dir = TempDir::new().unwrap();
+        let fid = out_dir.path().join("nested.fid");
+        pack_package(pkg_dir.path(), Some(&fid)).unwrap();
+
+        let extract = TempDir::new().unwrap();
+        let options = UnpackOptions {
+            max_decompressed: u64::MAX,
+            max_ratio: u64::MAX,
+            max_entries: u32::MAX,
+        };
+        let pkg = unpack_package_with_options(&fid, extract.path(), &options).unwrap();
+        assert!(
+            pkg.join("src/lib.rs").exists(),
+            "nested src/lib.rs must be packed (collect_files must not drop normal dirs)"
+        );
+    }
+
+    // ── FIDIUS-I-0033 Phase 5 (matrix): the manifest config × backend-runtime
+    // cross-product — `validate_runtime` enforces section/runtime consistency for
+    // all three backends, but had no direct unit tests.
+
+    fn manifest_for(runtime: Option<&str>, python: bool, wasm: bool) -> PackageManifest<()> {
+        PackageManifest {
+            package: PackageHeader {
+                name: "p".into(),
+                version: "1".into(),
+                interface: "i".into(),
+                interface_version: 1,
+                extension: None,
+                runtime: runtime.map(str::to_string),
+            },
+            metadata: (),
+            python: python.then(|| PythonPackageMeta {
+                entry_module: "m".into(),
+                requirements: None,
+            }),
+            wasm: wasm.then(|| WasmPackageMeta {
+                component: "c.wasm".into(),
+                precompiled: None,
+                capabilities: vec![],
+            }),
+        }
+    }
+
+    #[test]
+    fn validate_runtime_section_matrix() {
+        // (runtime, [python]?, [wasm]?) → Ok / Err. Each backend accepts exactly
+        // its own section and rejects the others'.
+        let ok = |rt, py, wa| manifest_for(rt, py, wa).validate_runtime().is_ok();
+
+        // Rust (default + explicit): no backend sections allowed.
+        assert!(ok(None, false, false));
+        assert!(ok(Some("rust"), false, false));
+        assert!(!ok(Some("rust"), true, false), "rust + [python] must fail");
+        assert!(!ok(Some("rust"), false, true), "rust + [wasm] must fail");
+
+        // Python: needs [python], rejects [wasm].
+        assert!(ok(Some("python"), true, false));
+        assert!(!ok(Some("python"), false, false), "python without [python]");
+        assert!(!ok(Some("python"), true, true), "python + [wasm] must fail");
+
+        // Wasm: needs [wasm], rejects [python].
+        assert!(ok(Some("wasm"), false, true));
+        assert!(!ok(Some("wasm"), false, false), "wasm without [wasm]");
+        assert!(!ok(Some("wasm"), true, true), "wasm + [python] must fail");
+
+        // Unknown runtime is lenient — `runtime()` maps it to Rust.
+        assert!(ok(Some("bogus"), false, false));
+    }
 }

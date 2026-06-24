@@ -1,0 +1,10 @@
+[package]
+name = "example-pkg"
+version = "5.1.0"
+interface = "example"
+interface_version = 1
+runtiMe = "wasm"
+
+[metadata]
+categorer = 1
+res = ["tcp"]

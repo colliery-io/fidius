@@ -1,0 +1,121 @@
+name: Nightly (coverage + fuzz, report-only)
+
+# The expensive, report-only quality jobs (FIDIUS-I-0033): coverage and a fuzz
+# smoke. Kept OFF the per-PR `ci.yml` gate — they run nightly, on release tags, and
+# on demand. Neither gates anything (both are report-only / continue-on-error).
+on:
+  schedule:
+    - cron: "0 7 * * *" # nightly, 07:00 UTC
+  push:
+    tags:
+      - "v*" # also capture coverage/fuzz at each release
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage:
+    name: Coverage (report-only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      # Scope: workspace defaults + `streaming`. The `wasm` feature needs the full
+      # component toolchain + prebuilt polyglot fixtures (see ci.yml's `wasm` job);
+      # instrumenting that path is a documented follow-on, so coverage is scoped to
+      # the native surface here (mirrors `angreal coverage`).
+      - name: Measure coverage (report-only — native + streaming)
+        run: |
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov --no-report --workspace --features streaming
+          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo llvm-cov report --html --output-dir coverage-html
+      - name: Publish per-crate summary
+        if: always()
+        run: |
+          {
+            echo '## Coverage (report-only — native + streaming)'
+            echo ''
+            echo 'The `wasm` feature surface is excluded here (needs the component'
+            echo 'toolchain); run `angreal coverage` locally for the full surface.'
+            echo ''
+            echo '```'
+            cargo llvm-cov report --summary-only || echo '(coverage data unavailable)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage report (HTML + lcov)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            lcov.info
+            coverage-html
+          if-no-files-found: warn
+
+  fuzz:
+    name: Fuzz smoke (report-only)
+    runs-on: ubuntu-latest
+    # A crasher is surfaced loudly (summary + uploaded artifact) but continue-on-error
+    # keeps it non-gating, per the locked posture. Flip to gating by removing it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned nightly (cargo-fuzz needs `-Z sanitizer`); isolated to this job.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-09
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz
+          workspaces: crates/fidius-host/fuzz
+      - uses: taiki-e/install-action@cargo-fuzz
+      # Persist + grow the corpus across runs (seeded from the committed corpus).
+      - uses: actions/cache@v4
+        with:
+          path: crates/fidius-host/fuzz/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      # Off the PR gate now, so each target gets a longer budget than the old smoke.
+      - name: Time-boxed fuzz (120s per target)
+        working-directory: crates/fidius-host
+        run: |
+          status=0
+          for t in wire_value frame_read manifest_validate fid_extract; do
+            echo "::group::fuzz $t"
+            cargo fuzz run "$t" -- -max_total_time=120 || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+      - name: Report result to job summary
+        if: always()
+        working-directory: crates/fidius-host/fuzz
+        run: |
+          if find artifacts -type f 2>/dev/null | grep -q .; then
+            {
+              echo '## ⚠️ Fuzz found a crasher'
+              echo ''
+              echo 'Reproduce locally: `cd crates/fidius-host && cargo +nightly fuzz run <target> fuzz/artifacts/<target>/<file>`'
+              echo ''
+              echo '```'
+              find artifacts -type f
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## Fuzz: no crashers (120s/target)' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload crash artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: crates/fidius-host/fuzz/artifacts
+          if-no-files-found: ignore

@@ -791,4 +791,56 @@ mod tests {
             m.signature_string
         );
     }
+
+    // ── FIDIUS-I-0033 Phase 3 (mutation): tests that pin IR helpers cargo-mutants
+    // found unguarded. Each kills a surviving mutant in `ir.rs`.
+
+    #[test]
+    fn is_required_reflects_optional_attr() {
+        // Kills `is_required -> true`: an `#[optional]` method is NOT required.
+        let ir = parse_test_trait(quote! {
+            pub trait Api: Send + Sync {
+                fn core(&self, x: u32) -> u32;
+                #[optional(since = 2)]
+                fn added_later(&self, y: u32) -> u32;
+            }
+        });
+        let core = ir.methods.iter().find(|m| m.name == "core").unwrap();
+        let opt = ir.methods.iter().find(|m| m.name == "added_later").unwrap();
+        assert!(core.is_required(), "a plain method is required");
+        assert!(!opt.is_required(), "an #[optional] method is not required");
+    }
+
+    #[test]
+    fn is_vec_u8_distinguishes_types() {
+        // Kills `is_vec_u8 -> true`: only `Vec<u8>` matches.
+        assert!(is_vec_u8(&syn::parse_str::<Type>("Vec<u8>").unwrap()));
+        assert!(!is_vec_u8(&syn::parse_str::<Type>("String").unwrap()));
+        assert!(!is_vec_u8(&syn::parse_str::<Type>("Vec<u16>").unwrap()));
+    }
+
+    #[test]
+    fn extract_arg_names_returns_each_non_self_arg() {
+        // Kills `extract_arg_names -> vec![]`: the two args are returned in order.
+        let m: TraitItemFn = syn::parse_str("fn f(&self, a: u32, b: String);").unwrap();
+        let names = extract_arg_names(&m);
+        assert_eq!(names.len(), 2);
+        assert_eq!(names[0].to_string(), "a");
+        assert_eq!(names[1].to_string(), "b");
+    }
+
+    #[test]
+    fn validate_raw_method_signature_rejects_bad_shapes() {
+        // Kills `validate_raw_method_signature -> Ok(())`: a non-`Vec<u8>` arg is
+        // rejected, while the canonical raw shape is accepted.
+        let ret: Type = syn::parse_str("Vec<u8>").unwrap();
+
+        let bad: TraitItemFn = syn::parse_str("fn f(&self, a: String) -> Vec<u8>;").unwrap();
+        let bad_args = vec![syn::parse_str::<Type>("String").unwrap()];
+        assert!(validate_raw_method_signature(&bad, &bad_args, Some(&ret)).is_err());
+
+        let good: TraitItemFn = syn::parse_str("fn g(&self, a: Vec<u8>) -> Vec<u8>;").unwrap();
+        let good_args = vec![syn::parse_str::<Type>("Vec<u8>").unwrap()];
+        assert!(validate_raw_method_signature(&good, &good_args, Some(&ret)).is_ok());
+    }
 }

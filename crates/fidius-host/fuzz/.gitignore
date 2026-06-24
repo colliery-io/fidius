@@ -1,0 +1,5 @@
+# cargo-fuzz build + run artifacts (do NOT commit). The curated seed corpora
+# under corpus/ ARE committed (they seed the CI smoke + local runs).
+target/
+artifacts/
+coverage/

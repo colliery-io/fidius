@@ -12,6 +12,10 @@ serde_json = { workspace = true }
 bincode = { workspace = true }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+# Property testing of the wire round-trip + Value-model invariants (FIDIUS-I-0033 Phase 4).
+proptest = "1"
+
 # wasm-only: backs the `http` module's brokered wasi:http client (FIDIUS-I-0028).
 # Native (host) builds never pull this — the `http` module is cfg(wasm).
 [target.'cfg(target_family = "wasm")'.dependencies]
