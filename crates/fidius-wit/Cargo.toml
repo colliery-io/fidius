@@ -15,3 +15,5 @@ proc-macro2 = { workspace = true }
 # Round-trip the generated WIT through the same parser wit-bindgen uses, so the
 # keyword-escaping is validated at the parser level without the wasm toolchain.
 wit-parser = "0.236"
+# Property testing of the Rust→WIT type mapping (FIDIUS-I-0033 Phase 4).
+proptest = "1"

@@ -1,0 +1,12 @@
+[package]
+name = "example-pkg"
+version = "5.1.0"
+interfacd = "example"
+interface_time = "wasm"
+
+[metackage]
+name = "example-pkg"
+ve= "wasm"
+
+t = "example_guest.wasm"
+capabilities = ["tcp"]

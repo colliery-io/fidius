@@ -1,0 +1,71 @@
+name: Mutation testing (scheduled, report-only)
+
+# FIDIUS-I-0033 Phase 3: cargo-mutants verifies the tests actually *catch* logic
+# changes, not just execute lines. It is slow, so it runs on a schedule (not per
+# PR) and is report-only — never gating. Trigger manually via workflow_dispatch.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Mondays 06:00 UTC
+  push:
+    tags:
+      - "v*" # release-time mutation snapshot
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mutants:
+    name: cargo-mutants (core + scoped macro)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mutants
+      - uses: taiki-e/install-action@cargo-mutants
+
+      # fidius-core: the highest-value, most-depended-on logic — run in full.
+      - name: Mutate fidius-core
+        run: cargo mutants --package fidius-core --in-place --output mutants-core || true
+
+      # fidius-macro: codegen/IR mutation is far heavier, so keep it scoped to the
+      # core IR + interface logic (bounded pass — see T-0185).
+      - name: Mutate fidius-macro (scoped to ir.rs + interface.rs)
+        run: |
+          cargo mutants --package fidius-macro --in-place --output mutants-macro \
+            -f src/ir.rs -f src/interface.rs || true
+
+      - name: Summarize to job summary
+        if: always()
+        run: |
+          {
+            echo '## cargo-mutants (report-only)'
+            # `--output DIR` writes the report under `DIR/mutants.out/`.
+            for d in mutants-core mutants-macro; do
+              echo ""
+              echo "### $d"
+              out="$d/mutants.out"
+              if [ -d "$out" ]; then
+                echo '```'
+                echo "missed (surviving) mutants:"
+                cat "$out/missed.txt" 2>/dev/null || echo "(none)"
+                echo '```'
+              else
+                echo "(no report produced)"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload mutants reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-reports
+          path: |
+            mutants-core
+            mutants-macro
+          if-no-files-found: ignore

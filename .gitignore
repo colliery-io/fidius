@@ -18,3 +18,13 @@ tests/wasm-fixtures/keyword-fields/wit/
 
 # Metis transient code-index dirty marker
 .metis/.index-dirty
+
+# cargo-mutants output (FIDIUS-I-0033 Phase 3)
+/mutants.out*
+/mutants-core
+/mutants-macro
+
+# Coverage instrumentation artifacts (cargo-llvm-cov)
+*.profraw
+# Metis local index DB (rebuilt from the .md docs)
+/metis.db
