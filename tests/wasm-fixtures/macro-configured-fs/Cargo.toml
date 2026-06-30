@@ -1,0 +1,29 @@
+# Standalone — kept out of the parent fidius workspace. WASM-only author crate: a
+# CONFIGURED fidius plugin (config bound once via `fidius-configure`) that ALSO does
+# real `std::fs` I/O. Exercises `load_wasm_configured_with_grants` — the configured
+# load path with a caller-supplied (tenant-granted) capability allow-list that
+# overrides the package manifest's `[wasm].capabilities`.
+[workspace]
+
+[package]
+name = "macro-configured-fs"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+host = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+serde = { version = "1", features = ["derive"] }
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
