@@ -443,7 +443,7 @@ impl PluginHost {
         name: &str,
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
-        self.load_wasm_impl(name, descriptor, self.egress.clone(), None)
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), None, None)
     }
 
     /// Load a **configured** WASM plugin (FIDIUS-A-0006 / CI.3): serialize
@@ -460,7 +460,41 @@ impl PluginHost {
     ) -> Result<crate::handle::PluginHandle, LoadError> {
         let cfg = fidius_core::wire::serialize(config)
             .map_err(|e| LoadError::WasmLoad(format!("config serialize: {e}")))?;
-        self.load_wasm_impl(name, descriptor, self.egress.clone(), Some(&cfg))
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), Some(&cfg), None)
+    }
+
+    /// Load a **configured** WASM plugin with a caller-supplied capability
+    /// allow-list and egress policy, overriding the package manifest's
+    /// `[wasm].capabilities` (FIDIUS-I-0033 / cloacina constructor grants).
+    ///
+    /// This is the entry point for embedders that authorize a plugin's host
+    /// access *at load time* rather than trusting the (signed-but-author-chosen)
+    /// manifest caps — e.g. cloacina's tenant-granted constructor capabilities,
+    /// where the filesystem path / env key / http+tcp intent are decided by the
+    /// deploying tenant, not the plugin author. `capabilities` fully **replaces**
+    /// the manifest list (it is not merged): pass exactly what the tenant
+    /// granted. Default-closed falls out naturally — an empty `capabilities`
+    /// builds a zero-grant `WasiCtx`, and `egress: None` denies all brokered
+    /// HTTP/TCP (the two-key gate's host key is absent).
+    ///
+    /// `capabilities` uses the same vocabulary as `[wasm].capabilities`
+    /// (`http`, `tcp`, `udp`, `network`/`sockets`, `fs:ro:<path>`/`fs:rw:<path>`,
+    /// `env:<NAME>`, …) and is validated identically; an unknown or coarse
+    /// (`env` / `fs`) entry fails the load.
+    ///
+    /// Available only with the `wasm` feature.
+    #[cfg(feature = "wasm")]
+    pub fn load_wasm_configured_with_grants<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        config: &C,
+        capabilities: Vec<String>,
+        egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::WasmLoad(format!("config serialize: {e}")))?;
+        self.load_wasm_impl(name, descriptor, egress, Some(&cfg), Some(capabilities))
     }
 
     /// Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
@@ -475,7 +509,7 @@ impl PluginHost {
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
         egress: impl crate::executor::wasm::EgressPolicy,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
-        self.load_wasm_impl(name, descriptor, Some(Arc::new(egress)), None)
+        self.load_wasm_impl(name, descriptor, Some(Arc::new(egress)), None, None)
     }
 
     #[cfg(feature = "wasm")]
@@ -485,6 +519,7 @@ impl PluginHost {
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
         egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
         config: Option<&[u8]>,
+        caps_override: Option<Vec<String>>,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
         use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
 
@@ -519,7 +554,10 @@ impl PluginHost {
             runtime: crate::types::PluginRuntimeKind::Wasm,
         };
         let interface = descriptor.interface_export.to_string();
-        let capabilities = wasm_meta.capabilities.clone();
+        // A caller-supplied allow-list (e.g. tenant-granted constructor caps)
+        // fully replaces the manifest's author-chosen `[wasm].capabilities`;
+        // absent an override we honor the manifest as before.
+        let capabilities = caps_override.unwrap_or_else(|| wasm_meta.capabilities.clone());
 
         // Resolve a precompiled .cwasm: explicit `[wasm].precompiled`, or an
         // auto-detected sibling `<component-stem>.cwasm`. The AOT path is purely
