@@ -133,7 +133,7 @@ pub fn detect_architecture(path: &Path) -> Result<BinaryInfo, LoadError> {
     }
 
     // PE: MZ
-    if bytes[0..2] == [b'M', b'Z'] {
+    if bytes[0..2] == *b"MZ" {
         return Ok(BinaryInfo {
             format: BinaryFormat::Pe,
             arch: Arch::Unknown, // Would need to parse PE/COFF headers for arch
