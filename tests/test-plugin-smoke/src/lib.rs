@@ -124,6 +124,40 @@ impl BytePipe for ReverseBytes {
     }
 }
 
+// Configured cdylib plugin (FIDIUS-A-0006 / CI.2): a `#[plugin_impl(Trait,
+// config = C)]` whose `configure` constructor binds config once at construction.
+// Unlike `configured_cdylib_e2e.rs` (which links the plugin in-process), this one
+// lives in a real dylib so `configured_cdylib_dynamic_e2e.rs` can prove
+// `PluginHandle::configure_from_loaded` binds config on a DYNAMICALLY loaded
+// cdylib.
+#[plugin_interface(version = 1, buffer = PluginAllocated)]
+pub trait Greeter: Send + Sync {
+    fn greet(&self, name: String) -> String;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GreetConfig {
+    pub greeting: String,
+}
+
+pub struct ConfiguredGreeter {
+    cfg: GreetConfig,
+}
+
+#[plugin_impl(Greeter, config = GreetConfig)]
+impl Greeter for ConfiguredGreeter {
+    fn greet(&self, name: String) -> String {
+        // Uses the bound config — the caller never re-passes it.
+        format!("{}, {}!", self.cfg.greeting, name)
+    }
+}
+
+impl ConfiguredGreeter {
+    fn configure(cfg: GreetConfig) -> Self {
+        Self { cfg }
+    }
+}
+
 // Fourth interface: server-streaming (FIDIUS-I-0026). Interface-only — there is
 // NO `#[plugin_impl]` for it, because native (cdylib) streaming is rejected by
 // the macro; this interface is served by a Python plugin (see
