@@ -102,6 +102,29 @@ impl PluginHandle {
         })
     }
 
+    /// Construct a **configured** plugin instance from a DYNAMICALLY loaded
+    /// cdylib — the dynamic-load analogue of [`Self::configure_in_process`]. A
+    /// [`LoadedPlugin`](crate::loader::LoadedPlugin) from
+    /// [`load_library`](crate::loader::load_library) / [`PluginHost::load`] is
+    /// constructed with `config` bound once (the plugin's `#[plugin_impl(Trait,
+    /// config = C)]` `configure` constructor receives it) instead of the
+    /// singleton [`Self::from_loaded`] builds. This lets a host load a
+    /// configured provider cdylib at runtime and bind N differently-configured
+    /// instances from the same library. The config crosses the boundary exactly
+    /// once, at construction.
+    ///
+    /// [`PluginHost::load`]: crate::PluginHost::load
+    pub fn configure_from_loaded<C: Serialize>(
+        plugin: crate::loader::LoadedPlugin,
+        config: &C,
+    ) -> Result<Self, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::ConfigSerialization(e.to_string()))?;
+        Ok(Self {
+            backend: Backend::Cdylib(CdylibExecutor::from_loaded_with_config(plugin, &cfg)),
+        })
+    }
+
     /// Look up a descriptor in the current process's inventory registry by
     /// `plugin_name` (the Rust struct name passed to `#[plugin_impl]`).
     pub fn find_in_process_descriptor(

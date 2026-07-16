@@ -146,7 +146,18 @@ impl CdylibExecutor {
 
     /// Create a CdylibExecutor from a LoadedPlugin.
     pub fn from_loaded(plugin: crate::loader::LoadedPlugin) -> Self {
-        let instance = unsafe { construct_instance(plugin.descriptor, &[]) };
+        Self::from_loaded_with_config(plugin, &[])
+    }
+
+    /// Like [`Self::from_loaded`] but binds serialized `cfg` config bytes at
+    /// construction — the DYNAMIC *configured* path (FIDIUS-A-0006 / CI.2). A
+    /// `#[plugin_impl(Trait, config = C)]` loaded from a dylib whose `configure`
+    /// constructor receives the bound config once; methods then close over it
+    /// without re-passing. `cfg` is bincode of the plugin's config type; empty
+    /// (`&[]`) reproduces [`Self::from_loaded`]'s singleton construction. This is
+    /// the dynamic-load analogue of [`Self::from_descriptor_with_config`].
+    pub fn from_loaded_with_config(plugin: crate::loader::LoadedPlugin, cfg: &[u8]) -> Self {
+        let instance = unsafe { construct_instance(plugin.descriptor, cfg) };
         let destroy = unsafe { (*plugin.descriptor).destroy };
         Self {
             _library: Some(plugin.library),
