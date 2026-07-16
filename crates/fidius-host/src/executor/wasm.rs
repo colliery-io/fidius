@@ -461,10 +461,15 @@ fn is_blocked_ip(ip: &IpAddr) -> bool {
     }
 }
 
-/// The `wasi:http` version this host provides — matched to `wasmtime-wasi-http`
-/// and the vendored guest WIT (FIDIUS-A-0005). Bump together with a wasmtime
-/// upgrade; the `fidius-guest` pin tripwire + the macro-egress E2E guard the match.
-const HOST_WASI_HTTP: (u32, u32, u32) = (0, 2, 6);
+/// The `wasi:http` version this host provides — what `wasmtime-wasi-http`
+/// registers (FIDIUS-A-0005). WASI 0.2 is forward-compatible, so the host is the
+/// **ceiling**: it satisfies any guest on the same `0.2` line up to this patch
+/// (`guest_patch <= host_patch`, enforced by [`wasi_http_incompatibility`]).
+/// wasmtime-wasi-http 46 registers `wasi:http@0.2.12`, which covers both the
+/// `fidius-guest` vendored pin (0.2.6) and the higher versions a newer stable
+/// `wasm32-wasip2` toolchain emits (e.g. 0.2.9 on CI). Bump this to the value
+/// wasmtime-wasi-http provides whenever wasmtime is upgraded.
+const HOST_WASI_HTTP: (u32, u32, u32) = (0, 2, 12);
 
 /// Scan a component's import names for a `wasi:http` version this host can't
 /// satisfy, returning a clear, actionable message if so (FIDIUS-A-0005, fail
@@ -1688,23 +1693,32 @@ mod wasi_http_version_tests {
 
     #[test]
     fn host_matched_version_is_compatible() {
-        // 0.2.6 (the pin) and any older patch on the same line load fine.
-        assert!(wasi_http_incompatibility(["wasi:http/types@0.2.6"].into_iter()).is_none());
-        assert!(
-            wasi_http_incompatibility(["wasi:http/outgoing-handler@0.2.0"].into_iter()).is_none()
-        );
+        // The host ceiling (0.2.12) and any older patch on the same 0.2 line load
+        // fine — including the `fidius-guest` vendored pin (0.2.6) and the higher
+        // versions a newer stable `wasm32-wasip2` toolchain emits (e.g. 0.2.9).
+        for ok in [
+            "wasi:http/types@0.2.12",
+            "wasi:http/types@0.2.9",
+            "wasi:http/types@0.2.6",
+            "wasi:http/outgoing-handler@0.2.0",
+        ] {
+            assert!(
+                wasi_http_incompatibility([ok].into_iter()).is_none(),
+                "{ok} should be compatible with the 0.2.12 host"
+            );
+        }
     }
 
     #[test]
     fn newer_minor_or_patch_is_rejected_with_a_clear_message() {
-        // Patch ahead of the host (the exact `wasi` crate 0.2.12 skew that broke
-        // the fetcher) — and a different line — must fail loud, naming versions.
-        for bad in ["wasi:http/types@0.2.12", "wasi:http/types@0.3.0"] {
+        // A patch ahead of the host ceiling — and a different line — must fail
+        // loud, naming versions.
+        for bad in ["wasi:http/types@0.2.13", "wasi:http/types@0.3.0"] {
             let msg = wasi_http_incompatibility([bad].into_iter())
                 .unwrap_or_else(|| panic!("{bad} should be rejected"));
             assert!(msg.contains("plugin requires wasi:http"), "{msg}");
             assert!(
-                msg.contains("0.2.6"),
+                msg.contains("0.2.12"),
                 "message names the host version: {msg}"
             );
         }

@@ -37,16 +37,16 @@ tokio = { workspace = true, features = ["sync", "rt"], optional = true }
 fidius-python = { path = "../fidius-python", version = "0.5.6", optional = true }
 # Component Model runtime for the wasm backend. `component-model` + `cranelift`
 # are on by default; we keep defaults for JIT + AOT (.cwasm) support.
-wasmtime = { version = "45", optional = true }
+wasmtime = { version = "46", optional = true }
 # WASI host implementation. Std-built components import wasi:cli/io/clocks/filesystem
 # even when unused, so the sandbox provides WASI with a zero-grant WasiCtx rather
 # than an empty Linker (FIDIUS-T-0102 finding; capability allow-list in T-0104).
-wasmtime-wasi = { version = "45", optional = true }
+wasmtime-wasi = { version = "46", optional = true }
 # Host-brokered outbound HTTP for sandboxed guests (FIDIUS-I-0027). Lockstep with
-# wasmtime/wasmtime-wasi 45. Egress is enabled ONLY when the package declares the
-# `http` capability AND the embedder supplies an `EgressPolicy` hook (fidius ships
-# the mechanism, not the policy).
-wasmtime-wasi-http = { version = "45", optional = true }
+# wasmtime/wasmtime-wasi 46 (provides wasi:http@0.2.12). Egress is enabled ONLY when
+# the package declares the `http` capability AND the embedder supplies an
+# `EgressPolicy` hook (fidius ships the mechanism, not the policy).
+wasmtime-wasi-http = { version = "46", optional = true }
 # The `http` crate types (Request/Parts/HeaderMap) in which the `EgressPolicy`
 # seam is expressed, so no wasmtime types leak into fidius's public API. Must be
 # the same major as wasmtime-wasi-http's.
