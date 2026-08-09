@@ -146,6 +146,7 @@ typed error currency in both directions; domain errors ride in
 | `HostCallError::NotBound` | the host never bound this interface |
 | `HostCallError::HostPanic(msg)` | the host function panicked (caught at the boundary) |
 | `HostCallError::Serialization` / `Deserialization` | wire fault |
+| `HostCallError::VersionMismatch` / `HashMismatch` | wasm per-call gate: the host provides a different revision |
 
 Panics never unwind across the FFI boundary in either direction: the
 dispatch shim catches host-side panics (→ `HostPanic`), and the existing
@@ -163,14 +164,42 @@ loading.
 
 ## WASM
 
-v1 is **dylib-only**. For WASM plugins host functions are component
-imports — a structurally different mechanism (a `fidius:host-call` import
-rather than a function-pointer table). The API is shaped so that can be
-added without breaking changes: the identity triple (name, version, hash)
-and the bincode request/response are transport-independent, and on wasm
-builds the macro already compiles the table machinery out, leaving only
-the constants. Until then, a WASM plugin has no host-function channel and
-`#[host_interface]`-generated clients simply don't exist in wasm builds.
+WASM plugins get the same channel through the **`fidius:host-call`
+component import** instead of a function-pointer table (the sandbox shares
+no memory, so pointers can't cross). The generated `<Trait>Client` has the
+same surface on both runtimes; only the transport differs:
+
+- The guest dispatches
+  `fidius:host-call/host.call(interface-name, expected-version,
+  expected-hash, index, args) -> (status, payload)` — the identity triple
+  travels with **every call**.
+- The host links the import into every component (harmless for plugins
+  that don't use it — same pattern as `fidius:stream-pull`), backed by a
+  per-executor table registry. Binding:
+
+  ```rust
+  let handle = host.load_wasm("my-plugin", &DESCRIPTOR)?;
+  MyHostBinding::bind_wasm(&handle, Arc::new(MyHost { .. }))?;
+  // requires the interface crate's `host` + `wasm` features
+  ```
+
+  The same `HostFunctionTable` built for the dylib path backs the wasm
+  dispatch, so a host implementation is written once. Binds are once-only
+  per handle, and each loaded component has its own registry (no
+  per-library global, unlike the dylib cell).
+- **The gate is per-call**, not at instantiation: a component can't be
+  introspected for the host interfaces its method bodies use, so the host
+  compares the guest's expected version + hash against the bound table on
+  every dispatch (a `u64` compare) and returns a typed
+  `HostCallError::VersionMismatch` / `HashMismatch` /
+  `NotBound` on any skew. Same guarantee as the dylib bind-time gate —
+  loud, typed, and **never** a mis-dispatch of positional bincode — the
+  failure just surfaces at the first call instead of at load. `bound()` /
+  `is_bound()` run the gate eagerly via a reserved probe index.
+
+The threading contract is unchanged; note that wasm host functions run on
+the thread driving the component call (components are single-threaded), so
+the reentrant host → plugin → host path is always same-stack.
 
 ## Worked example
 
@@ -180,4 +209,6 @@ including the reentrant round-trip, version/hash mismatch at load, panics
 in both directions, and the unbound case — is exercised in
 `crates/fidius-host/tests/host_functions_e2e.rs`,
 `host_functions_unbound.rs`, and `host_functions_in_process.rs`, driven by
-the `tests/test-plugin-hostcall` fixture.
+the `tests/test-plugin-hostcall` fixture. The wasm variant — the same
+matrix over a real component, including the per-call version/hash gate —
+is `wasm_host_functions_e2e.rs`, driven by `tests/wasm-fixtures/hostcall`.

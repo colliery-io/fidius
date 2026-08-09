@@ -373,6 +373,52 @@ impl PluginHandle {
         }
     }
 
+    /// Bind a host-function table (plugin → host callback channel) to a
+    /// **WASM-backed** handle. The generated `<Trait>Binding::bind_wasm`
+    /// resolves through this: `table` must be a process-lifetime table built
+    /// by a `#[host_interface]`-generated binding (`<Trait>Binding::table`).
+    /// The guest's `fidius:host-call` import gates every dispatch against
+    /// the table's version + signature hash, so a mismatched surface fails
+    /// with a typed error and can never mis-dispatch.
+    ///
+    /// Returns `LoadError::HostBindFailed` with
+    /// [`fidius_core::host_ffi::BIND_ERR_WRONG_BACKEND`] for non-WASM
+    /// backends — cdylib handles bind through `<Trait>Binding::bind` /
+    /// `bind_plugin` (the dylib import registry) instead.
+    ///
+    /// # Safety
+    /// `table` must be null or a valid, **process-lifetime**
+    /// [`fidius_core::host_ffi::HostFunctionTable`] (e.g. the leaked table a
+    /// generated `<Trait>Binding::table` builds); the backend retains it and
+    /// dispatches through it for its remaining lifetime.
+    #[cfg(feature = "wasm")]
+    pub unsafe fn bind_wasm_host_table(
+        &self,
+        table: *const fidius_core::host_ffi::HostFunctionTable,
+    ) -> Result<(), LoadError> {
+        match &self.backend {
+            // SAFETY: forwarded per this fn's contract.
+            Backend::Wasm(e) => unsafe { e.bind_host_table(table) },
+            _ => {
+                use fidius_core::host_ffi::{bind_status_message, BIND_ERR_WRONG_BACKEND};
+                let interface = if table.is_null() {
+                    "<null>".to_string()
+                } else {
+                    // SAFETY: non-null table per the bind contract.
+                    unsafe { std::ffi::CStr::from_ptr((*table).interface_name) }
+                        .to_str()
+                        .unwrap_or("<invalid>")
+                        .to_string()
+                };
+                Err(LoadError::HostBindFailed {
+                    interface,
+                    code: BIND_ERR_WRONG_BACKEND,
+                    message: bind_status_message(BIND_ERR_WRONG_BACKEND).to_string(),
+                })
+            }
+        }
+    }
+
     /// Check if an optional method is supported (capability bit set).
     /// Returns `false` for `bit >= 64` and for backends without capabilities.
     pub fn has_capability(&self, bit: u32) -> bool {

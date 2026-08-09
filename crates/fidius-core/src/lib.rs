@@ -33,6 +33,11 @@ pub use fidius_guest::{
 #[cfg(target_family = "wasm")]
 pub use fidius_guest::http;
 
+/// Guest-side host-function calls over the `fidius:host-call` import — the
+/// wasm variant of the plugin → host callback channel. `wasm32-wasip2`-only.
+#[cfg(target_family = "wasm")]
+pub use fidius_guest::host_call;
+
 /// Capability-gated outbound TCP for sandboxed WASM connectors (FIDIUS-I-0033).
 /// Portable (backed by `std::net` → `wasi:sockets`), so present in host builds too.
 pub use fidius_guest::sockets;

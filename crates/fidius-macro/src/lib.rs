@@ -137,13 +137,20 @@ pub fn plugin_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # WASM
 ///
-/// v1 of the host-function channel is **dylib-only**: for WASM plugins,
-/// host functions are component imports and need a different mechanism.
-/// The API is shaped so that can be added later without breaking changes
-/// (the identity triple `name`/`version`/`hash` and the bincode
-/// request/response map directly onto a future `fidius:host-call` import).
-/// On a wasm build this macro emits only the constants; the client,
-/// binding, and table machinery are compiled out.
+/// WASM plugins get the same channel through the `fidius:host-call`
+/// component **import** instead of a function-pointer table (no shared
+/// memory across the sandbox). The generated `<Trait>Client` has the same
+/// surface on both runtimes; on wasm each call carries the identity triple
+/// (`name`/`version`/`hash`) and the host gates it against the bound table
+/// **on every dispatch** — the wasm counterpart of the dylib bind-time
+/// gate, with the same guarantee: a mismatched surface fails with the
+/// typed `HostCallError::VersionMismatch`/`HashMismatch` (at the first
+/// call, since a component's host-interface usage can't be introspected at
+/// instantiation), never a bincode mis-dispatch. Hosts bind with
+/// `<Trait>Binding::bind_wasm(&plugin_handle, host)` (requires the
+/// interface crate's `host` + `wasm` features). The import is always
+/// linked host-side and harmless for components that don't use it, so
+/// plugins that declare no host interface are unaffected.
 #[proc_macro_attribute]
 pub fn host_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attrs = parse_macro_input!(attr as HostInterfaceAttrs);

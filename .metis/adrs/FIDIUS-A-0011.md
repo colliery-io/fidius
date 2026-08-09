@@ -90,11 +90,18 @@ Design forces:
    force-reject every deployed 0.5.x plugin — exactly the compatibility
    break the feature is required to avoid.
 
-6. **v1 is dylib-only.** For WASM, host functions are component imports —
-   a different mechanism. The identity triple + bincode request/response
-   are transport-independent, so a future `fidius:host-call` import can be
-   added without breaking this API; wasm builds compile the table
-   machinery out today.
+6. **WASM via the `fidius:host-call` import, gated per call.** The guest
+   dispatches `call(interface-name, expected-version, expected-hash,
+   index, args) -> (status, payload)`; the host backs the import with the
+   same `HostFunctionTable` (bound via `<Trait>Binding::bind_wasm`, one
+   registry per executor) and compares the guest's identity triple against
+   the bound table on **every** dispatch. A component's host-interface
+   usage can't be introspected at instantiation, so the gate moves from
+   load time to call time — same guarantee (typed loud failure:
+   `VersionMismatch`/`HashMismatch`/`NotBound`; never a bincode
+   mis-dispatch), different timing. The import is always linked and
+   harmless for components that don't use it. `bound()`/`is_bound()` run
+   the gate eagerly through a reserved probe index.
 
 ## Consequences
 

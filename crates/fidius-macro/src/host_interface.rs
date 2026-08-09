@@ -29,9 +29,13 @@
 //!   loaded libraries (`bind`, feature `"host"`) and in-process plugins
 //!   (`bind_in_process`).
 //!
-//! v1 is **dylib-only**: everything except the constants is gated
-//! `#[cfg(not(target_family = "wasm"))]`. See the macro's rustdoc in
-//! `lib.rs` for the threading/reentrancy contract.
+//! Both plugin runtimes are served: **dylib** plugins receive a
+//! function-pointer table at bind time (gated at load), and **wasm** plugins
+//! dispatch through the `fidius:host-call` component import (gated on every
+//! call by the identity triple the client sends). The table/bind machinery
+//! is `#[cfg(not(target_family = "wasm"))]`; the wasm client is
+//! `#[cfg(target_family = "wasm")]`. See the macro's rustdoc in `lib.rs`
+//! for the threading/reentrancy contract.
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
@@ -435,6 +439,49 @@ pub fn generate_host_interface(
         })
         .collect();
 
+    // ── Plugin-side client methods, wasm variant ────────────────────────────
+    // Same signatures; dispatch goes through the `fidius:host-call` import,
+    // carrying the identity triple so the host gates every call.
+    let wasm_client_methods: Vec<TokenStream> = methods
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let i = i as u32;
+            let mname = &m.name;
+            let arg_names = &m.arg_names;
+            let arg_types = &m.arg_types;
+            let ok_ty = match (&m.result_ok, &m.return_type) {
+                (Some(ok), _) => quote! { #ok },
+                (None, Some(rt)) => quote! { #rt },
+                (None, None) => quote! { () },
+            };
+            let doc = format!(
+                "Call the host's `{mname}` through the `fidius:host-call` import. \
+                 The host gates the call on this interface's version + signature \
+                 hash before dispatching."
+            );
+            quote! {
+                #[doc = #doc]
+                pub fn #mname(
+                    &self,
+                    #(#arg_names: &#arg_types,)*
+                ) -> ::std::result::Result<#ok_ty, #crate_path::host_ffi::HostCallError> {
+                    let __input = #crate_path::wire::serialize(&(#(#arg_names,)*))
+                        .map_err(|e| #crate_path::host_ffi::HostCallError::Serialization(e.to_string()))?;
+                    let __out = #crate_path::host_call::call(
+                        #trait_name_str,
+                        #companion_mod::#version_name,
+                        #companion_mod::#hash_name,
+                        #i,
+                        &__input,
+                    )?;
+                    #crate_path::wire::deserialize(&__out)
+                        .map_err(|e| #crate_path::host_ffi::HostCallError::Deserialization(e.to_string()))
+                }
+            }
+        })
+        .collect();
+
     let cleaned_trait = strip_helper_attrs(item);
 
     let client_doc = format!(
@@ -726,6 +773,62 @@ pub fn generate_host_interface(
                     || Self::table(host),
                 )
             }
+
+            /// Bind `host` into a **WASM-backed** `PluginHandle` — the wasm
+            /// variant of [`Self::bind`]. The guest dispatches host functions
+            /// through the `fidius:host-call` import, which gates **every**
+            /// call on this interface's version + signature hash (the wasm
+            /// counterpart of the dylib bind-time gate): a plugin built
+            /// against a different revision gets a typed
+            /// `HostCallError::VersionMismatch` / `HashMismatch` on its first
+            /// call, never a bincode mis-dispatch. Once-only per handle.
+            ///
+            /// Requires the interface crate's `host` and `wasm` features
+            /// (forwarding to `fidius/host` + `fidius/wasm`).
+            #[cfg(all(feature = "host", feature = "wasm"))]
+            pub fn bind_wasm(
+                handle: &#crate_path::PluginHandle,
+                host: ::std::sync::Arc<dyn #trait_name>,
+            ) -> ::std::result::Result<(), #crate_path::LoadError> {
+                // SAFETY: `table` builds a fresh, intentionally-leaked
+                // (process-lifetime) table — exactly the bind contract.
+                unsafe { handle.bind_wasm_host_table(Self::table(host)) }
+            }
+        }
+
+        #[doc = #client_doc]
+        #[cfg(target_family = "wasm")]
+        pub struct #client_name {
+            _priv: (),
+        }
+
+        #[cfg(target_family = "wasm")]
+        impl #client_name {
+            /// The host functions, if the host bound a matching table.
+            /// Probes the `fidius:host-call` import: an unbound interface
+            /// returns `HostCallError::NotBound`; a host providing a
+            /// different revision returns the typed
+            /// `VersionMismatch`/`HashMismatch` error.
+            pub fn bound() -> ::std::result::Result<Self, #crate_path::host_ffi::HostCallError> {
+                #crate_path::host_call::probe(
+                    #trait_name_str,
+                    #companion_mod::#version_name,
+                    #companion_mod::#hash_name,
+                )?;
+                Ok(Self { _priv: () })
+            }
+
+            /// Whether the host has bound a matching table for this interface.
+            pub fn is_bound() -> bool {
+                #crate_path::host_call::probe(
+                    #trait_name_str,
+                    #companion_mod::#version_name,
+                    #companion_mod::#hash_name,
+                )
+                .is_ok()
+            }
+
+            #(#wasm_client_methods)*
         }
     })
 }

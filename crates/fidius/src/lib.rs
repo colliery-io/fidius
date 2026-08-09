@@ -117,6 +117,12 @@ pub use fidius_core::wire;
 #[cfg(target_family = "wasm")]
 pub use fidius_core::http;
 
+/// Guest-side host-function calls over the `fidius:host-call` import — the
+/// wasm variant of the plugin → host callback channel. Present only in
+/// `wasm32-wasip2` builds; generated `<Trait>Client` wasm methods call it.
+#[cfg(target_family = "wasm")]
+pub use fidius_core::host_call;
+
 /// Capability-gated outbound TCP (`sockets::tcp::connect`) for sandboxed WASM
 /// connectors (FIDIUS-I-0033) — the raw-wire seam for DB/warehouse drivers. The
 /// host's `EgressPolicy::authorize_tcp` gates each connect by `host:port`.

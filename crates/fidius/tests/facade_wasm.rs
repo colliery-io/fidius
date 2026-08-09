@@ -38,3 +38,27 @@ fn egress_denied_constructs_through_facade() {
     let denied = EgressDenied::new("not allowed");
     assert!(format!("{denied:?}").contains("not allowed"));
 }
+
+// The host-function channel's wasm bind path must resolve through the facade
+// when a downstream enables `host` + `wasm` (this test crate does): the
+// generated `<Trait>Binding::bind_wasm` names `fidius::PluginHandle::
+// bind_wasm_host_table`, which only exists behind these features.
+#[fidius::host_interface(version = 1, crate = "fidius")]
+trait WasmEchoHost: Send + Sync {
+    fn echo(&self, s: String) -> String;
+}
+
+#[test]
+#[allow(non_upper_case_globals)]
+fn host_interface_wasm_bind_surface_resolves_through_facade() {
+    // Name the generated wasm bind entry point (compile guard) without
+    // loading a component: a fn pointer to it must typecheck.
+    let _bind: fn(
+        &fidius::PluginHandle,
+        std::sync::Arc<dyn WasmEchoHost>,
+    ) -> Result<(), fidius::LoadError> = WasmEchoHostBinding::bind_wasm;
+    assert_ne!(
+        __fidius_host_WasmEchoHost::WasmEchoHost_HOST_INTERFACE_HASH,
+        0
+    );
+}

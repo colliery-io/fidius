@@ -14,6 +14,9 @@ crate-type = ["cdylib", "rlib"]
 # DeferrableClient). Not enabled by the plugin cdylib build — only
 # host-side consumers turn this on.
 host = ["fidius/host"]
+# Declared (unused) so the macro-generated `bind_wasm`'s
+# `cfg(all(feature = "host", feature = "wasm"))` is an expected cfg.
+wasm = []
 
 [dependencies]
 fidius = { path = "../../crates/fidius" }

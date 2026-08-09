@@ -100,6 +100,34 @@ pub const BIND_ERR_ABI: i32 = -5;
 pub const BIND_ERR_FN_COUNT: i32 = -6;
 /// The bind shim panicked (never expected; defensive).
 pub const BIND_ERR_PANIC: i32 = -7;
+/// The handle's backend cannot accept this table (e.g. a wasm-only bind
+/// entry point called on a cdylib/Python-backed handle, or vice versa).
+pub const BIND_ERR_WRONG_BACKEND: i32 = -8;
+
+// ── WASM host-call channel ──────────────────────────────────────────────────
+// For WASM plugins, host functions cross as the `fidius:host-call/host@0.1.0`
+// component import: `call(interface-name, expected-version, expected-hash,
+// index, args) -> (status, payload)`. The identity triple travels with every
+// call, so the version/hash gate is enforced per call (a u64 compare) — same
+// guarantee as the dylib bind-time gate (typed loud failure, never a
+// mis-dispatch of positional bincode), enforced at the first call instead of
+// at instantiation (a component can't be introspected for the host
+// interfaces its method bodies use).
+
+/// Reserved dispatch index for the bind-probe: `call(..., PROBE, [])` runs
+/// the name/version/hash gate and returns `STATUS_OK` with an empty payload
+/// without dispatching a real function. Generated wasm clients use it to
+/// implement `bound()` / `is_bound()`.
+pub const HOST_CALL_PROBE_INDEX: u32 = u32::MAX;
+
+/// host-call status: no host interface with this name is bound.
+pub const HOST_CALL_STATUS_NOT_BOUND: i32 = -7;
+/// host-call status: the bound table's version differs from what the plugin
+/// was built against. Payload = bincode `(plugin_expects: u32, host_provides: u32)`.
+pub const HOST_CALL_STATUS_VERSION_MISMATCH: i32 = -8;
+/// host-call status: the bound table's signature hash differs. Payload =
+/// bincode `(plugin_expects: u64, host_provides: u64)`.
+pub const HOST_CALL_STATUS_HASH_MISMATCH: i32 = -9;
 
 /// The dispatch signature of a host-function table: `(ctx, fn_index, in_ptr,
 /// in_len, out_ptr, out_len) -> status`. Input is the bincode of the argument
@@ -291,6 +319,84 @@ pub enum HostCallError {
     /// The host returned a status code this plugin doesn't know.
     #[error("unknown host status code: {code}")]
     UnknownStatus { code: i32 },
+
+    /// The host provides a different **version** of this interface than the
+    /// plugin was built against. WASM host-call channel only — on the dylib
+    /// path the same mismatch fails the host's bind at load, so plugin code
+    /// sees [`HostCallError::NotBound`] instead.
+    #[error("host interface '{interface}' version mismatch: plugin was built against v{plugin_expects}, host provides v{host_provides}")]
+    VersionMismatch {
+        interface: &'static str,
+        plugin_expects: u32,
+        host_provides: u32,
+    },
+
+    /// The host provides a different **signature set** (hash) of this
+    /// interface than the plugin was built against. WASM host-call channel
+    /// only; dylib mismatches fail the host's bind at load.
+    #[error("host interface '{interface}' signature hash mismatch: plugin was built against {plugin_expects:#x}, host provides {host_provides:#x}")]
+    HashMismatch {
+        interface: &'static str,
+        plugin_expects: u64,
+        host_provides: u64,
+    },
+}
+
+/// Decode a `(status, payload)` pair from the WASM `fidius:host-call` import
+/// into the plugin-side result. Compiles natively too so the mapping is
+/// unit-testable without a component build.
+pub fn decode_host_call_status(
+    interface: &'static str,
+    index: u32,
+    status: i32,
+    payload: Vec<u8>,
+) -> Result<Vec<u8>, HostCallError> {
+    use crate::status::*;
+    match status {
+        STATUS_OK => Ok(payload),
+        STATUS_PLUGIN_ERROR => {
+            let err: PluginError = crate::wire::deserialize(&payload).unwrap_or_else(|_| {
+                PluginError::new(
+                    "UNKNOWN",
+                    "host returned an error but no decodable error data",
+                )
+            });
+            Err(HostCallError::Host(err))
+        }
+        STATUS_PANIC => {
+            let msg = if payload.is_empty() {
+                "unknown panic".to_string()
+            } else {
+                crate::wire::deserialize::<String>(&payload)
+                    .unwrap_or_else(|_| "unknown panic".into())
+            };
+            Err(HostCallError::HostPanic(msg))
+        }
+        STATUS_SERIALIZATION_ERROR => Err(HostCallError::Serialization(
+            "host could not decode arguments or encode the result".into(),
+        )),
+        STATUS_INVALID_INDEX => Err(HostCallError::InvalidIndex { index }),
+        HOST_CALL_STATUS_NOT_BOUND => Err(HostCallError::NotBound { interface }),
+        HOST_CALL_STATUS_VERSION_MISMATCH => {
+            let (plugin_expects, host_provides): (u32, u32) =
+                crate::wire::deserialize(&payload).unwrap_or((0, 0));
+            Err(HostCallError::VersionMismatch {
+                interface,
+                plugin_expects,
+                host_provides,
+            })
+        }
+        HOST_CALL_STATUS_HASH_MISMATCH => {
+            let (plugin_expects, host_provides): (u64, u64) =
+                crate::wire::deserialize(&payload).unwrap_or((0, 0));
+            Err(HostCallError::HashMismatch {
+                interface,
+                plugin_expects,
+                host_provides,
+            })
+        }
+        code => Err(HostCallError::UnknownStatus { code }),
+    }
 }
 
 /// Error installing a [`HostFunctionTable`] into a plugin — the typed form

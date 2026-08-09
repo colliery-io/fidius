@@ -52,6 +52,11 @@ pub mod sockets;
 /// import (FIDIUS-I-0030 CS2.3). `wasm32-wasip2`-only.
 #[cfg(target_family = "wasm")]
 pub mod client_stream;
+
+/// Guest-side host-function calls over the `fidius:host-call` import — the
+/// wasm variant of the plugin → host callback channel. `wasm32-wasip2`-only.
+#[cfg(target_family = "wasm")]
+pub mod host_call;
 pub mod python_descriptor;
 pub mod status;
 pub mod stream_ffi;

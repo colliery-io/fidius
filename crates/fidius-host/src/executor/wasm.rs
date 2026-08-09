@@ -172,6 +172,63 @@ struct HostState {
     /// a client-streaming call; the guest's `fidius:stream-pull/pull.next` import
     /// pulls bincode items from it. `None` outside such a call.
     client_stream: Option<Box<dyn Iterator<Item = Vec<u8>> + Send>>,
+    /// Host-function tables bound to this executor (plugin → host callback
+    /// channel, wasm variant). Shared with the executor so tables bound after
+    /// instantiation (including after `configure`'s persistent store was
+    /// created) are visible to the `fidius:host-call` import.
+    host_tables: HostTables,
+}
+
+/// The executor-wide registry of bound host-function tables, keyed by
+/// interface name. Shared (`Arc`) into every store's `HostState`.
+type HostTables = Arc<std::sync::RwLock<std::collections::HashMap<String, HostTableRef>>>;
+
+/// A `Send + Sync` wrapper for a bound, process-lifetime
+/// [`HostFunctionTable`] pointer (same justification as the loader's static
+/// table pointers: the generated binding leaks the table it builds).
+#[derive(Clone, Copy)]
+struct HostTableRef(*const fidius_core::host_ffi::HostFunctionTable);
+
+// SAFETY: the pointed-to table has process lifetime per the bind contract and
+// is immutable after construction; dispatch/free_buffer are thread-safe entry
+// points (the host implementation behind them is required to be Send + Sync).
+unsafe impl Send for HostTableRef {}
+unsafe impl Sync for HostTableRef {}
+
+/// Run one host-function dispatch through a bound table and return the raw
+/// `(status, payload)` pair for the guest, copying the host-owned output
+/// buffer and releasing it via the table's `free_buffer`.
+fn dispatch_host_table(
+    table: &fidius_core::host_ffi::HostFunctionTable,
+    index: u32,
+    args: &[u8],
+) -> (i32, Vec<u8>) {
+    let mut out_ptr: *mut u8 = std::ptr::null_mut();
+    let mut out_len: u32 = 0;
+    // SAFETY: the table was validated at bind time; dispatch/free_buffer are
+    // process-lifetime function pointers per the HostFunctionTable contract.
+    let status = unsafe {
+        (table.dispatch)(
+            table.ctx,
+            index,
+            args.as_ptr(),
+            args.len() as u32,
+            &mut out_ptr,
+            &mut out_len,
+        )
+    };
+    let payload = if out_ptr.is_null() || out_len == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: the host wrote a valid buffer of out_len bytes; copy it out
+        // and hand it straight back to the host's free_buffer.
+        unsafe {
+            let bytes = std::slice::from_raw_parts(out_ptr, out_len as usize).to_vec();
+            (table.free_buffer)(out_ptr, out_len as usize);
+            bytes
+        }
+    };
+    (status, payload)
 }
 
 impl WasiHttpView for HostState {
@@ -566,6 +623,10 @@ pub struct WasmComponentExecutor {
     /// takes its store by value, so it can't share the unary persistent store — it
     /// just needs the same config set in its own memory first).
     config_bytes: Option<Vec<u8>>,
+    /// Host-function tables bound to this executor (plugin → host callback
+    /// channel, wasm variant), keyed by interface name. Populated by
+    /// [`Self::bind_host_table`]; read by the `fidius:host-call` import.
+    host_tables: HostTables,
 }
 
 /// A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
@@ -732,6 +793,71 @@ impl WasmComponentExecutor {
                 message: e.to_string(),
             })?;
 
+        // Host functions (plugin → host callback channel, wasm variant):
+        // provide the `fidius:host-call` import the guest dispatches host
+        // functions through. Always linked (harmless for components that
+        // don't import it); backed by the executor's bound-table registry.
+        // The identity triple the guest sends with each call is gated here
+        // against the bound table before any dispatch — the wasm counterpart
+        // of the dylib bind-time gate (never a bincode mis-dispatch).
+        let host_tables: HostTables = Arc::new(std::sync::RwLock::new(Default::default()));
+        linker
+            .instance("fidius:host-call/host@0.1.0")
+            .and_then(|mut host| {
+                host.func_wrap(
+                    "call",
+                    |store: wasmtime::StoreContextMut<'_, HostState>,
+                     (interface, expected_version, expected_hash, index, args): (
+                        String,
+                        u32,
+                        u64,
+                        u32,
+                        Vec<u8>,
+                    )|
+                     -> wasmtime::Result<((i32, Vec<u8>),)> {
+                        use fidius_core::host_ffi::{
+                            HOST_CALL_PROBE_INDEX, HOST_CALL_STATUS_HASH_MISMATCH,
+                            HOST_CALL_STATUS_NOT_BOUND, HOST_CALL_STATUS_VERSION_MISMATCH,
+                        };
+                        let tables = store.data().host_tables.clone();
+                        let guard = tables
+                            .read()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        let Some(entry) = guard.get(&interface) else {
+                            return Ok(((HOST_CALL_STATUS_NOT_BOUND, Vec::new()),));
+                        };
+                        // SAFETY: process-lifetime table per the bind contract.
+                        let table = unsafe { &*entry.0 };
+                        if table.interface_version != expected_version {
+                            let payload = fidius_core::wire::serialize(&(
+                                expected_version,
+                                table.interface_version,
+                            ))
+                            .unwrap_or_default();
+                            return Ok(((HOST_CALL_STATUS_VERSION_MISMATCH, payload),));
+                        }
+                        if table.interface_hash != expected_hash {
+                            let payload = fidius_core::wire::serialize(&(
+                                expected_hash,
+                                table.interface_hash,
+                            ))
+                            .unwrap_or_default();
+                            return Ok(((HOST_CALL_STATUS_HASH_MISMATCH, payload),));
+                        }
+                        if index == HOST_CALL_PROBE_INDEX {
+                            // Bind-probe: the gate passed; nothing to dispatch.
+                            return Ok(((fidius_core::status::STATUS_OK, Vec::new()),));
+                        }
+                        Ok((dispatch_host_table(table, index, &args),))
+                    },
+                )?;
+                Ok(())
+            })
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+
         let instance_pre = linker
             .instantiate_pre(component)
             .map_err(|e| CallError::Backend {
@@ -748,7 +874,54 @@ impl WasmComponentExecutor {
             info,
             configured: None,
             config_bytes: None,
+            host_tables,
         })
+    }
+
+    /// Bind a host-function table (plugin → host callback channel) to this
+    /// executor. Its identity fields are read here and gated against the
+    /// guest's expectation on every `fidius:host-call` dispatch. Once-only
+    /// per interface: a second bind fails rather than swapping the table
+    /// under in-flight calls.
+    ///
+    /// # Safety
+    /// `table` must be null or a valid, **process-lifetime**
+    /// [`HostFunctionTable`](fidius_core::host_ffi::HostFunctionTable) —
+    /// e.g. the leaked table a `#[host_interface]`-generated
+    /// `<Trait>Binding::table` builds. The executor retains the pointer and
+    /// dispatches through it for its remaining lifetime.
+    pub unsafe fn bind_host_table(
+        &self,
+        table: *const fidius_core::host_ffi::HostFunctionTable,
+    ) -> Result<(), crate::error::LoadError> {
+        use fidius_core::host_ffi::{bind_status_message, BIND_ERR_ALREADY_BOUND, BIND_ERR_NULL};
+        if table.is_null() {
+            return Err(crate::error::LoadError::HostBindFailed {
+                interface: "<null>".into(),
+                code: BIND_ERR_NULL,
+                message: bind_status_message(BIND_ERR_NULL).to_string(),
+            });
+        }
+        // SAFETY: non-null; process-lifetime per this method's contract.
+        let name = unsafe { std::ffi::CStr::from_ptr((*table).interface_name) }
+            .to_str()
+            .map_err(|_| crate::error::LoadError::HostImportRegistryInvalid {
+                reason: "host table interface_name is not valid UTF-8".into(),
+            })?
+            .to_string();
+        let mut guard = self
+            .host_tables
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if guard.contains_key(&name) {
+            return Err(crate::error::LoadError::HostBindFailed {
+                interface: name,
+                code: BIND_ERR_ALREADY_BOUND,
+                message: bind_status_message(BIND_ERR_ALREADY_BOUND).to_string(),
+            });
+        }
+        guard.insert(name, HostTableRef(table));
+        Ok(())
     }
 
     /// Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
@@ -877,6 +1050,7 @@ impl WasmComponentExecutor {
                 policy: self.egress.clone(),
             },
             client_stream: None,
+            host_tables: self.host_tables.clone(),
         };
         let mut store = Store::new(&self.engine, host);
         let instance =

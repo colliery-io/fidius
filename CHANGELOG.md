@@ -52,8 +52,17 @@ own thread while a host → plugin call is live on that stack. Hosts must
 not hold locks (or async-runtime worker threads) across a plugin call
 that a host function could need.
 
-v1 of the channel is **dylib-only**; the API is shaped so a WASM
-import-based variant can be added later without breaking changes.
+**WASM plugins are served too**, through the `fidius:host-call` component
+import (same generated `<Trait>Client` surface; hosts bind with
+`<Trait>Binding::bind_wasm(&handle, host)`, reusing the same
+`HostFunctionTable`). Because a component's host-interface usage can't be
+introspected at instantiation, the wasm gate is enforced **on every
+call**: the guest sends the identity triple (name, version, hash) with
+each dispatch and a skew returns the typed
+`HostCallError::VersionMismatch` / `HashMismatch` / `NotBound` — same
+never-mis-dispatch guarantee, surfacing at the first call instead of at
+load. The import is always linked and harmless for components that don't
+use it.
 
 ### Fixed
 
