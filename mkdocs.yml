@@ -119,6 +119,7 @@ nav:
     - Interface Evolution: explanation/interface-evolution.md
     - Buffer Strategies: explanation/buffer-strategies.md
     - Streaming (server, client, bidirectional): explanation/streaming.md
+    - Host Functions (plugin → host callbacks): explanation/host-functions.md
     - Configured Instances: explanation/configured-instances.md
     - Wire Format: explanation/wire-format.md
     - WASM Component ABI: explanation/wasm-component-abi.md

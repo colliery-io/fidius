@@ -1,0 +1,23 @@
+[package]
+name = "test-plugin-hostcall"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# cdylib for the subprocess plugin build; rlib so host-side tests (in
+# fidius-host) can dev-depend on this crate and use the generated
+# TestHostBinding / Deferrable method-index constants.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Enable host-side binding generation (TestHostBinding::bind /
+# DeferrableClient). Not enabled by the plugin cdylib build — only
+# host-side consumers turn this on.
+host = ["fidius/host"]
+# Declared (unused) so the macro-generated `bind_wasm`'s
+# `cfg(all(feature = "host", feature = "wasm"))` is an expected cfg.
+wasm = []
+
+[dependencies]
+fidius = { path = "../../crates/fidius" }
+serde = { version = "1", features = ["derive"] }

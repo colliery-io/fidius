@@ -1,6 +1,6 @@
 [package]
 name = "fidius-host"
-version = "0.5.6"
+version = "0.5.7"
 edition = "2021"
 description = "Host-side loading and calling for the Fidius plugin framework"
 license = "Apache-2.0"
@@ -24,7 +24,7 @@ wasm = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:wasmtime-wasi-http", "dep:http
 streaming = ["dep:futures", "dep:async-trait", "dep:tokio"]
 
 [dependencies]
-fidius-core = { path = "../fidius-core", version = "0.5.6" }
+fidius-core = { path = "../fidius-core", version = "0.5.7" }
 libloading = { workspace = true }
 ed25519-dalek = { workspace = true }
 thiserror = { workspace = true }
@@ -34,7 +34,7 @@ tracing = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["sync", "rt"], optional = true }
-fidius-python = { path = "../fidius-python", version = "0.5.6", optional = true }
+fidius-python = { path = "../fidius-python", version = "0.5.7", optional = true }
 # Component Model runtime for the wasm backend. `component-model` + `cranelift`
 # are on by default; we keep defaults for JIT + AOT (.cwasm) support.
 wasmtime = { version = "46", optional = true }
@@ -83,6 +83,9 @@ async-trait = { workspace = true }
 # used by the tests is a separate cargo invocation and does NOT pull this
 # feature.
 test-plugin-smoke = { path = "../../tests/test-plugin-smoke", features = ["host"] }
+# Host-function (plugin → host callback) fixture: the generated
+# TestHostBinding + method-index constants for the host_functions e2e tests.
+test-plugin-hostcall = { path = "../../tests/test-plugin-hostcall", features = ["host"] }
 # Backend latency benchmark (FIDIUS-I-0024).
 criterion = "0.5"
 

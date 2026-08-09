@@ -13,6 +13,7 @@
 // limitations under the License.
 
 // Host-only modules (archive/compression/filesystem, inventory collection).
+pub mod host_registry;
 pub mod package;
 pub mod registry;
 
@@ -23,14 +24,19 @@ pub mod async_runtime;
 // re-exported here so every existing `fidius_core::*` path (and the `fidius`
 // facade re-exports) resolves unchanged — the split (FIDIUS-I-0022) is internal.
 pub use fidius_guest::{
-    descriptor, error, frame, hash, python_descriptor, status, stream_ffi, stream_marker, value,
-    wasm_descriptor, wire,
+    descriptor, error, frame, hash, host_ffi, python_descriptor, status, stream_ffi, stream_marker,
+    value, wasm_descriptor, wire,
 };
 
 /// Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028) —
 /// present only in `wasm32-wasip2` builds.
 #[cfg(target_family = "wasm")]
 pub use fidius_guest::http;
+
+/// Guest-side host-function calls over the `fidius:host-call` import — the
+/// wasm variant of the plugin → host callback channel. `wasm32-wasip2`-only.
+#[cfg(target_family = "wasm")]
+pub use fidius_guest::host_call;
 
 /// Capability-gated outbound TCP for sandboxed WASM connectors (FIDIUS-I-0033).
 /// Portable (backed by `std::net` → `wasi:sockets`), so present in host builds too.

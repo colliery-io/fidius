@@ -1,0 +1,30 @@
+# Standalone WASM author fixture (host-function channel, wasm variant): a
+# plugin whose methods call BACK into the host through the fidius:host-call
+# import — the wasm counterpart of tests/test-plugin-hostcall.
+[workspace]
+
+[package]
+name = "hostcall-guest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+# The fidius macros emit `#[cfg(feature = "host")]` / `#[cfg(feature = "wasm")]`
+# gated host-side items; declare the features (unused here) so the cfgs are
+# "expected" and don't warn.
+[features]
+host = []
+wasm = []
+
+[dependencies]
+fidius-guest = { path = "../../../crates/fidius-guest" }
+fidius-macro = { path = "../../../crates/fidius-macro" }
+wit-bindgen = "0.44"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

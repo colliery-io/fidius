@@ -96,12 +96,14 @@
 // interface-hash mismatch at load time — never as silent data corruption.
 //
 // Mix freely: one trait can have raw methods alongside normal typed methods.
-pub use fidius_macro::{plugin_impl, plugin_interface};
+pub use fidius_macro::{host_interface, plugin_impl, plugin_interface};
 
 // Re-export modules so generated code can use fidius::descriptor::, fidius::status::, etc.
 pub use fidius_core::descriptor;
 pub use fidius_core::error;
 pub use fidius_core::hash;
+pub use fidius_core::host_ffi;
+pub use fidius_core::host_registry;
 pub use fidius_core::python_descriptor;
 pub use fidius_core::status;
 pub use fidius_core::stream_ffi;
@@ -114,6 +116,12 @@ pub use fidius_core::wire;
 /// `read()` calls it and the host's `EgressPolicy` brokers the request.
 #[cfg(target_family = "wasm")]
 pub use fidius_core::http;
+
+/// Guest-side host-function calls over the `fidius:host-call` import — the
+/// wasm variant of the plugin → host callback channel. Present only in
+/// `wasm32-wasip2` builds; generated `<Trait>Client` wasm methods call it.
+#[cfg(target_family = "wasm")]
+pub use fidius_core::host_call;
 
 /// Capability-gated outbound TCP (`sockets::tcp::connect`) for sandboxed WASM
 /// connectors (FIDIUS-I-0033) — the raw-wire seam for DB/warehouse drivers. The
@@ -128,6 +136,11 @@ pub use fidius_core::descriptor::{
 };
 pub use fidius_core::error::PluginError;
 pub use fidius_core::hash::{fnv1a, interface_hash};
+
+/// Errors of the plugin → host callback channel, at the crate root for
+/// convenience: `HostCallError` is what plugin code sees when a host-function
+/// call fails; `HostBindError` is the in-process bind failure.
+pub use fidius_core::host_ffi::{HostBindError, HostCallError};
 
 /// The `fidius::Stream<T>` server-streaming return marker — write it as a
 /// method's return type in a `#[plugin_interface]` trait to declare a
@@ -148,9 +161,14 @@ pub use fidius_core::async_runtime;
 // reach into `fidius-host` directly (FIDIUS-T-0176 facade-completeness audit).
 #[cfg(feature = "host")]
 pub use fidius_host::{
-    CallError, LoadError, LoadPolicy, LoadedLibrary, LoadedPlugin, PluginExecutor, PluginHandle,
-    PluginHost, PluginHostBuilder, PluginInfo, PluginRuntimeKind,
+    CallError, HostImportInfo, LoadError, LoadPolicy, LoadedLibrary, LoadedPlugin, PluginExecutor,
+    PluginHandle, PluginHost, PluginHostBuilder, PluginInfo, PluginRuntimeKind,
 };
+
+// Host-import discovery + the generic bind gate for the plugin → host
+// callback channel. Generated `<Trait>Binding::bind` goes through this.
+#[cfg(feature = "host")]
+pub use fidius_host::host_import;
 
 // Server-streaming host handle (FIDIUS-I-0026). The generated Client's streaming
 // methods return this; consumers pull items with `.next().await`.

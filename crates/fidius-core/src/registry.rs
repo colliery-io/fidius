@@ -65,12 +65,22 @@ pub fn get_registry() -> &'static PluginRegistry {
 /// ```ignore
 /// fidius::fidius_plugin_registry!();
 /// ```
+///
+/// Also emits the optional `fidius_get_host_imports` export advertising the
+/// host interfaces this plugin can consume (every `#[fidius::host_interface]`
+/// trait linked into the dylib). Plugins that use no host interface export an
+/// empty registry — the host binds nothing and behavior is unchanged.
 #[macro_export]
 macro_rules! fidius_plugin_registry {
     () => {
         #[no_mangle]
         pub extern "C" fn fidius_get_registry() -> *const $crate::descriptor::PluginRegistry {
             $crate::registry::get_registry() as *const _
+        }
+
+        #[no_mangle]
+        pub extern "C" fn fidius_get_host_imports() -> *const $crate::host_ffi::HostImportRegistry {
+            $crate::host_registry::get_host_import_registry() as *const _
         }
     };
 }
