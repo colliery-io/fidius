@@ -80,6 +80,41 @@ pub enum LoadError {
     /// CI.2). Practically never happens for a well-formed config type.
     #[error("config serialization failed: {0}")]
     ConfigSerialization(String),
+
+    /// The plugin was built against a different **version** of a host
+    /// interface than the host provides (plugin → host callback channel).
+    /// Raised at bind (load) time; the host-function table is never
+    /// installed, so a mismatched surface cannot mis-dispatch.
+    #[error("host interface '{interface}' version mismatch: plugin was built against v{plugin_expects}, host provides v{host_provides}")]
+    HostInterfaceVersionMismatch {
+        interface: String,
+        plugin_expects: u32,
+        host_provides: u32,
+    },
+
+    /// The plugin was built against a different **signature set** of a host
+    /// interface than the host provides (same declared version, drifted
+    /// methods). Raised at bind (load) time; nothing is installed.
+    #[error("host interface '{interface}' signature hash mismatch: plugin was built against {plugin_expects:#x}, host provides {host_provides:#x}")]
+    HostInterfaceHashMismatch {
+        interface: String,
+        plugin_expects: u64,
+        host_provides: u64,
+    },
+
+    /// The plugin's `fidius_get_host_imports` registry was malformed (bad
+    /// magic, unsupported layout version, or invalid pointers).
+    #[error("host import registry invalid: {reason}")]
+    HostImportRegistryInvalid { reason: String },
+
+    /// The plugin's bind shim rejected an offered host-function table (e.g.
+    /// the interface was already bound for this library).
+    #[error("binding host interface '{interface}' failed: {message} (status {code})")]
+    HostBindFailed {
+        interface: String,
+        code: i32,
+        message: String,
+    },
 }
 
 /// Errors that can occur when calling a plugin method.

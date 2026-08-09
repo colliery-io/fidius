@@ -13,6 +13,7 @@
 // limitations under the License.
 
 // Host-only modules (archive/compression/filesystem, inventory collection).
+pub mod host_registry;
 pub mod package;
 pub mod registry;
 
@@ -23,8 +24,8 @@ pub mod async_runtime;
 // re-exported here so every existing `fidius_core::*` path (and the `fidius`
 // facade re-exports) resolves unchanged — the split (FIDIUS-I-0022) is internal.
 pub use fidius_guest::{
-    descriptor, error, frame, hash, python_descriptor, status, stream_ffi, stream_marker, value,
-    wasm_descriptor, wire,
+    descriptor, error, frame, hash, host_ffi, python_descriptor, status, stream_ffi, stream_marker,
+    value, wasm_descriptor, wire,
 };
 
 /// Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028) —

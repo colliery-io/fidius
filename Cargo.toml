@@ -12,7 +12,7 @@ members = [
     "crates/fidius-python",
     "examples",
 ]
-exclude = ["tests/test-plugin-smoke"]
+exclude = ["tests/test-plugin-smoke", "tests/test-plugin-hostcall"]
 resolver = "2"
 
 [workspace.dependencies]

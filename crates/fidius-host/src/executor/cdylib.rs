@@ -804,7 +804,11 @@ impl CdylibExecutor {
 
         // Pump the returned handle into a `ChunkStream` (shared with the
         // bidirectional path, which reaches the same output-stream handle).
-        Ok(pump_stream_handle(out_ptr, decode_item))
+        Ok(pump_stream_handle(
+            out_ptr,
+            decode_item,
+            self._library.clone(),
+        ))
     }
 
     /// Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): call a method whose
@@ -876,7 +880,11 @@ impl CdylibExecutor {
                 message: "bidi stream init returned a null output handle".into(),
             });
         }
-        Ok(pump_stream_handle(out_ptr, decode_item))
+        Ok(pump_stream_handle(
+            out_ptr,
+            decode_item,
+            self._library.clone(),
+        ))
     }
 
     /// Check if an optional method is supported (capability bit is set).
@@ -997,6 +1005,7 @@ impl PluginExecutor for CdylibExecutor {
 fn pump_stream_handle(
     out_ptr: *mut u8,
     decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallError>,
+    library: Option<Arc<Library>>,
 ) -> crate::stream::ChunkStream {
     use fidius_core::stream_ffi::FidiusStreamHandle;
     use fidius_core::Value;
@@ -1014,6 +1023,12 @@ fn pump_stream_handle(
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
 
     std::thread::spawn(move || {
+        // Keep the dylib mapped until this thread is done executing guest
+        // code: the consumer can drop its handle (and with it the executor's
+        // `Arc<Library>`) while this detached thread is still inside the
+        // guest's `next`/`drop_fn` — without this clone, that `dlclose`
+        // unmaps the code mid-execution (a segfault race).
+        let _library = library;
         // Force capture of the whole `SendHandle` (which is `Send`), not the
         // disjoint raw-pointer field (2021 edition closure capture).
         let send_handle = send_handle;

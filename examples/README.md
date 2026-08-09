@@ -15,6 +15,7 @@ No artifact building, no toolchain: `cargo run -p fidius-examples --example <nam
 | `05_record_stream` | Stream **rich-typed records** (a record with a `HashMap` field) item-by-item. |
 | `06_bidi_transform` | **Bidirectional** streaming — the host produces an input stream, the plugin consumes it and produces a transformed output stream, pulled lazily (ADR-0010). |
 | `07_client_streaming` | **Client-streaming** — the host produces a stream the plugin pulls and reduces (lazy producer; unbounded input, bounded memory). |
+| `08_host_functions` | **Host functions** — the plugin calls back into the host mid-execution (`#[host_interface]`): release/reclaim a host-owned slot, the reentrant host → plugin → host path. |
 
 These use the **in-process** cdylib path (the plugin is linked into the example
 binary) so they're self-contained. The same host API loads dylib / WASM / Python

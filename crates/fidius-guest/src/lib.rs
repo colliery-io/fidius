@@ -33,6 +33,10 @@ pub mod descriptor;
 pub mod error;
 pub mod frame;
 pub mod hash;
+/// Host-function (plugin → host callback) FFI contract — the reverse
+/// direction of [`descriptor`]. Native (cdylib) plugins only in v1; the
+/// module compiles everywhere so shared/generated code can name its types.
+pub mod host_ffi;
 /// Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028).
 /// Only present in components built for `wasm32-wasip2`.
 #[cfg(target_family = "wasm")]

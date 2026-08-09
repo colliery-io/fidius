@@ -41,3 +41,9 @@ pub const STATUS_PANIC: i32 = -4;
 /// (FIDIUS-I-0026 / FIDIUS-T-0138). Distinct from `STATUS_OK` with `out_len == 0`,
 /// which is a real zero-byte item (e.g. a unit `()` item).
 pub const STATUS_STREAM_END: i32 = -5;
+
+/// The callee has no function at the requested dispatch index. Returned by a
+/// host-function table's `dispatch` (plugin → host callback channel) for an
+/// out-of-range index. Cannot occur through generated clients once the
+/// bind-time version/hash gate has passed.
+pub const STATUS_INVALID_INDEX: i32 = -6;

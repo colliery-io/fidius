@@ -67,3 +67,40 @@ fn plugin_interface_macro_generates_hash_through_facade() {
         "macro must generate a non-zero hash"
     );
 }
+
+// The host-function channel's plugin-facing surface must resolve through the
+// facade with NO features enabled — plugin cdylibs are built featureless.
+#[fidius::host_interface(version = 1, crate = "fidius")]
+trait EchoHost: Send + Sync {
+    fn echo(&self, s: String) -> String;
+}
+
+#[test]
+#[allow(non_upper_case_globals)]
+fn host_interface_macro_generates_through_facade() {
+    assert_ne!(
+        __fidius_host_EchoHost::EchoHost_HOST_INTERFACE_HASH,
+        0,
+        "macro must generate a non-zero host-interface hash"
+    );
+    assert_eq!(__fidius_host_EchoHost::EchoHost_HOST_INTERFACE_VERSION, 1);
+    // Unbound by construction in this test binary: the typed client reports
+    // NotBound, the plugin-side error surface of the callback channel.
+    assert!(!EchoHostClient::is_bound());
+    match EchoHostClient::bound() {
+        Err(fidius::HostCallError::NotBound { interface }) => assert_eq!(interface, "EchoHost"),
+        Err(other) => panic!("expected NotBound, got {other:?}"),
+        Ok(_) => panic!("expected NotBound, got a bound client"),
+    }
+}
+
+#[test]
+fn host_ffi_types_are_reexported() {
+    fn assert_exists<T>() {}
+    assert_exists::<fidius::host_ffi::HostFunctionTable>();
+    assert_exists::<fidius::host_ffi::HostImportDescriptor>();
+    assert_exists::<fidius::host_ffi::HostImportRegistry>();
+    assert_exists::<fidius::HostCallError>();
+    assert_exists::<fidius::HostBindError>();
+    assert_eq!(fidius::host_ffi::host_callback_depth(), 0);
+}
