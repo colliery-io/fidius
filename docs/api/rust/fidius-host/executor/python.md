@@ -54,5 +54,134 @@ Wrap a loaded `PythonPluginHandle` with its owned metadata.
 
 
 
+##### `call_client_streaming` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn call_client_streaming (& self , method : usize , items : Box < dyn Iterator < Item = serde_json :: Value > + Send > , args : Value ,) -> Result < Value , CallError >
+```
+
+Client-streaming (FIDIUS-I-0030 CS2.4): the host produces `items`; the plugin method receives them as a host-fed iterator + returns a value. Pivots through JSON like the unary path.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn call_client_streaming(
+        &self,
+        method: usize,
+        items: Box<dyn Iterator<Item = serde_json::Value> + Send>,
+        args: Value,
+    ) -> Result<Value, CallError> {
+        let args_json =
+            serde_json::to_vec(&args).map_err(|e| CallError::Serialization(e.to_string()))?;
+        let out = self
+            .py
+            .call_client_streaming_json(method, items, &args_json)
+            .map_err(CallError::from)?;
+        serde_json::from_slice(&out).map_err(|e| CallError::Deserialization(e.to_string()))
+    }
+```
+
+</details>
+
+
+
+##### `call_bidi_streaming` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn call_bidi_streaming (& self , method : usize , items : Box < dyn Iterator < Item = serde_json :: Value > + Send > , args : Value ,) -> Result < crate :: stream :: ChunkStream , CallError >
+```
+
+Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): the host produces `items` (the plugin's input iterator) and consumes the plugin's returned generator as a `ChunkStream`. Pulling the output pulls the input — the synchronous lazy-pull composition. `args` are the non-stream args.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn call_bidi_streaming(
+        &self,
+        method: usize,
+        items: Box<dyn Iterator<Item = serde_json::Value> + Send>,
+        args: Value,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
+        let args_json =
+            serde_json::to_vec(&args).map_err(|e| CallError::Serialization(e.to_string()))?;
+        let stream = self
+            .py
+            .call_bidi_streaming_start(method, items, &args_json)
+            .map_err(CallError::from)?;
+        Ok(pump_python_stream(stream))
+    }
+```
+
+</details>
+
+
+
+
+
+## Functions
+
+### `fidius-host::executor::python::pump_python_stream`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn pump_python_stream (stream : fidius_python :: PythonStream) -> crate :: stream :: ChunkStream
+```
+
+Pump a `PythonStream` (a guest generator) into a [`crate::stream::ChunkStream`] on a dedicated GIL-holding thread (blocking_send = backpressure; native `Value` items, no framing). Shared by server-streaming ([`Pyo3Executor::call_streaming`]) and bidirectional ([`Pyo3Executor::call_bidi_streaming`]).
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn pump_python_stream(stream: fidius_python::PythonStream) -> crate::stream::ChunkStream {
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
+
+    std::thread::spawn(move || {
+        use fidius_python::PyStreamStep;
+        loop {
+            match stream.next() {
+                // Clean end: drop `tx` → the host stream ends (None).
+                PyStreamStep::End => break,
+                // Producer error: surface one Err, then end.
+                PyStreamStep::Error(pe) => {
+                    let _ = tx.blocking_send(Err(CallError::Plugin(pe)));
+                    break;
+                }
+                PyStreamStep::Item(jv) => {
+                    // JSON is self-describing, so `Value` reconstructs fine here.
+                    let item = match serde_json::from_value::<Value>(jv) {
+                        Ok(v) => Ok(v),
+                        Err(e) => Err(CallError::Deserialization(e.to_string())),
+                    };
+                    let is_err = item.is_err();
+                    // blocking_send parks the GIL-free thread when the channel is full →
+                    // backpressure. `Err` means the consumer dropped → cancel the generator.
+                    if tx.blocking_send(item).is_err() {
+                        stream.cancel();
+                        break;
+                    }
+                    if is_err {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let body = futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|item| (item, rx))
+    });
+    crate::stream::ChunkStream::new(body)
+}
+```
+
+</details>
+
 
 

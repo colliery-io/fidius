@@ -32,6 +32,19 @@ fidius-host public error enum type-clean across feature gates.
 - **`WasmLoad`** - WASM component loader failed (only produced with the `wasm` feature on).
 Wraps wasmtime/instantiation errors as a string to keep the public enum
 type-clean across feature gates.
+- **`ConfigSerialization`** - Failed to serialize a plugin's config for construction (FIDIUS-A-0006 /
+CI.2). Practically never happens for a well-formed config type.
+- **`HostInterfaceVersionMismatch`** - The plugin was built against a different **version** of a host
+interface than the host provides (plugin → host callback channel).
+Raised at bind (load) time; the host-function table is never
+installed, so a mismatched surface cannot mis-dispatch.
+- **`HostInterfaceHashMismatch`** - The plugin was built against a different **signature set** of a host
+interface than the host provides (same declared version, drifted
+methods). Raised at bind (load) time; nothing is installed.
+- **`HostImportRegistryInvalid`** - The plugin's `fidius_get_host_imports` registry was malformed (bad
+magic, unsupported layout version, or invalid pointers).
+- **`HostBindFailed`** - The plugin's bind shim rejected an offered host-function table (e.g.
+the interface was already bound for this library).
 
 
 

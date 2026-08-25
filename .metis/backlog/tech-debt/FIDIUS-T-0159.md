@@ -140,3 +140,11 @@ in CI — you can't ship one), so automation would buy only convenience for an i
 maintainer-only chore. Not worth building. Left in backlog in case it ever becomes a
 recurring annoyance; revisit then (cheapest option would be sharpening the tripwire's
 failure message to name the exact line to bump).
+
+**2026-08-24 — scope note (FIDIUS-I-0034):** a wasmtime upgrade now has two more
+lockstep touchpoints beyond the wasi:http pin: the `wasmtime-wasi-io` dependency
+(must stay the same major as wasmtime-wasi) and fidius's shadowed
+`wasi:sockets/ip-name-lookup` (`fidius-host/src/executor/name_lookup.rs`), which
+implements wasmtime-wasi's bindgen host traits — a major bump can change those
+trait shapes (as 45→46 changed `WasiView`). Both fail loudly at compile time, so
+the skip decision stands; this note is so an upgrade PR knows to touch them.

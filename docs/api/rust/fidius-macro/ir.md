@@ -103,6 +103,10 @@ marker (so it hashes distinctly from a unary `-> T`), and the host-side
 client (ST.3) returns a `ChunkStream` instead of a `Result<T, _>`. |
 | `stream_item_type` | `Option < Type >` | The per-item type `T` for a `streaming` method (the `T` in
 `fidius::Stream<T>`). `None` for non-streaming methods. |
+| `client_stream_item` | `Option < Type >` | The per-item type `T` for a **client-streaming** method — a `Stream<T>` in
+argument position (FIDIUS-I-0030). The signature string carries a `<stream`
+marker so it hashes distinctly. `None` for non-client-streaming methods.
+(Codegen is wired per backend in CS2.2–CS2.4.) |
 
 #### Methods
 
@@ -483,7 +487,7 @@ fn stream_item_type(ty: &Type) -> Option<Type> {
 
 
 ```rust
-fn build_signature_string (method : & TraitItemFn , wire_raw : bool , stream_item : Option < & Type > ,) -> String
+fn build_signature_string (method : & TraitItemFn , wire_raw : bool , stream_item : Option < & Type > , client_streaming : bool ,) -> String
 ```
 
 Build the canonical signature string for a method.
@@ -504,6 +508,7 @@ fn build_signature_string(
     method: &TraitItemFn,
     wire_raw: bool,
     stream_item: Option<&Type>,
+    client_streaming: bool,
 ) -> String {
     let name = method.sig.ident.to_string();
 
@@ -513,7 +518,14 @@ fn build_signature_string(
         .iter()
         .filter_map(|arg| match arg {
             FnArg::Receiver(_) => None,
-            FnArg::Typed(pat_type) => Some(pat_type.ty.to_token_stream().to_string()),
+            // Client-streaming: hash the item type `T`, not the `Stream<T>` wrapper —
+            // its crate path differs host (`fidius_core`) vs guest (`fidius_guest`),
+            // matching how a server-streaming return hashes its item (the `<stream`
+            // marker keeps it distinct from a unary `T` arg).
+            FnArg::Typed(pat_type) => Some(match stream_item_type(&pat_type.ty) {
+                Some(item) => item.to_token_stream().to_string(),
+                None => pat_type.ty.to_token_stream().to_string(),
+            }),
         })
         .collect();
 
@@ -526,7 +538,14 @@ fn build_signature_string(
         },
     };
 
-    fidius_core::hash::signature_string(&name, &arg_types, &ret, wire_raw, stream_item.is_some())
+    fidius_core::hash::signature_string(
+        &name,
+        &arg_types,
+        &ret,
+        wire_raw,
+        stream_item.is_some(),
+        client_streaming,
+    )
 }
 ```
 
@@ -685,21 +704,14 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
         let return_type = extract_return_type(method);
         let method_metas = parse_meta_attrs(&method.attrs, "method_meta")?;
 
-        // Server-streaming detection (FIDIUS-I-0026, D4): a method whose return
-        // type is `fidius::Stream<T>`. Argument-position `Stream<T>`
-        // (client-streaming / bidirectional) is rejected — v1 is server-streaming
-        // only.
-        for at in &arg_types {
-            if stream_item_type(at).is_some() {
-                return Err(syn::Error::new(
-                    at.span(),
-                    "fidius v1 supports server-streaming only: `Stream<T>` is not allowed in \
-                     argument position (client-streaming and bidirectional are deferred)",
-                ));
-            }
-        }
+        // Server-streaming (FIDIUS-I-0026, D4): a `-> fidius::Stream<T>` return.
         let stream_item = return_type.as_ref().and_then(stream_item_type);
         let streaming = stream_item.is_some();
+        // Client-streaming (FIDIUS-I-0030 / ADR-0007): a `Stream<T>` in ARGUMENT
+        // position. Recognized in the IR + folded into the interface hash here; the
+        // per-backend pull channel is wired in CS2.2–CS2.4, so for now a clear
+        // "not yet wired" error is returned below (keeps the compile-fail guard).
+        let client_stream_item: Option<Type> = arg_types.iter().find_map(stream_item_type);
 
         if wire_raw {
             if is_async {
@@ -714,7 +726,16 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             validate_raw_method_signature(method, &arg_types, return_type.as_ref())?;
         }
 
-        let signature_string = build_signature_string(method, wire_raw, stream_item.as_ref());
+        let signature_string = build_signature_string(
+            method,
+            wire_raw,
+            stream_item.as_ref(),
+            client_stream_item.is_some(),
+        );
+
+        // Client-streaming (FIDIUS-I-0030): recognized + hashed in CS2.1; the
+        // cdylib backend is wired in CS2.2. The WASM adapter + the typed Client
+        // still reject/skip it (CS2.3/CS2.5), so non-cdylib paths stay guarded.
 
         methods.push(MethodIR {
             name: method.sig.ident.clone(),
@@ -728,6 +749,7 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
             wire_raw,
             streaming,
             stream_item_type: stream_item,
+            client_stream_item,
         });
     }
 

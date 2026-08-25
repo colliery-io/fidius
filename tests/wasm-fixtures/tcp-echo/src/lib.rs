@@ -28,6 +28,20 @@ impl Guest for Component {
         do_echo(&addr, &payload).unwrap_or_default()
     }
 
+    /// FIDIUS-I-0034: sequential dials in ONE instance, so all dials share
+    /// the store's resolve-and-pin table (rotation / same-IP pin tests).
+    fn connect_seq(addrs: Vec<String>, payload: Vec<u8>) -> Vec<Vec<u8>> {
+        addrs
+            .iter()
+            .map(|addr| do_echo(addr, &payload).unwrap_or_default())
+            .collect()
+    }
+
+    /// No-op: this fixture has no config, but exporting the binder lets the
+    /// host park it on a persistent store (`configure()`), which the
+    /// FIDIUS-I-0034 resident-instance pin tests need.
+    fn fidius_configure(_cfg: Vec<u8>) {}
+
     /// Interface-hash carrier; the host's `load_wasm` checks it against the
     /// descriptor. Arbitrary fixed value for this hand-built fixture.
     fn fidius_interface_hash() -> u64 {

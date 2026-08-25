@@ -13,24 +13,29 @@ nav:
     - fidius-cli::python_stub: rust/fidius-cli/python_stub.md
     - fidius-core: rust/fidius-core.md
     - fidius-core::async_runtime: rust/fidius-core/async_runtime.md
+    - fidius-core::host_registry: rust/fidius-core/host_registry.md
     - fidius-core::package: rust/fidius-core/package.md
     - fidius-core::registry: rust/fidius-core/registry.md
     - fidius-host: rust/fidius-host.md
     - fidius-host::arch: rust/fidius-host/arch.md
     - fidius-host::arena: rust/fidius-host/arena.md
+    - fidius-host::client_stream: rust/fidius-host/client_stream.md
     - fidius-host::error: rust/fidius-host/error.md
     - fidius-host::executor: rust/fidius-host/executor.md
     - fidius-host::executor::cdylib: rust/fidius-host/executor/cdylib.md
+    - fidius-host::executor::name_lookup: rust/fidius-host/executor/name_lookup.md
     - fidius-host::executor::python: rust/fidius-host/executor/python.md
     - fidius-host::executor::wasm: rust/fidius-host/executor/wasm.md
     - fidius-host::handle: rust/fidius-host/handle.md
     - fidius-host::host: rust/fidius-host/host.md
+    - fidius-host::host_import: rust/fidius-host/host_import.md
     - fidius-host::loader: rust/fidius-host/loader.md
     - fidius-host::package: rust/fidius-host/package.md
     - fidius-host::signing: rust/fidius-host/signing.md
     - fidius-host::stream: rust/fidius-host/stream.md
     - fidius-host::types: rust/fidius-host/types.md
     - fidius-macro: rust/fidius-macro.md
+    - fidius-macro::host_interface: rust/fidius-macro/host_interface.md
     - fidius-macro::impl_macro: rust/fidius-macro/impl_macro.md
     - fidius-macro::interface: rust/fidius-macro/interface.md
     - fidius-macro::ir: rust/fidius-macro/ir.md

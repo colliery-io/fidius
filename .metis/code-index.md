@@ -1,6 +1,6 @@
 # Code Index
 
-> Generated: 2026-06-23T23:17:43Z | 177 files | Go, JavaScript, Python, Rust
+> Generated: 2026-08-25T02:23:30Z | 194 files | Go, JavaScript, Python, Rust
 
 ## Project Structure
 
@@ -29,6 +29,7 @@
 │   ├── fidius-core/
 │   │   ├── src/
 │   │   │   ├── async_runtime.rs
+│   │   │   ├── host_registry.rs
 │   │   │   ├── lib.rs
 │   │   │   ├── package.rs
 │   │   │   └── registry.rs
@@ -41,6 +42,8 @@
 │   │   │   ├── error.rs
 │   │   │   ├── frame.rs
 │   │   │   ├── hash.rs
+│   │   │   ├── host_call.rs
+│   │   │   ├── host_ffi.rs
 │   │   │   ├── http.rs
 │   │   │   ├── lib.rs
 │   │   │   ├── python_descriptor.rs
@@ -71,11 +74,13 @@
 │   │   │   ├── error.rs
 │   │   │   ├── executor/
 │   │   │   │   ├── cdylib.rs
+│   │   │   │   ├── name_lookup.rs
 │   │   │   │   ├── python.rs
 │   │   │   │   └── wasm.rs
 │   │   │   ├── executor.rs
 │   │   │   ├── handle.rs
 │   │   │   ├── host.rs
+│   │   │   ├── host_import.rs
 │   │   │   ├── lib.rs
 │   │   │   ├── loader.rs
 │   │   │   ├── package.rs
@@ -87,6 +92,7 @@
 │   │       ├── cdylib_client_stream_e2e.rs
 │   │       ├── cdylib_record_stream_item.rs
 │   │       ├── cdylib_streaming_e2e.rs
+│   │       ├── configured_cdylib_dynamic_e2e.rs
 │   │       ├── configured_cdylib_e2e.rs
 │   │       ├── configured_cdylib_stream_e2e.rs
 │   │       ├── configured_python_e2e.rs
@@ -94,6 +100,10 @@
 │   │       ├── configured_wasm_e2e.rs
 │   │       ├── configured_wasm_stream_e2e.rs
 │   │       ├── e2e.rs
+│   │       ├── host_functions_e2e.rs
+│   │       ├── host_functions_in_process.rs
+│   │       ├── host_functions_unbound.rs
+│   │       ├── hostname_egress_e2e.rs
 │   │       ├── integration.rs
 │   │       ├── keyword_fields_wasm.rs
 │   │       ├── macro_egress_e2e.rs
@@ -116,11 +126,14 @@
 │   │       ├── wasm_egress_e2e.rs
 │   │       ├── wasm_executor.rs
 │   │       ├── wasm_fs_e2e.rs
+│   │       ├── wasm_grants_e2e.rs
+│   │       ├── wasm_host_functions_e2e.rs
 │   │       ├── wasm_record_stream_item.rs
 │   │       ├── wasm_record_stream_user_types.rs
 │   │       └── wasm_streaming_e2e.rs
 │   ├── fidius-macro/
 │   │   ├── src/
+│   │   │   ├── host_interface.rs
 │   │   │   ├── impl_macro.rs
 │   │   │   ├── interface.rs
 │   │   │   ├── ir.rs
@@ -179,7 +192,8 @@
 │   │   ├── 04_pipeline.rs
 │   │   ├── 05_record_stream.rs
 │   │   ├── 06_bidi_transform.rs
-│   │   └── 07_client_streaming.rs
+│   │   ├── 07_client_streaming.rs
+│   │   └── 08_host_functions.rs
 │   └── src/
 │       └── lib.rs
 ├── python/
@@ -190,6 +204,9 @@
 │   └── tests/
 │       └── test_sdk.py
 └── tests/
+    ├── test-plugin-hostcall/
+    │   └── src/
+    │       └── lib.rs
     ├── test-plugin-py-bidi-stream/
     │   └── transformer.py
     ├── test-plugin-py-client-stream/
@@ -224,11 +241,17 @@
         │   └── greeter.js
         ├── greeter-py/
         │   └── app.py
+        ├── hostcall/
+        │   └── src/
+        │       └── lib.rs
         ├── keyword-fields/
         │   ├── build.rs
         │   └── src/
         │       └── lib.rs
         ├── macro-configured/
+        │   └── src/
+        │       └── lib.rs
+        ├── macro-configured-fs/
         │   └── src/
         │       └── lib.rs
         ├── macro-configured-stream/
@@ -282,10 +305,10 @@
 
 #### crates/fidius/src/lib.rs
 
--  `facade_host_surface` module L185-200 — `-` — by which fidius could grow first-class timeout semantics.
--  `names` function L186-199 — `( _host: &crate::PluginHost, _builder: &crate::PluginHostBuilder, _handle: &crat...` — by which fidius could grow first-class timeout semantics.
--  `facade_wasm_surface` module L204-213 — `-` — by which fidius could grow first-class timeout semantics.
--  `names` function L205-212 — `( _policy: &dyn crate::EgressPolicy, _denied: crate::EgressDenied, // the `http`...` — by which fidius could grow first-class timeout semantics.
+-  `facade_host_surface` module L203-218 — `-` — by which fidius could grow first-class timeout semantics.
+-  `names` function L204-217 — `( _host: &crate::PluginHost, _builder: &crate::PluginHostBuilder, _handle: &crat...` — by which fidius could grow first-class timeout semantics.
+-  `facade_wasm_surface` module L222-231 — `-` — by which fidius could grow first-class timeout semantics.
+-  `names` function L223-230 — `( _policy: &dyn crate::EgressPolicy, _denied: crate::EgressDenied, // the `http`...` — by which fidius could grow first-class timeout semantics.
 
 ### crates/fidius/tests
 
@@ -300,12 +323,17 @@
 -  `abi_constants_are_reexported` function L47-51 — `()`
 -  `Greeter` interface L57-59 — `{ fn greet() }`
 -  `plugin_interface_macro_generates_hash_through_facade` function L63-69 — `()`
+-  `EchoHost` interface L74-76 — `{ fn echo() }`
+-  `host_interface_macro_generates_through_facade` function L80-95 — `()`
+-  `host_ffi_types_are_reexported` function L98-106 — `()`
+-  `assert_exists` function L99 — `()`
 
 #### crates/fidius/tests/facade_host.rs
 
 -  `plugin_host_builds_through_facade` function L9-20 — `()`
--  `host_types_are_reexported` function L23-32 — `()`
+-  `host_types_are_reexported` function L23-35 — `()`
 -  `assert_exists` function L25 — `()`
+-  `host_function_bind_gate_is_reachable_through_facade` function L38-52 — `()`
 
 #### crates/fidius/tests/facade_streaming.rs
 
@@ -320,6 +348,8 @@
 -  `authorize` function L16-18 — `(&self, _parts: &mut http_types::request::Parts) -> Result<(), EgressDenied>`
 -  `egress_tcp_and_udp_default_to_deny_through_facade` function L22-34 — `()`
 -  `egress_denied_constructs_through_facade` function L37-40 — `()`
+-  `WasmEchoHost` interface L47-49 — `{ fn echo() }`
+-  `host_interface_wasm_bind_surface_resolves_through_facade` function L53-64 — `()`
 
 ### crates/fidius-build/src
 
@@ -438,11 +468,19 @@
 
 - pub `FIDIUS_RUNTIME` variable L25-31 — `: std::sync::LazyLock<tokio::runtime::Runtime>` — The shared tokio runtime for this dylib.
 
+#### crates/fidius-core/src/host_registry.rs
+
+- pub `HostImportEntry` struct L30-32 — `{ descriptor: &'static HostImportDescriptor }` — A submitted host-import descriptor pointer, collected via `inventory`.
+- pub `get_host_import_registry` function L55-58 — `() -> &'static HostImportRegistry` — Get or build the host-import registry (cached after first call).
+-  `build_host_import_registry` function L37-52 — `() -> HostImportRegistry` — Build the host-import registry from all submitted descriptors.
+-  `REGISTRY` variable L56 — `: std::sync::OnceLock<HostImportRegistry>` — identically (nothing to bind).
+
 #### crates/fidius-core/src/lib.rs
 
-- pub `package` module L16 — `-`
-- pub `registry` module L17 — `-`
-- pub `async_runtime` module L20 — `-`
+- pub `host_registry` module L16 — `-`
+- pub `package` module L17 — `-`
+- pub `registry` module L18 — `-`
+- pub `async_runtime` module L21 — `-`
 
 #### crates/fidius-core/src/package.rs
 
@@ -536,7 +574,7 @@
 - pub `get_registry` function L55-58 — `() -> &'static PluginRegistry` — Get or build the plugin registry.
 -  `build_registry` function L34-49 — `() -> PluginRegistry` — Build the plugin registry from all submitted descriptors.
 -  `REGISTRY` variable L56 — `: std::sync::OnceLock<PluginRegistry>` — `fidius_get_registry` export function that the host calls via `dlsym`.
--  `fidius_plugin_registry` macro L69-76 — `-` — Emit the `fidius_get_registry` export function.
+-  `fidius_plugin_registry` macro L74-86 — `-` — Emit the `fidius_get_registry` export function.
 
 ### crates/fidius-core/tests
 
@@ -659,6 +697,66 @@
 -  `streaming_markers_are_distinct` function L145-169 — `()` — plugins compiled against a different interface.
 -  `different_signatures_differ` function L172-179 — `()` — plugins compiled against a different interface.
 
+#### crates/fidius-guest/src/host_call.rs
+
+- pub `call` function L56-71 — `( interface: &'static str, expected_version: u32, expected_hash: u64, index: u32...` — Invoke a host function through the `fidius:host-call` import: bincode of
+- pub `probe` function L76-89 — `( interface: &'static str, expected_version: u32, expected_hash: u64, ) -> Resul...` — Run the name/version/hash gate without dispatching a function (the
+-  `bindings` module L34-50 — `-` — `fidius:stream-pull` import.
+
+#### crates/fidius-guest/src/host_ffi.rs
+
+- pub `HOST_IMPORTS_VERSION` variable L75 — `: u32` — Current layout version of the [`HostImportRegistry`] struct.
+- pub `HOST_IMPORTS_SYMBOL` variable L81 — `: &str` — Name of the optional symbol a plugin dylib exports to advertise the host
+- pub `BIND_OK` variable L87 — `: i32` — The table was validated and installed.
+- pub `BIND_ERR_NULL` variable L89 — `: i32` — The table pointer was null.
+- pub `BIND_ERR_ALREADY_BOUND` variable L91 — `: i32` — A table for this interface was already installed (bind is once-only).
+- pub `BIND_ERR_HASH_MISMATCH` variable L94 — `: i32` — The table's `interface_hash` does not match what the plugin was built
+- pub `BIND_ERR_VERSION_MISMATCH` variable L96 — `: i32` — The table's `interface_version` does not match what the plugin expects.
+- pub `BIND_ERR_ABI` variable L98 — `: i32` — The table was built by an incompatible fidius ABI.
+- pub `BIND_ERR_FN_COUNT` variable L100 — `: i32` — The table's `fn_count` does not match the interface's method count.
+- pub `BIND_ERR_PANIC` variable L102 — `: i32` — The bind shim panicked (never expected; defensive).
+- pub `BIND_ERR_WRONG_BACKEND` variable L105 — `: i32` — The handle's backend cannot accept this table (e.g.
+- pub `HOST_CALL_PROBE_INDEX` variable L121 — `: u32` — Reserved dispatch index for the bind-probe: `call(..., PROBE, [])` runs
+- pub `HOST_CALL_STATUS_NOT_BOUND` variable L124 — `: i32` — host-call status: no host interface with this name is bound.
+- pub `HOST_CALL_STATUS_VERSION_MISMATCH` variable L127 — `: i32` — host-call status: the bound table's version differs from what the plugin
+- pub `HOST_CALL_STATUS_HASH_MISMATCH` variable L130 — `: i32` — host-call status: the bound table's signature hash differs.
+- pub `HostDispatchFn` type L137-138 — `= unsafe extern "C" fn(*mut c_void, u32, *const u8, u32, *mut *mut u8, *mut u32)...` — The dispatch signature of a host-function table: `(ctx, fn_index, in_ptr,
+- pub `HostFunctionTable` struct L156-178 — `{ table_size: u32, abi_version: u32, interface_name: *const c_char, interface_ha...` — A set of host functions offered to a plugin, as a C-ABI table.
+- pub `HostImportDescriptor` struct L191-205 — `{ descriptor_size: u32, abi_version: u32, interface_name: *const c_char, interfa...` — A plugin's declaration that it can consume a host interface.
+- pub `HostImportRegistry` struct L214-223 — `{ magic: [u8; 8], registry_version: u32, import_count: u32, imports: *const *con...` — Registry of all host-import declarations in a plugin dylib, returned by
+- pub `HostImportPtr` struct L232 — `-` — A `Sync` wrapper for a raw `HostImportDescriptor` pointer, for use in
+- pub `HostTableCell` struct L245 — `-` — The once-only cell a plugin stores its bound [`HostFunctionTable`] in.
+- pub `new` function L250-252 — `() -> Self` — An empty (unbound) cell, for `static` initialization.
+- pub `bind` function L259-269 — `(&self, table: *const HostFunctionTable) -> i32` — Install `table` if the cell is empty.
+- pub `get` function L272-277 — `(&self) -> Option<&HostFunctionTable>` — The bound table, or `None` if the host never bound this interface.
+- pub `HostCallError` enum L287-343 — `NotBound | Host | HostPanic | Serialization | Deserialization | InvalidIndex | U...` — Error returned to plugin code when a host-function call fails.
+- pub `decode_host_call_status` function L348-400 — `( interface: &'static str, index: u32, status: i32, payload: Vec<u8>, ) -> Resul...` — Decode a `(status, payload)` pair from the WASM `fidius:host-call` import
+- pub `HostBindError` struct L406-413 — `{ interface: &'static str, code: i32, message: &'static str }` — Error installing a [`HostFunctionTable`] into a plugin — the typed form
+- pub `bind_status_to_result` function L416-426 — `(interface: &'static str, code: i32) -> Result<(), HostBindError>` — Map a `BIND_*` status to a `Result` for host-side bind entry points.
+- pub `bind_status_message` function L429-441 — `(code: i32) -> &'static str` — Map a `BIND_*` status to a human-readable description (for error paths).
+- pub `host_callback_depth` function L452-454 — `() -> usize` — Per-thread depth of live host-function dispatches.
+- pub `CallbackDepthGuard` struct L463 — `-` — RAII guard incrementing [`host_callback_depth`] — used by the generated
+- pub `new` function L467-470 — `() -> Self` — taken at depth > 0).
+- pub `call_host_fn` function L487-552 — `( table: &HostFunctionTable, index: u32, input: &[u8], ) -> Result<Vec<u8>, Host...` — Invoke a host function through a bound table: bincode-of-args in,
+-  `HostFunctionTable` type L182 — `impl Send for HostFunctionTable` — taken at depth > 0).
+-  `HostFunctionTable` type L183 — `impl Sync for HostFunctionTable` — taken at depth > 0).
+-  `HostImportDescriptor` type L208 — `impl Send for HostImportDescriptor` — taken at depth > 0).
+-  `HostImportDescriptor` type L209 — `impl Sync for HostImportDescriptor` — taken at depth > 0).
+-  `HostImportRegistry` type L226 — `impl Send for HostImportRegistry` — taken at depth > 0).
+-  `HostImportRegistry` type L227 — `impl Sync for HostImportRegistry` — taken at depth > 0).
+-  `HostImportPtr` type L235 — `impl Send for HostImportPtr` — taken at depth > 0).
+-  `HostImportPtr` type L236 — `impl Sync for HostImportPtr` — taken at depth > 0).
+-  `HostTableCell` type L247-278 — `= HostTableCell` — taken at depth > 0).
+-  `CallbackDepthGuard` type L465-471 — `= CallbackDepthGuard` — taken at depth > 0).
+-  `CallbackDepthGuard` type L473-477 — `impl Drop for CallbackDepthGuard` — taken at depth > 0).
+-  `drop` function L474-476 — `(&mut self)` — taken at depth > 0).
+-  `tests` module L555-606 — `-` — taken at depth > 0).
+-  `cell_binds_exactly_once` function L559-590 — `()` — taken at depth > 0).
+-  `CELL` variable L560 — `: HostTableCell` — taken at depth > 0).
+-  `dispatch` function L564-573 — `( _: *mut c_void, _: u32, _: *const u8, _: u32, _: *mut *mut u8, _: *mut u32, ) ...` — taken at depth > 0).
+-  `free_buffer` function L574 — `(_: *mut u8, _: usize)` — taken at depth > 0).
+-  `depth_guard_nests_and_unwinds` function L593-605 — `()` — taken at depth > 0).
+
 #### crates/fidius-guest/src/http.rs
 
 - pub `Request` struct L57-71 — `{ method: String, url: String, headers: Vec<(String, String)>, body: Vec<u8>, ti...` — An outbound request.
@@ -688,16 +786,18 @@
 - pub `error` module L33 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
 - pub `frame` module L34 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
 - pub `hash` module L35 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `http` module L39 — `-` — Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028).
-- pub `sockets` module L45 — `-` — Capability-gated outbound TCP for sandboxed WASM connectors (FIDIUS-I-0033) —
-- pub `client_stream` module L50 — `-` — Client-streaming guest consumer (`WasmHostStream`) over the `fidius:stream-pull`
-- pub `python_descriptor` module L51 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `status` module L52 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `stream_ffi` module L53 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `stream_marker` module L54 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `value` module L55 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `wasm_descriptor` module L56 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
-- pub `wire` module L57 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `host_ffi` module L39 — `-` — Host-function (plugin → host callback) FFI contract — the reverse
+- pub `http` module L43 — `-` — Brokered outbound HTTP for sandboxed WASM connectors (FIDIUS-I-0028).
+- pub `sockets` module L49 — `-` — Capability-gated outbound TCP for sandboxed WASM connectors (FIDIUS-I-0033) —
+- pub `client_stream` module L54 — `-` — Client-streaming guest consumer (`WasmHostStream`) over the `fidius:stream-pull`
+- pub `host_call` module L59 — `-` — Guest-side host-function calls over the `fidius:host-call` import — the
+- pub `python_descriptor` module L60 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `status` module L61 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `stream_ffi` module L62 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `stream_marker` module L63 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `value` module L64 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `wasm_descriptor` module L65 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
+- pub `wire` module L66 — `-` — (per ADR-0002), so `fidius-guest` is versioned in lockstep with `fidius-core`.
 
 #### crates/fidius-guest/src/python_descriptor.rs
 
@@ -742,6 +842,7 @@
 - pub `STATUS_PLUGIN_ERROR` variable L34 — `: i32` — The plugin method returned an error.
 - pub `STATUS_PANIC` variable L38 — `: i32` — A panic was caught at the `extern "C"` boundary via `catch_unwind`.
 - pub `STATUS_STREAM_END` variable L43 — `: i32` — Clean end of a server-stream: the streaming `next()` shim has no more items
+- pub `STATUS_INVALID_INDEX` variable L49 — `: i32` — The callee has no function at the requested dispatch index.
 
 #### crates/fidius-guest/src/stream_ffi.rs
 
@@ -1072,18 +1173,19 @@
 
 #### crates/fidius-host/src/error.rs
 
-- pub `LoadError` enum L21-83 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
-- pub `CallError` enum L87-148 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
--  `CallError` type L158-180 — `= CallError` — Fold the Python backend's call error into the unified [`CallError`].
--  `from` function L159-179 — `(e: fidius_python::PythonCallError) -> Self` — Error types for fidius-host plugin loading and calling.
+- pub `LoadError` enum L21-118 — `LibraryNotFound | SymbolNotFound | InvalidMagic | IncompatibleRegistryVersion | ...` — Errors that can occur when loading a plugin.
+- pub `CallError` enum L122-183 — `Serialization | Deserialization | Plugin | Panic | BufferTooSmall | NotImplement...` — Errors that can occur when calling a plugin method.
+-  `CallError` type L193-215 — `= CallError` — Fold the Python backend's call error into the unified [`CallError`].
+-  `from` function L194-214 — `(e: fidius_python::PythonCallError) -> Self` — Error types for fidius-host plugin loading and calling.
 
 #### crates/fidius-host/src/executor.rs
 
 - pub `cdylib` module L42 — `-` — `PluginExecutor` — the dispatch seam across execution backends.
-- pub `python` module L44 — `-` — bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
-- pub `wasm` module L46 — `-` — bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
-- pub `PluginExecutor` interface L66-77 — `{ fn info(), fn method_count(), fn call_raw() }` — The surface every execution backend shares.
-- pub `ValueExecutor` interface L85-90 — `{ fn call() }` — Backends whose typed boundary is the self-describing [`Value`] model —
+- pub `python` module L46 — `-` — bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
+- pub `wasm` module L48 — `-` — bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
+- pub `PluginExecutor` interface L68-79 — `{ fn info(), fn method_count(), fn call_raw() }` — The surface every execution backend shares.
+- pub `ValueExecutor` interface L87-92 — `{ fn call() }` — Backends whose typed boundary is the self-describing [`Value`] model —
+-  `name_lookup` module L44 — `-` — bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
 
 #### crates/fidius-host/src/handle.rs
 
@@ -1091,24 +1193,26 @@
 - pub `from_loaded` function L74-78 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a `PluginHandle` from a freshly loaded cdylib plugin.
 - pub `from_descriptor` function L83-87 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a `PluginHandle` from a descriptor already registered in the
 - pub `configure_in_process` function L94-103 — `( desc: &'static PluginDescriptor, config: &C, ) -> Result<Self, LoadError>` — Construct a **configured** in-process plugin instance (FIDIUS-A-0006 /
-- pub `find_in_process_descriptor` function L107-111 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
-- pub `from_python` function L117-121 — `(py: fidius_python::PythonPluginHandle, info: PluginInfo) -> Self` — Create a `PluginHandle` backed by a loaded Python plugin.
-- pub `from_wasm` function L126-130 — `(executor: WasmComponentExecutor) -> Self` — Create a `PluginHandle` backed by a loaded WASM component.
-- pub `call_method` function L137-165 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `call_streaming` function L180-207 — `( &self, index: usize, input: &I, ) -> Result<crate::stream::ChunkStream, CallEr...` — Start a server-streaming method call by vtable index (FIDIUS-I-0026).
-- pub `call_bidi_streaming` function L216-254 — `( &self, index: usize, items: impl IntoIterator<Item = I, IntoIter: Send + 'stat...` — Start a **bidirectional** streaming call (FIDIUS-I-0032 / ADR-0010): the host
-- pub `call_method_raw` function L257-265 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
-- pub `call_client_streaming_raw` function L277-298 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2): pass the host's producer
-- pub `call_client_streaming` function L306-351 — `( &self, method: usize, items: impl IntoIterator<Item = I, IntoIter: Send + 'sta...` — Typed client-streaming (FIDIUS-I-0030): the host produces `items` (the
-- pub `has_capability` function L355-360 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
-- pub `info` function L363-371 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L376-385 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
-- pub `trait_metadata` function L389-397 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
+- pub `configure_from_loaded` function L117-126 — `( plugin: crate::loader::LoadedPlugin, config: &C, ) -> Result<Self, LoadError>` — Construct a **configured** plugin instance from a DYNAMICALLY loaded
+- pub `find_in_process_descriptor` function L130-134 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
+- pub `from_python` function L140-144 — `(py: fidius_python::PythonPluginHandle, info: PluginInfo) -> Self` — Create a `PluginHandle` backed by a loaded Python plugin.
+- pub `from_wasm` function L149-153 — `(executor: WasmComponentExecutor) -> Self` — Create a `PluginHandle` backed by a loaded WASM component.
+- pub `call_method` function L160-188 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `call_streaming` function L203-230 — `( &self, index: usize, input: &I, ) -> Result<crate::stream::ChunkStream, CallEr...` — Start a server-streaming method call by vtable index (FIDIUS-I-0026).
+- pub `call_bidi_streaming` function L239-277 — `( &self, index: usize, items: impl IntoIterator<Item = I, IntoIter: Send + 'stat...` — Start a **bidirectional** streaming call (FIDIUS-I-0032 / ADR-0010): the host
+- pub `call_method_raw` function L280-288 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
+- pub `call_client_streaming_raw` function L300-321 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2): pass the host's producer
+- pub `call_client_streaming` function L329-374 — `( &self, method: usize, items: impl IntoIterator<Item = I, IntoIter: Send + 'sta...` — Typed client-streaming (FIDIUS-I-0030): the host produces `items` (the
+- pub `bind_wasm_host_table` function L395-420 — `( &self, table: *const fidius_core::host_ffi::HostFunctionTable, ) -> Result<(),...` — Bind a host-function table (plugin → host callback channel) to a
+- pub `has_capability` function L424-429 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit set).
+- pub `info` function L432-440 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L445-454 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Static `#[method_meta(...)]` key/value metadata for the given method,
+- pub `trait_metadata` function L458-466 — `(&self) -> Vec<(&str, &str)>` — Static `#[trait_meta(...)]` key/value metadata declared on the trait.
 -  `Backend` enum L50-60 — `Cdylib | Python | Wasm` — The execution backend behind a [`PluginHandle`].
--  `PluginHandle` type L72-398 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
--  `cdylib_stream_decode` function L406-412 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
--  `lazy_bincode_producer` function L420-428 — `( items: impl IntoIterator<Item = I, IntoIter: Send + 'static>, ) -> Box<dyn Ite...` — A lazy, boxed bincode producer for the WASM client/bidi streaming input path: each
--  `lazy_json_producer` function L436-444 — `( items: impl IntoIterator<Item = I, IntoIter: Send + 'static>, ) -> Box<dyn Ite...` — A lazy, boxed producer of `Value`-shaped JSON for the Python client/bidi streaming
+-  `PluginHandle` type L72-467 — `= PluginHandle` — refactor (`bincode(input)` straight to the FFI; `Value` is never involved).
+-  `cdylib_stream_decode` function L475-481 — `( bytes: &[u8], ) -> Result<fidius_core::Value, CallError>` — Per-item decoder for the cdylib streaming fast path (FIDIUS-T-0137): each item
+-  `lazy_bincode_producer` function L489-497 — `( items: impl IntoIterator<Item = I, IntoIter: Send + 'static>, ) -> Box<dyn Ite...` — A lazy, boxed bincode producer for the WASM client/bidi streaming input path: each
+-  `lazy_json_producer` function L505-513 — `( items: impl IntoIterator<Item = I, IntoIter: Send + 'static>, ) -> Box<dyn Ite...` — A lazy, boxed producer of `Value`-shaped JSON for the Python client/bidi streaming
 
 #### crates/fidius-host/src/host.rs
 
@@ -1132,14 +1236,26 @@
 - pub `find_wasm_package` function L398-424 — `(&self, name: &str) -> Result<PathBuf, LoadError>` — Find a WASM package directory by name across the search paths (matches
 - pub `load_wasm` function L441-447 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a WASM component plugin package by name and validate it against the
 - pub `load_wasm_configured` function L455-464 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a **configured** WASM plugin (FIDIUS-A-0006 / CI.3): serialize
-- pub `load_wasm_with_egress` function L472-479 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
+- pub `load_wasm_configured_with_grants` function L487-498 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Load a **configured** WASM plugin with a caller-supplied capability
+- pub `load_wasm_with_egress` function L506-513 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress
 -  `PluginHostBuilder` type L57-142 — `= PluginHostBuilder` — PluginHost builder and plugin discovery.
 -  `new` function L58-69 — `() -> Self` — PluginHost builder and plugin discovery.
--  `PluginHost` type L144-604 — `= PluginHost` — PluginHost builder and plugin discovery.
+-  `PluginHost` type L144-642 — `= PluginHost` — PluginHost builder and plugin discovery.
 -  `discover_cdylib` function L186-206 — `(&self, path: &Path, plugins: &mut Vec<PluginInfo>)` — PluginHost builder and plugin discovery.
 -  `discover_package` function L211-235 — `(&self, dir: &Path, plugins: &mut Vec<PluginInfo>)` — Discover a directory-based package (`package.toml`) and surface it by
--  `load_wasm_impl` function L482-603 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — PluginHost builder and plugin discovery.
--  `is_dylib` function L607-616 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+-  `load_wasm_impl` function L516-641 — `( &self, name: &str, descriptor: &'static fidius_core::wasm_descriptor::WasmInte...` — PluginHost builder and plugin discovery.
+-  `is_dylib` function L645-654 — `(path: &Path) -> bool` — Check if a path has a platform-appropriate dylib extension.
+
+#### crates/fidius-host/src/host_import.rs
+
+- pub `HostImportInfo` struct L43-50 — `{ interface_name: String, interface_hash: u64, interface_version: u32 }` — Owned metadata about one host interface a plugin declares it can consume.
+- pub `list_host_imports` function L104-125 — `(library: &Library) -> Result<Vec<HostImportInfo>, LoadError>` — List the host interfaces a loaded library declares it can consume.
+- pub `bind_host_interface` function L146-213 — `( library: &Library, expected_name: &str, expected_hash: u64, expected_version: ...` — Install a host-function table into a loaded plugin library, gating on the
+- pub `host_imports` function L218-220 — `(&self) -> Result<Vec<HostImportInfo>, LoadError>` — The host interfaces this library's plugins declare they can consume.
+- pub `host_imports` function L226-228 — `(&self) -> Result<Vec<HostImportInfo>, LoadError>` — The host interfaces this plugin's library declares it can consume.
+-  `GetHostImportsFn` type L53 — `= unsafe extern "C" fn() -> *const HostImportRegistry` — Signature of the optional `fidius_get_host_imports` export.
+-  `read_registry` function L59-86 — `(library: &Library) -> Result<Option<&'static HostImportRegistry>, LoadError>` — Read and validate a library's host-import registry.
+-  `descriptors` function L89-97 — `( registry: &'static HostImportRegistry, ) -> impl Iterator<Item = &'static Host...` — Iterate a validated registry's descriptors.
 
 #### crates/fidius-host/src/lib.rs
 
@@ -1150,11 +1266,12 @@
 - pub `executor` module L20 — `-`
 - pub `handle` module L21 — `-`
 - pub `host` module L22 — `-`
-- pub `loader` module L23 — `-`
-- pub `package` module L24 — `-`
-- pub `signing` module L25 — `-`
-- pub `stream` module L27 — `-`
-- pub `types` module L28 — `-`
+- pub `host_import` module L23 — `-`
+- pub `loader` module L24 — `-`
+- pub `package` module L25 — `-`
+- pub `signing` module L26 — `-`
+- pub `stream` module L28 — `-`
+- pub `types` module L29 — `-`
 
 #### crates/fidius-host/src/loader.rs
 
@@ -1231,19 +1348,20 @@
 #### crates/fidius-host/src/executor/cdylib.rs
 
 - pub `CdylibExecutor` struct L71-96 — `{ _library: Option<Arc<Library>>, vtable: *const c_void, descriptor: *const Plug...` — A handle to a loaded plugin, ready for calling methods.
-- pub `from_loaded` function L148-162 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a CdylibExecutor from a LoadedPlugin.
-- pub `from_descriptor` function L171-173 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a CdylibExecutor from a plugin descriptor already registered in
-- pub `from_descriptor_with_config` function L178-206 — `( desc: &'static PluginDescriptor, cfg: &[u8], ) -> Result<Self, LoadError>` — Like [`Self::from_descriptor`] but constructs the instance from serialized
-- pub `find_in_process_descriptor` function L214-228 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
-- pub `call_method` function L246-266 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
-- pub `call_method_raw` function L277-288 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
-- pub `call_client_streaming_raw` function L564-648 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2).
-- pub `call_streaming_raw` function L747-797 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
-- pub `call_bidi_streaming_raw` function L810-869 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): call a method whose
-- pub `has_capability` function L874-879 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
-- pub `info` function L882-884 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
-- pub `method_metadata` function L897-929 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
-- pub `trait_metadata` function L935-956 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
+- pub `from_loaded` function L148-150 — `(plugin: crate::loader::LoadedPlugin) -> Self` — Create a CdylibExecutor from a LoadedPlugin.
+- pub `from_loaded_with_config` function L159-173 — `(plugin: crate::loader::LoadedPlugin, cfg: &[u8]) -> Self` — Like [`Self::from_loaded`] but binds serialized `cfg` config bytes at
+- pub `from_descriptor` function L182-184 — `(desc: &'static PluginDescriptor) -> Result<Self, LoadError>` — Create a CdylibExecutor from a plugin descriptor already registered in
+- pub `from_descriptor_with_config` function L189-217 — `( desc: &'static PluginDescriptor, cfg: &[u8], ) -> Result<Self, LoadError>` — Like [`Self::from_descriptor`] but constructs the instance from serialized
+- pub `find_in_process_descriptor` function L225-239 — `( plugin_name: &str, ) -> Result<&'static PluginDescriptor, LoadError>` — Look up a descriptor in the current process's inventory registry by
+- pub `call_method` function L257-277 — `( &self, index: usize, input: &I, ) -> Result<O, CallError>` — Call a plugin method by vtable index.
+- pub `call_method_raw` function L288-299 — `(&self, index: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Call a plugin method whose argument and successful return value are
+- pub `call_client_streaming_raw` function L575-659 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Client-streaming raw call (FIDIUS-I-0030 CS2.2).
+- pub `call_streaming_raw` function L758-812 — `( &self, index: usize, input_bytes: &[u8], decode_item: fn(&[u8]) -> Result<fidi...` — Start a server-streaming cdylib call (FIDIUS-I-0026 CS.1).
+- pub `call_bidi_streaming_raw` function L825-888 — `( &self, index: usize, handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,...` — Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): call a method whose
+- pub `has_capability` function L893-898 — `(&self, bit: u32) -> bool` — Check if an optional method is supported (capability bit is set).
+- pub `info` function L901-903 — `(&self) -> &PluginInfo` — Access the plugin's owned metadata.
+- pub `method_metadata` function L916-948 — `(&self, method_id: u32) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the given method via
+- pub `trait_metadata` function L954-975 — `(&self) -> Vec<(&str, &str)>` — Returns the static key/value metadata declared on the trait via
 -  `FfiFn` type L45 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut *mut u8, *mut u32) -> i...` — Type alias for the PluginAllocated FFI function pointer signature.
 -  `ArenaFn` type L48-49 — `= unsafe extern "C" fn(*mut c_void, *const u8, u32, *mut u8, u32, *mut u32, *mut...` — Type alias for the Arena FFI function pointer signature.
 -  `construct_instance` function L56-61 — `(descriptor: *const PluginDescriptor, cfg: &[u8]) -> *mut c_void` — Construct the plugin instance via the descriptor's `construct` (FIDIUS-A-0006).
@@ -1251,23 +1369,50 @@
 -  `CdylibExecutor` type L107 — `impl Sync for CdylibExecutor` — (and future WASM) backends.
 -  `CdylibExecutor` type L109-118 — `impl Drop for CdylibExecutor` — (and future WASM) backends.
 -  `drop` function L110-117 — `(&mut self)` — (and future WASM) backends.
--  `CdylibExecutor` type L120-957 — `= CdylibExecutor` — (and future WASM) backends.
+-  `CdylibExecutor` type L120-976 — `= CdylibExecutor` — (and future WASM) backends.
 -  `new` function L123-145 — `( library: Arc<Library>, vtable: *const c_void, descriptor: *const PluginDescrip...` — Create a new CdylibExecutor.
--  `call_plugin_allocated` function L292-373 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
--  `call_arena` function L379-466 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
--  `call_plugin_allocated_raw` function L471-552 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
--  `ClientStreamFn` type L576-583 — `= unsafe extern "C" fn( *mut c_void, *mut fidius_core::stream_ffi::FidiusStreamH...` — (and future WASM) backends.
--  `call_arena_raw` function L652-730 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
--  `ClientStreamFn` type L824-831 — `= unsafe extern "C" fn( *mut c_void, *mut fidius_core::stream_ffi::FidiusStreamH...` — (and future WASM) backends.
--  `CdylibExecutor` type L959-975 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
--  `info` function L960-962 — `(&self) -> &PluginInfo` — (and future WASM) backends.
--  `method_count` function L964-966 — `(&self) -> u32` — (and future WASM) backends.
--  `call_raw` function L972-974 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
--  `pump_stream_handle` function L986-1080 — `( out_ptr: *mut u8, decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallErr...` — Pump a returned `FidiusStreamHandle` into a [`crate::stream::ChunkStream`] on a
--  `STREAM_CHANNEL_CAP` variable L995 — `: usize` — Bounded backpressure/memory window between the pump thread and the async
--  `SendHandle` struct L999 — `-` — (and future WASM) backends.
--  `SendHandle` type L1000 — `impl Send for SendHandle` — (and future WASM) backends.
--  `INITIAL_ITEM_CAP` variable L1015 — `: usize` — (and future WASM) backends.
+-  `call_plugin_allocated` function L303-384 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — PluginAllocated path: plugin allocates an output buffer via
+-  `call_arena` function L390-477 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<O, CallError>` — Arena path: host supplies a buffer from the thread-local pool.
+-  `call_plugin_allocated_raw` function L482-563 — `( &self, index: usize, input_bytes: &[u8], ) -> Result<Vec<u8>, CallError>` — PluginAllocated raw path — same FFI shape as `call_plugin_allocated`,
+-  `ClientStreamFn` type L587-594 — `= unsafe extern "C" fn( *mut c_void, *mut fidius_core::stream_ffi::FidiusStreamH...` — (and future WASM) backends.
+-  `call_arena_raw` function L663-741 — `(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Arena raw path — same FFI shape as `call_arena`, success bytes
+-  `ClientStreamFn` type L839-846 — `= unsafe extern "C" fn( *mut c_void, *mut fidius_core::stream_ffi::FidiusStreamH...` — (and future WASM) backends.
+-  `CdylibExecutor` type L978-994 — `impl PluginExecutor for CdylibExecutor` — (and future WASM) backends.
+-  `info` function L979-981 — `(&self) -> &PluginInfo` — (and future WASM) backends.
+-  `method_count` function L983-985 — `(&self) -> u32` — (and future WASM) backends.
+-  `call_raw` function L991-993 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — Raw byte dispatch.
+-  `pump_stream_handle` function L1005-1106 — `( out_ptr: *mut u8, decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallErr...` — Pump a returned `FidiusStreamHandle` into a [`crate::stream::ChunkStream`] on a
+-  `STREAM_CHANNEL_CAP` variable L1015 — `: usize` — Bounded backpressure/memory window between the pump thread and the async
+-  `SendHandle` struct L1019 — `-` — (and future WASM) backends.
+-  `SendHandle` type L1020 — `impl Send for SendHandle` — (and future WASM) backends.
+-  `INITIAL_ITEM_CAP` variable L1041 — `: usize` — (and future WASM) backends.
+
+#### crates/fidius-host/src/executor/name_lookup.rs
+
+-  `PinState` struct L63-66 — `{ by_name: HashMap<String, Vec<IpAddr>>, by_ip: HashMap<IpAddr, String> }` — What this store's lookups pinned: both directions of `name ↔ IPs`.
+-  `PinState` type L68-92 — `= PinState` — upstream's implementation stands untouched.
+-  `record` function L71-85 — `(&mut self, name: &str, ips: &[IpAddr])` — Record one completed resolution of `name` (already lowercased) to
+-  `host_for` function L89-91 — `(&self, ip: &IpAddr) -> Option<String>` — The name this store's lookups most recently resolved to `ip`
+-  `PinTable` type L99 — `= Arc<Mutex<PinState>>` — Shared handle to a store's pins: one clone lives in `HostState` (feeding
+-  `Resolver` type L105 — `= Arc<dyn Fn(&str) -> std::io::Result<Vec<IpAddr>> + Send + Sync>` — The host-side resolution function.
+-  `default_resolver` function L107-109 — `() -> Resolver` — upstream's implementation stands untouched.
+-  `FidiusNameLookup` struct L112 — `-` — `HasData` marker for the shadowed instance (the `D` in `add_to_linker`).
+-  `FidiusNameLookup` type L114-116 — `impl HasData for FidiusNameLookup` — upstream's implementation stands untouched.
+-  `Data` type L115 — `= NameLookupView<'a>` — upstream's implementation stands untouched.
+-  `NameLookupView` struct L122-127 — `{ table: &'a mut ResourceTable, pins: &'a PinTable, policy: Option<&'a Arc<dyn E...` — Per-call view the bindgen host traits run against: the store's own
+-  `convert_error_code` function L134-136 — `(&mut self, error: SocketError) -> wasmtime::Result<ErrorCode>` — upstream's implementation stands untouched.
+-  `network_error_code` function L138-147 — `( &mut self, err: Resource<wasmtime::Error>, ) -> wasmtime::Result<Option<ErrorC...` — upstream's implementation stands untouched.
+-  `drop` function L151-154 — `(&mut self, this: Resource<Network>) -> wasmtime::Result<()>` — upstream's implementation stands untouched.
+-  `resolve_addresses` function L158-209 — `( &mut self, network: Resource<Network>, name: String, ) -> Result<Resource<Reso...` — upstream's implementation stands untouched.
+-  `resolve_next_address` function L215-235 — `( &mut self, resource: Resource<ResolveAddressStream>, ) -> Result<Option<IpAddr...` — upstream's implementation stands untouched.
+-  `subscribe` function L237-242 — `( &mut self, resource: Resource<ResolveAddressStream>, ) -> wasmtime::Result<Res...` — upstream's implementation stands untouched.
+-  `drop` function L244-247 — `(&mut self, resource: Resource<ResolveAddressStream>) -> wasmtime::Result<()>` — upstream's implementation stands untouched.
+-  `tests` module L251-314 — `-` — upstream's implementation stands untouched.
+-  `ip` function L254-256 — `(s: &str) -> IpAddr` — upstream's implementation stands untouched.
+-  `record_and_lookup` function L259-271 — `()` — upstream's implementation stands untouched.
+-  `re_resolve_replaces_wholesale` function L274-284 — `()` — upstream's implementation stands untouched.
+-  `ip_collision_most_recent_wins_without_clobbering_on_stale_removal` function L287-306 — `()` — upstream's implementation stands untouched.
+-  `default_resolver_resolves_localhost` function L309-313 — `()` — upstream's implementation stands untouched.
 
 #### crates/fidius-host/src/executor/python.rs
 
@@ -1290,92 +1435,110 @@
 
 #### crates/fidius-host/src/executor/wasm.rs
 
-- pub `EgressDenied` struct L57-61 — `{ reason: String }` — Denial returned by an [`EgressPolicy`] to refuse an outbound request.
-- pub `new` function L65-69 — `(reason: impl Into<String>) -> Self` — A denial with a reason.
-- pub `EgressPolicy` interface L85-130 — `{ fn authorize(), fn authorize_tcp(), fn authorize_udp() }` — Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP**
-- pub `WasmMethod` struct L524-532 — `{ name: String, wire_raw: bool, streaming: bool }` — A method on the WASM interface, in declaration (vtable) order.
-- pub `WasmComponentExecutor` struct L535-564 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
-- pub `from_component_bytes` function L575-583 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
-- pub `from_component_bytes_with_egress` function L588-611 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
-- pub `from_cwasm` function L619-627 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
-- pub `from_cwasm_with_egress` function L635-658 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
-- pub `configure` function L753-771 — `(&mut self, cfg: &[u8]) -> Result<(), CallError>` — Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
-- pub `call_client_streaming` function L778-826 — `( &self, method: usize, producer: Box<dyn Iterator<Item = Vec<u8>> + Send>, args...` — Client-streaming (FIDIUS-I-0030 CS2.3): call a method whose `Stream<T>`
-- pub `call_bidi_streaming` function L834-842 — `( &self, method: usize, producer: Box<dyn Iterator<Item = Vec<u8>> + Send>, args...` — Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): the host produces `producer`
-- pub `interface_hash` function L937-953 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
-- pub `validate_component` function L1471-1479 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
-- pub `precompile_component` function L1485-1493 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
--  `EgressDenied` type L63-70 — `= EgressDenied` — from the package manifest's allow-list.
--  `authorize_tcp` function L108-110 — `(&self, _addr: &SocketAddr) -> Result<(), EgressDenied>` — Authorize one outbound **TCP** connection before `connect` (FIDIUS-I-0033).
--  `authorize_udp` function L127-129 — `(&self, _addr: &SocketAddr) -> Result<(), EgressDenied>` — Authorize one outbound **UDP** datagram before it leaves (FIDIUS-I-0033) —
--  `EgressHooks` struct L137-139 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
--  `EgressHooks` type L141-161 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
--  `send_request` function L142-160 — `( &mut self, request: http::Request<HyperOutgoingBody>, config: OutgoingRequestC...` — from the package manifest's allow-list.
--  `HostState` struct L166-175 — `{ ctx: WasiCtx, table: ResourceTable, http_ctx: WasiHttpCtx, hooks: EgressHooks,...` — Per-store host state.
--  `HostState` type L177-185 — `impl WasiHttpView for HostState` — from the package manifest's allow-list.
--  `http` function L178-184 — `(&mut self) -> WasiHttpCtxView<'_>` — from the package manifest's allow-list.
--  `KNOWN_CAPABILITIES` variable L193-213 — `: &[&str]` — Capabilities the host knows how to grant.
--  `validate_capabilities` function L217-299 — `(caps: &[String]) -> Result<(), CallError>` — Reject unknown capability names early (at load) so a typo fails closed and
--  `build_wasi_ctx` function L305-436 — `(caps: &[String], egress: Option<Arc<dyn EgressPolicy>>) -> WasiCtx` — Build a `WasiCtx` from the allow-list.
--  `is_blocked_ip` function L443-462 — `(ip: &IpAddr) -> bool` — Baseline SSRF denylist for the raw-socket grant (FIDIUS-T-0143): an address a
--  `HOST_WASI_HTTP` variable L467 — `: (u32, u32, u32)` — The `wasi:http` version this host provides — matched to `wasmtime-wasi-http`
--  `wasi_http_incompatibility` function L479-509 — `(import_names: impl Iterator<Item = &'a str>) -> Option<String>` — Scan a component's import names for a `wasi:http` version this host can't
--  `HostState` type L513-520 — `impl WasiView for HostState` — from the package manifest's allow-list.
--  `ctx` function L514-519 — `(&mut self) -> WasiCtxView<'_>` — from the package manifest's allow-list.
--  `ConfiguredStore` struct L567-570 — `{ store: Store<HostState>, instance: wasmtime::component::Instance }` — A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
--  `WasmComponentExecutor` type L572-954 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `build` function L662-747 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
--  `with_store` function L846-861 — `( &self, f: impl FnOnce(&mut Store<HostState>, &wasmtime::component::Instance) -...` — Run `f` with a `(store, instance)`: the persistent configured store if
--  `instantiate` function L866-885 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
--  `func` function L888-915 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
--  `method` function L917-933 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L956-991 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `info` function L957-959 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
--  `method_count` function L961-963 — `(&self) -> u32` — from the package manifest's allow-list.
--  `call_raw` function L965-990 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L993-1038 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
--  `call` function L994-1037 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
--  `STREAM_CHANNEL_CAP` variable L1044 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
--  `WasmComponentExecutor` type L1048-1056 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `call_streaming` function L1049-1055 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
--  `WasmComponentExecutor` type L1058-1191 — `= WasmComponentExecutor` — from the package manifest's allow-list.
--  `stream_with_producer` function L1065-1190 — `( &self, method: usize, args: Value, producer: Option<Box<dyn Iterator<Item = Ve...` — Shared server-streaming / bidirectional output pump.
--  `plugin_error_from_val` function L1195-1221 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
--  `to_kebab` function L1226-1241 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
--  `kebab_to_snake` function L1244-1246 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
--  `kebab_to_pascal` function L1249-1259 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
--  `value_to_val` function L1261-1309 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
--  `value_to_val_typed` function L1316-1420 — `(v: &Value, ty: &wasmtime::component::Type) -> Result<Val, CallError>` — Type-directed lowering for the **argument** path.
--  `val_to_value` function L1423-1461 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
--  `ssrf_tests` module L1496-1534 — `-` — from the package manifest's allow-list.
--  `ip` function L1500-1502 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
--  `blocks_internal_and_metadata_targets` function L1505-1521 — `()` — from the package manifest's allow-list.
--  `allows_public_targets` function L1524-1533 — `()` — from the package manifest's allow-list.
--  `fs_capability_tests` module L1537-1576 — `-` — from the package manifest's allow-list.
--  `msg` function L1540-1545 — `(r: Result<(), CallError>) -> String` — from the package manifest's allow-list.
--  `path_scoped_fs_grants_are_accepted` function L1548-1553 — `()` — from the package manifest's allow-list.
--  `bare_filesystem_is_rejected` function L1556-1560 — `()` — from the package manifest's allow-list.
--  `fs_grant_without_a_path_is_rejected` function L1563-1566 — `()` — from the package manifest's allow-list.
--  `build_wasi_ctx_with_an_fs_grant_does_not_panic` function L1569-1575 — `()` — from the package manifest's allow-list.
--  `tcp_egress_tests` module L1579-1683 — `-` — from the package manifest's allow-list.
--  `AllowOnePort` struct L1585 — `-` — A reference embedder policy: allow TCP to one allow-listed `host:port`
--  `AllowOnePort` type L1586-1597 — `impl EgressPolicy for AllowOnePort` — from the package manifest's allow-list.
--  `authorize` function L1587-1589 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
--  `authorize_tcp` function L1590-1596 — `(&self, addr: &SocketAddr) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
--  `tcp_is_a_known_capability` function L1600-1603 — `()` — from the package manifest's allow-list.
--  `udp_is_a_known_capability` function L1606-1610 — `()` — from the package manifest's allow-list.
--  `policy_egress_and_network_are_mutually_exclusive` function L1613-1639 — `()` — from the package manifest's allow-list.
--  `default_authorize_tcp_and_udp_deny` function L1642-1654 — `()` — from the package manifest's allow-list.
--  `HttpOnly` struct L1645 — `-` — from the package manifest's allow-list.
--  `HttpOnly` type L1646-1650 — `impl EgressPolicy for HttpOnly` — from the package manifest's allow-list.
--  `authorize` function L1647-1649 — `(&self, _p: &mut http::request::Parts) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
--  `tcp_grant_with_policy_builds_a_ctx` function L1657-1664 — `()` — from the package manifest's allow-list.
--  `tcp_grant_without_policy_builds_a_ctx` function L1667-1671 — `()` — from the package manifest's allow-list.
--  `udp_and_combined_grants_build_a_ctx` function L1674-1682 — `()` — from the package manifest's allow-list.
--  `wasi_http_version_tests` module L1686-1721 — `-` — from the package manifest's allow-list.
--  `host_matched_version_is_compatible` function L1690-1696 — `()` — from the package manifest's allow-list.
--  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L1699-1711 — `()` — from the package manifest's allow-list.
--  `no_wasi_http_import_is_fine` function L1714-1720 — `()` — from the package manifest's allow-list.
+- pub `EgressDenied` struct L61-65 — `{ reason: String }` — Denial returned by an [`EgressPolicy`] to refuse an outbound request.
+- pub `new` function L69-73 — `(reason: impl Into<String>) -> Self` — A denial with a reason.
+- pub `TcpTarget` struct L95-105 — `{ host: Option<&'a str>, addr: SocketAddr }` — Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP**
+- pub `EgressPolicy` interface L107-188 — `{ fn authorize(), fn authorize_tcp(), fn authorize_tcp_target(), fn authorize_dn...` — from the package manifest's allow-list.
+- pub `WasmMethod` struct L686-694 — `{ name: String, wire_raw: bool, streaming: bool }` — A method on the WASM interface, in declaration (vtable) order.
+- pub `WasmComponentExecutor` struct L697-734 — `{ engine: Engine, instance_pre: InstancePre<HostState>, interface: String, metho...` — WASM component execution backend.
+- pub `from_component_bytes` function L745-753 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build an executor from raw component bytes (a `.wasm` component).
+- pub `from_component_bytes_with_egress` function L758-781 — `( bytes: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_component_bytes`] but with an embedder [`EgressPolicy`]
+- pub `from_cwasm` function L789-797 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Build from a precompiled `.cwasm` (engine/version-specific).
+- pub `from_cwasm_with_egress` function L805-828 — `( cwasm: &[u8], interface: String, methods: Vec<WasmMethod>, capabilities: Vec<S...` — Like [`Self::from_cwasm`] but with an embedder [`EgressPolicy`]
+- pub `set_resolver` function L1012-1017 — `( &mut self, resolver: Arc<dyn Fn(&str) -> std::io::Result<Vec<IpAddr>> + Send +...` — Replace the host-side resolver behind the shadowed `ip-name-lookup`
+- pub `bind_host_table` function L1031-1063 — `( &self, table: *const fidius_core::host_ffi::HostFunctionTable, ) -> Result<(),...` — Bind a host-function table (plugin → host callback channel) to this
+- pub `configure` function L1069-1087 — `(&mut self, cfg: &[u8]) -> Result<(), CallError>` — Bind config once (FIDIUS-A-0006 / CI.3): instantiate a *persistent* store,
+- pub `call_client_streaming` function L1094-1142 — `( &self, method: usize, producer: Box<dyn Iterator<Item = Vec<u8>> + Send>, args...` — Client-streaming (FIDIUS-I-0030 CS2.3): call a method whose `Stream<T>`
+- pub `call_bidi_streaming` function L1150-1158 — `( &self, method: usize, producer: Box<dyn Iterator<Item = Vec<u8>> + Send>, args...` — Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): the host produces `producer`
+- pub `interface_hash` function L1262-1278 — `(&self) -> Result<u64, CallError>` — Call the `fidius-interface-hash` export — the integrity check the loader
+- pub `validate_component` function L1796-1804 — `(bytes: &[u8]) -> Result<(), CallError>` — Validate that `bytes` is a well-formed WASM **component** (Component Model),
+- pub `precompile_component` function L1810-1818 — `(bytes: &[u8]) -> Result<Vec<u8>, CallError>` — Ahead-of-time compile a component into engine/version-specific `.cwasm`
+-  `EgressDenied` type L67-74 — `= EgressDenied` — from the package manifest's allow-list.
+-  `authorize_tcp` function L131-133 — `(&self, _addr: &SocketAddr) -> Result<(), EgressDenied>` — Authorize one outbound **TCP** connection before `connect` (FIDIUS-I-0033).
+-  `authorize_tcp_target` function L150-152 — `(&self, target: &TcpTarget<'_>) -> Result<(), EgressDenied>` — Name-aware TCP authorization (FIDIUS-I-0034): like
+-  `authorize_dns` function L166-168 — `(&self, _name: &str) -> Result<(), EgressDenied>` — Authorize one guest DNS lookup, **before** resolution (FIDIUS-I-0034).
+-  `authorize_udp` function L185-187 — `(&self, _addr: &SocketAddr) -> Result<(), EgressDenied>` — Authorize one outbound **UDP** datagram before it leaves (FIDIUS-I-0033) —
+-  `EgressHooks` struct L195-197 — `{ policy: Option<Arc<dyn EgressPolicy>> }` — fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
+-  `EgressHooks` type L199-219 — `impl WasiHttpHooks for EgressHooks` — from the package manifest's allow-list.
+-  `send_request` function L200-218 — `( &mut self, request: http::Request<HyperOutgoingBody>, config: OutgoingRequestC...` — from the package manifest's allow-list.
+-  `HostState` struct L224-246 — `{ ctx: WasiCtx, table: ResourceTable, http_ctx: WasiHttpCtx, hooks: EgressHooks,...` — Per-store host state.
+-  `name_lookup_view` function L251-258 — `(state: &mut HostState) -> NameLookupView<'_>` — Accessor handed to `ip_name_lookup::add_to_linker` for the shadowed
+-  `HostTables` type L262 — `= Arc<std::sync::RwLock<std::collections::HashMap<String, HostTableRef>>>` — The executor-wide registry of bound host-function tables, keyed by
+-  `HostTableRef` struct L268 — `-` — A `Send + Sync` wrapper for a bound, process-lifetime
+-  `HostTableRef` type L273 — `impl Send for HostTableRef` — from the package manifest's allow-list.
+-  `HostTableRef` type L274 — `impl Sync for HostTableRef` — from the package manifest's allow-list.
+-  `dispatch_host_table` function L279-310 — `( table: &fidius_core::host_ffi::HostFunctionTable, index: u32, args: &[u8], ) -...` — Run one host-function dispatch through a bound table and return the raw
+-  `HostState` type L312-320 — `impl WasiHttpView for HostState` — from the package manifest's allow-list.
+-  `http` function L313-319 — `(&mut self) -> WasiHttpCtxView<'_>` — from the package manifest's allow-list.
+-  `KNOWN_CAPABILITIES` variable L328-348 — `: &[&str]` — Capabilities the host knows how to grant.
+-  `validate_capabilities` function L352-434 — `(caps: &[String]) -> Result<(), CallError>` — Reject unknown capability names early (at load) so a typo fails closed and
+-  `build_wasi_ctx` function L444-593 — `( caps: &[String], egress: Option<Arc<dyn EgressPolicy>>, pins: PinTable, ) -> W...` — Build a `WasiCtx` from the allow-list.
+-  `is_blocked_ip` function L600-619 — `(ip: &IpAddr) -> bool` — Baseline SSRF denylist for the raw-socket grant (FIDIUS-T-0143): an address a
+-  `HOST_WASI_HTTP` variable L629 — `: (u32, u32, u32)` — The `wasi:http` version this host provides — what `wasmtime-wasi-http`
+-  `wasi_http_incompatibility` function L641-671 — `(import_names: impl Iterator<Item = &'a str>) -> Option<String>` — Scan a component's import names for a `wasi:http` version this host can't
+-  `HostState` type L675-682 — `impl WasiView for HostState` — from the package manifest's allow-list.
+-  `ctx` function L676-681 — `(&mut self) -> WasiCtxView<'_>` — from the package manifest's allow-list.
+-  `ConfiguredStore` struct L737-740 — `{ store: Store<HostState>, instance: wasmtime::component::Instance }` — A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
+-  `WasmComponentExecutor` type L742-1279 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `build` function L832-1004 — `( engine: Engine, component: &Component, interface: String, methods: Vec<WasmMet...` — Shared constructor: wire WASI into a `Linker` and pre-instantiate the
+-  `with_store` function L1162-1177 — `( &self, f: impl FnOnce(&mut Store<HostState>, &wasmtime::component::Instance) -...` — Run `f` with a `(store, instance)`: the persistent configured store if
+-  `instantiate` function L1182-1210 — `(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError>` — Instantiate a fresh sandboxed `Store` + component instance from the cached
+-  `func` function L1213-1240 — `( &self, store: &mut Store<HostState>, instance: &wasmtime::component::Instance,...` — Resolve an exported function within the plugin's interface by name.
+-  `method` function L1242-1258 — `(&self, index: usize, want_raw: bool) -> Result<&WasmMethod, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L1281-1316 — `impl PluginExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `info` function L1282-1284 — `(&self) -> &PluginInfo` — from the package manifest's allow-list.
+-  `method_count` function L1286-1288 — `(&self) -> u32` — from the package manifest's allow-list.
+-  `call_raw` function L1290-1315 — `(&self, method: usize, input: &[u8]) -> Result<Vec<u8>, CallError>` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L1318-1363 — `impl ValueExecutor for WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call` function L1319-1362 — `(&self, method: usize, args: Value) -> Result<Value, CallError>` — from the package manifest's allow-list.
+-  `STREAM_CHANNEL_CAP` variable L1369 — `: usize` — Bounded channel depth between the wasmtime pump thread and the async
+-  `WasmComponentExecutor` type L1373-1381 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `call_streaming` function L1374-1380 — `( &self, method: usize, args: Value, ) -> Result<crate::stream::ChunkStream, Cal...` — from the package manifest's allow-list.
+-  `WasmComponentExecutor` type L1383-1516 — `= WasmComponentExecutor` — from the package manifest's allow-list.
+-  `stream_with_producer` function L1390-1515 — `( &self, method: usize, args: Value, producer: Option<Box<dyn Iterator<Item = Ve...` — Shared server-streaming / bidirectional output pump.
+-  `plugin_error_from_val` function L1520-1546 — `(payload: Option<&Val>) -> CallError` — Map a `result::err` payload (expected: a record with `code`/`message`/
+-  `to_kebab` function L1551-1566 — `(s: &str) -> String` — fidius `Value` → wasmtime `Val`.
+-  `kebab_to_snake` function L1569-1571 — `(s: &str) -> String` — kebab-case → snake_case (WIT record field → serde struct field).
+-  `kebab_to_pascal` function L1574-1584 — `(s: &str) -> String` — kebab-case → PascalCase (WIT variant case → serde enum variant).
+-  `value_to_val` function L1586-1634 — `(v: &Value) -> Result<Val, CallError>` — from the package manifest's allow-list.
+-  `value_to_val_typed` function L1641-1745 — `(v: &Value, ty: &wasmtime::component::Type) -> Result<Val, CallError>` — Type-directed lowering for the **argument** path.
+-  `val_to_value` function L1748-1786 — `(v: &Val) -> Value` — wasmtime `Val` → fidius `Value` (structural; self-describing).
+-  `ssrf_tests` module L1821-1859 — `-` — from the package manifest's allow-list.
+-  `ip` function L1825-1827 — `(s: &str) -> IpAddr` — from the package manifest's allow-list.
+-  `blocks_internal_and_metadata_targets` function L1830-1846 — `()` — from the package manifest's allow-list.
+-  `allows_public_targets` function L1849-1858 — `()` — from the package manifest's allow-list.
+-  `fs_capability_tests` module L1862-1901 — `-` — from the package manifest's allow-list.
+-  `msg` function L1865-1870 — `(r: Result<(), CallError>) -> String` — from the package manifest's allow-list.
+-  `path_scoped_fs_grants_are_accepted` function L1873-1878 — `()` — from the package manifest's allow-list.
+-  `bare_filesystem_is_rejected` function L1881-1885 — `()` — from the package manifest's allow-list.
+-  `fs_grant_without_a_path_is_rejected` function L1888-1891 — `()` — from the package manifest's allow-list.
+-  `build_wasi_ctx_with_an_fs_grant_does_not_panic` function L1894-1900 — `()` — from the package manifest's allow-list.
+-  `tcp_egress_tests` module L1904-2012 — `-` — from the package manifest's allow-list.
+-  `AllowOnePort` struct L1910 — `-` — A reference embedder policy: allow TCP to one allow-listed `host:port`
+-  `AllowOnePort` type L1911-1922 — `impl EgressPolicy for AllowOnePort` — from the package manifest's allow-list.
+-  `authorize` function L1912-1914 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
+-  `authorize_tcp` function L1915-1921 — `(&self, addr: &SocketAddr) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
+-  `tcp_is_a_known_capability` function L1925-1928 — `()` — from the package manifest's allow-list.
+-  `udp_is_a_known_capability` function L1931-1935 — `()` — from the package manifest's allow-list.
+-  `policy_egress_and_network_are_mutually_exclusive` function L1938-1964 — `()` — from the package manifest's allow-list.
+-  `default_authorize_tcp_and_udp_deny` function L1967-1979 — `()` — from the package manifest's allow-list.
+-  `HttpOnly` struct L1970 — `-` — from the package manifest's allow-list.
+-  `HttpOnly` type L1971-1975 — `impl EgressPolicy for HttpOnly` — from the package manifest's allow-list.
+-  `authorize` function L1972-1974 — `(&self, _p: &mut http::request::Parts) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
+-  `tcp_grant_with_policy_builds_a_ctx` function L1982-1989 — `()` — from the package manifest's allow-list.
+-  `tcp_grant_without_policy_builds_a_ctx` function L1992-1996 — `()` — from the package manifest's allow-list.
+-  `udp_and_combined_grants_build_a_ctx` function L1999-2011 — `()` — from the package manifest's allow-list.
+-  `wasi_http_version_tests` module L2015-2059 — `-` — from the package manifest's allow-list.
+-  `host_matched_version_is_compatible` function L2019-2034 — `()` — from the package manifest's allow-list.
+-  `newer_minor_or_patch_is_rejected_with_a_clear_message` function L2037-2049 — `()` — from the package manifest's allow-list.
+-  `no_wasi_http_import_is_fine` function L2052-2058 — `()` — from the package manifest's allow-list.
+-  `egress_policy_tests` module L2062-2118 — `-` — from the package manifest's allow-list.
+-  `LegacyLoopbackOnly` struct L2067 — `-` — A policy written before FIDIUS-I-0034: overrides ONLY `authorize_tcp`.
+-  `LegacyLoopbackOnly` type L2068-2079 — `impl EgressPolicy for LegacyLoopbackOnly` — from the package manifest's allow-list.
+-  `authorize` function L2069-2071 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
+-  `authorize_tcp` function L2072-2078 — `(&self, addr: &SocketAddr) -> Result<(), EgressDenied>` — from the package manifest's allow-list.
+-  `authorize_tcp_target_default_delegates_to_authorize_tcp` function L2082-2108 — `()` — from the package manifest's allow-list.
+-  `authorize_dns_defaults_to_allow` function L2111-2117 — `()` — from the package manifest's allow-list.
 
 ### crates/fidius-host/tests
 
@@ -1417,6 +1580,13 @@
 -  `cdylib_stream_yields_all_items` function L46-57 — `()` — streaming peer alongside Python and WASM.
 -  `cdylib_empty_stream` function L60-67 — `()` — streaming peer alongside Python and WASM.
 -  `cdylib_huge_stream_is_bounded_and_cancellable` function L70-84 — `()` — streaming peer alongside Python and WASM.
+
+#### crates/fidius-host/tests/configured_cdylib_dynamic_e2e.rs
+
+-  `GreetConfig` struct L30-32 — `{ greeting: String }` — configured provider cdylib at runtime and bind its config once.
+-  `smoke_host` function L35-44 — `() -> PluginHost` — Build the smoke dylib and return a host whose search path finds it.
+-  `dynamic_cdylib_binds_config_at_load` function L47-63 — `()` — configured provider cdylib at runtime and bind its config once.
+-  `n_dynamically_configured_instances_coexist` function L66-87 — `()` — configured provider cdylib at runtime and bind its config once.
 
 #### crates/fidius-host/tests/configured_cdylib_e2e.rs
 
@@ -1493,6 +1663,89 @@
 -  `AddOutput` struct L139-141 — `{ result: i64 }` — End-to-end validation tests: signing, negative cases.
 -  `lenient_policy_still_enforces_signatures` function L151-172 — `()` — End-to-end validation tests: signing, negative cases.
 -  `lenient_policy_still_rejects_wrong_key` function L176-197 — `()` — End-to-end validation tests: signing, negative cases.
+
+#### crates/fidius-host/tests/host_functions_e2e.rs
+
+-  `plugin_source_dir` function L40-42 — `() -> PathBuf` — therefore a separate process with its own dylib load.
+-  `RecordingHost` struct L47-52 — `{ calls: Mutex<Vec<(String, std::thread::ThreadId)>>, reclaims: AtomicU32 }` — Recording host implementation.
+-  `RecordingHost` type L54-66 — `= RecordingHost` — therefore a separate process with its own dylib load.
+-  `record` function L55-62 — `(&self, entry: impl Into<String>)` — therefore a separate process with its own dylib load.
+-  `calls` function L63-65 — `(&self) -> Vec<(String, std::thread::ThreadId)>` — therefore a separate process with its own dylib load.
+-  `RecordingHost` type L68-95 — `impl TestHost for RecordingHost` — therefore a separate process with its own dylib load.
+-  `release_slot` function L69-80 — `(&self, task_id: String) -> Result<(), PluginError>` — therefore a separate process with its own dylib load.
+-  `reclaim_slot` function L82-85 — `(&self, task_id: String) -> Result<u32, PluginError>` — therefore a separate process with its own dylib load.
+-  `get_value` function L87-90 — `(&self, key: String) -> String` — therefore a separate process with its own dylib load.
+-  `panicky` function L92-94 — `(&self) -> u32` — therefore a separate process with its own dylib load.
+-  `bound_plugin` function L98-127 — `() -> &'static (PluginHandle, Arc<RecordingHost>)` — One shared loaded-plugin + bound-host state for the whole test binary.
+-  `STATE` variable L99 — `: OnceLock<(PluginHandle, Arc<RecordingHost>)>` — therefore a separate process with its own dylib load.
+-  `reentrant_host_plugin_host_roundtrip` function L130-157 — `()` — therefore a separate process with its own dylib load.
+-  `host_error_arrives_typed_in_the_plugin` function L160-178 — `()` — therefore a separate process with its own dylib load.
+-  `host_panic_surfaces_as_typed_error_not_unwinding` function L181-190 — `()` — therefore a separate process with its own dylib load.
+-  `plugin_panic_after_callback_surfaces_as_call_error` function L193-202 — `()` — therefore a separate process with its own dylib load.
+-  `callbacks_work_from_plugin_spawned_threads` function L205-211 — `()` — therefore a separate process with its own dylib load.
+-  `plugin_reports_interface_bound` function L214-220 — `()` — therefore a separate process with its own dylib load.
+-  `second_bind_fails_loudly_without_disturbing_the_first` function L223-244 — `()` — therefore a separate process with its own dylib load.
+-  `version_mismatch_fails_at_bind_and_never_builds_a_table` function L247-275 — `()` — therefore a separate process with its own dylib load.
+-  `signature_drift_fails_at_bind_and_never_builds_a_table` function L278-299 — `()` — therefore a separate process with its own dylib load.
+-  `binding_an_undeclared_interface_is_a_clean_no` function L302-316 — `()` — therefore a separate process with its own dylib load.
+
+#### crates/fidius-host/tests/host_functions_in_process.rs
+
+-  `CountingHost` struct L33-35 — `{ reclaims: AtomicU32 }` — host-function test binaries.
+-  `CountingHost` type L37-50 — `impl TestHost for CountingHost` — host-function test binaries.
+-  `release_slot` function L38-40 — `(&self, _task_id: String) -> Result<(), PluginError>` — host-function test binaries.
+-  `reclaim_slot` function L41-43 — `(&self, _task_id: String) -> Result<u32, PluginError>` — host-function test binaries.
+-  `get_value` function L44-46 — `(&self, key: String) -> String` — host-function test binaries.
+-  `panicky` function L47-49 — `(&self) -> u32` — host-function test binaries.
+-  `doctored_tables_are_rejected_by_the_plugin_shim` function L56-89 — `()` — A doctored table must be rejected by the plugin-side bind shim before
+-  `in_process_bind_and_reentrant_call` function L92-114 — `()` — host-function test binaries.
+
+#### crates/fidius-host/tests/host_functions_unbound.rs
+
+-  `hostcall_plugin_dir` function L29-31 — `() -> PathBuf` — process in which `TestHost` was **never** bound.
+-  `smoke_plugin_dir` function L33-35 — `() -> PathBuf` — process in which `TestHost` was **never** bound.
+-  `unbound_host_interface_is_a_typed_error_not_a_crash` function L38-61 — `()` — process in which `TestHost` was **never** bound.
+-  `plugin_without_host_interfaces_loads_and_runs_unchanged` function L64-95 — `()` — process in which `TestHost` was **never** bound.
+
+#### crates/fidius-host/tests/hostname_egress_e2e.rs
+
+-  `IFACE` variable L37 — `: &str` — IP literals.
+-  `tcp_echo_component` function L41-60 — `() -> Option<Vec<u8>>` — IP literals.
+-  `BYTES` variable L42 — `: OnceLock<Option<Vec<u8>>>` — IP literals.
+-  `mock_tcp_echo_once` function L62-64 — `(n: usize) -> (u16, std::thread::JoinHandle<()>)` — IP literals.
+-  `mock_tcp_echo_once_on` function L69-82 — `(host: &str, n: usize) -> (u16, std::thread::JoinHandle<()>)` — Like `mock_tcp_echo_once`, but bound to a chosen loopback flavor — the
+-  `NameAllowList` struct L88-92 — `{ allowed: Vec<String>, seen: Arc<Mutex<Vec<(Option<String>, SocketAddr)>>>, den...` — What the check handed the policy, recorded for assertions: the future
+-  `NameAllowList` type L94-102 — `= NameAllowList` — IP literals.
+-  `new` function L95-101 — `(allowed: &[&str]) -> Self` — IP literals.
+-  `NameAllowList` type L104-127 — `impl EgressPolicy for NameAllowList` — IP literals.
+-  `authorize` function L105-107 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — IP literals.
+-  `authorize_tcp_target` function L111-120 — `(&self, target: &TcpTarget<'_>) -> Result<(), EgressDenied>` — IP literals.
+-  `authorize_dns` function L121-126 — `(&self, name: &str) -> Result<(), EgressDenied>` — IP literals.
+-  `TestResolver` type L131 — `= Arc<dyn Fn(&str) -> std::io::Result<Vec<IpAddr>> + Send + Sync>` — The executor's `#[doc(hidden)]` resolver seam — tests inject one to model
+-  `CONNECT_AND_ECHO` variable L134 — `: usize` — Method indices, in the order `load_with` declares them.
+-  `CONNECT_SEQ` variable L135 — `: usize` — IP literals.
+-  `load` function L137-139 — `(policy: Arc<dyn EgressPolicy>) -> PluginHandle` — IP literals.
+-  `load_with` function L141-177 — `(policy: Arc<dyn EgressPolicy>, resolver: Option<TestResolver>) -> PluginHandle` — IP literals.
+-  `hostname_dial_reaches_policy_with_name_and_echoes` function L186-208 — `()` — Production path, initiative acceptance criterion 1 (hostname half): a guest
+-  `ip_literal_dial_reaches_policy_as_none_and_is_denied` function L214-234 — `()` — Production path, criterion 1 (IP half) + pin correctness: an IP-literal
+-  `authorize_dns_denial_fails_lookup_before_connect` function L240-258 — `()` — `authorize_dns` denial: the guest's lookup fails before resolution — the
+-  `LegacyLoopbackOnly` struct L264 — `-` — Default delegation, e2e flavor (initiative criterion 2): a pre-0034 policy
+-  `LegacyLoopbackOnly` type L265-276 — `impl EgressPolicy for LegacyLoopbackOnly` — IP literals.
+-  `authorize` function L266-268 — `(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied>` — IP literals.
+-  `authorize_tcp` function L269-275 — `(&self, addr: &SocketAddr) -> Result<(), EgressDenied>` — IP literals.
+-  `legacy_policy_hostname_dial_unchanged` function L279-298 — `()` — IP literals.
+-  `map_resolver` function L301-316 — `(entries: &[(&str, IpAddr)]) -> TestResolver` — A resolver mapping fixed names to fixed IPs — the injected stand-in for DNS.
+-  `same_ip_second_name_denied_unless_listed` function L323-359 — `()` — Pin correctness, not IP fallthrough (initiative criterion 3): two names
+-  `unlisted_name_denied` function L364-385 — `()` — Unlisted name → denied (criterion 3, simple half): no allow-list entry, no
+-  `literal_dial_to_pinned_ip_is_attributed_to_the_name` function L393-421 — `()` — Pin attribution: after `db.internal` resolves to an IP, a LITERAL dial to
+-  `rotation_replaces_pin_and_stale_ip_loses_authority` function L431-490 — `()` — Rotation / resident lifetime (initiative criterion 4): within ONE store,
+-  `mixed_case_dial_matches_lowercase_allow_list` function L496-523 — `()` — Case-insensitivity (DNS is case-insensitive): the guest dials
+-  `unresolvable_name_fails_lookup_without_reaching_policy` function L528-552 — `()` — Unresolvable name: the resolver has no entry → the guest's lookup fails,
+-  `multi_ip_resolution_pins_all_candidates` function L558-599 — `()` — Multi-address resolution: a name resolving to several IPs pins ALL of
+-  `configured_instance_pins_persist_and_rotate_across_calls` function L607-715 — `()` — The REAL resident-instance path (initiative criterion 4, production
+-  `builder_path_hostname_dial_authorized_by_name` function L725-792 — `()` — The ergonomic embedder path — `PluginHost::builder().egress(..)` +
+-  `TCP_METHODS` variable L733-737 — `: [WasmMethodDesc; 1]` — IP literals.
+-  `TCP_ECHO` variable L738-743 — `: WasmInterfaceDescriptor` — IP literals.
 
 #### crates/fidius-host/tests/integration.rs
 
@@ -1808,6 +2061,43 @@
 -  `no_grant_denies_all_io` function L128-142 — `()` — permits reads but denies writes.
 -  `ro_grant_allows_read_but_denies_write` function L145-165 — `()` — permits reads but denies writes.
 
+#### crates/fidius-host/tests/wasm_grants_e2e.rs
+
+- pub `ConfiguredFs` interface L47-49 — `{ fn read_file() }` — the manifest caps go through (the override is not a trust bypass).
+-  `Cfg` struct L40-42 — `{ suffix: String }` — the manifest caps go through (the override is not a trust bypass).
+-  `READ_FILE` variable L51 — `: usize` — the manifest caps go through (the override is not a trust bypass).
+-  `component` function L53-67 — `() -> &'static [u8]` — the manifest caps go through (the override is not a trust bypass).
+-  `BYTES` variable L54 — `: OnceLock<Vec<u8>>` — the manifest caps go through (the override is not a trust bypass).
+-  `stage_pkg` function L72-106 — `(root: &Path, manifest_caps: &[String])` — Stage a `runtime = "wasm"` package whose manifest carries `manifest_caps`.
+-  `host_for` function L108-116 — `(manifest_caps: &[String]) -> (tempfile::TempDir, PluginHost)` — the manifest caps go through (the override is not a trust bypass).
+-  `load_time_grant_overrides_empty_manifest_and_config_is_bound` function L119-143 — `()` — the manifest caps go through (the override is not a trust bypass).
+-  `empty_grant_denies_io_even_when_manifest_would_allow` function L146-170 — `()` — the manifest caps go through (the override is not a trust bypass).
+-  `coarse_grant_is_rejected_at_load` function L173-193 — `()` — the manifest caps go through (the override is not a trust bypass).
+
+#### crates/fidius-host/tests/wasm_host_functions_e2e.rs
+
+- pub `WasmSlotHost` interface L42-47 — `{ fn release_slot(), fn reclaim_slot(), fn get_value(), fn panicky() }` — binds (or doesn't) its own fresh instance.
+- pub `WasmDeferrable` interface L50-55 — `{ fn run(), fn host_bound(), fn try_release(), fn observe_host_panic() }` — binds (or doesn't) its own fresh instance.
+-  `component` function L57-71 — `() -> &'static [u8]` — binds (or doesn't) its own fresh instance.
+-  `BYTES` variable L58 — `: OnceLock<Vec<u8>>` — binds (or doesn't) its own fresh instance.
+-  `stage_pkg` function L73-95 — `(root: &std::path::Path)` — binds (or doesn't) its own fresh instance.
+-  `load_handle` function L98-109 — `(tmp: &tempfile::TempDir) -> PluginHandle` — Load a fresh handle over the fixture component (own table registry).
+-  `RecordingHost` struct L113-116 — `{ calls: Mutex<Vec<String>>, reclaims: AtomicU32 }` — Recording host implementation shared by the tests.
+-  `RecordingHost` type L118-144 — `impl WasmSlotHost for RecordingHost` — binds (or doesn't) its own fresh instance.
+-  `release_slot` function L119-129 — `(&self, task_id: String) -> Result<(), PluginError>` — binds (or doesn't) its own fresh instance.
+-  `reclaim_slot` function L130-136 — `(&self, task_id: String) -> Result<u32, PluginError>` — binds (or doesn't) its own fresh instance.
+-  `get_value` function L137-140 — `(&self, key: String) -> String` — binds (or doesn't) its own fresh instance.
+-  `panicky` function L141-143 — `(&self) -> u32` — binds (or doesn't) its own fresh instance.
+-  `table` function L147-149 — `(host: Arc<RecordingHost>) -> *const HostFunctionTable` — Build a process-lifetime table for a recording host.
+-  `wasm_reentrant_host_plugin_host_roundtrip` function L152-177 — `()` — binds (or doesn't) its own fresh instance.
+-  `wasm_host_error_arrives_typed` function L180-197 — `()` — binds (or doesn't) its own fresh instance.
+-  `wasm_host_panic_surfaces_as_typed_error` function L200-214 — `()` — binds (or doesn't) its own fresh instance.
+-  `wasm_unbound_is_a_typed_error_not_a_trap` function L217-235 — `()` — binds (or doesn't) its own fresh instance.
+-  `wasm_version_mismatch_is_typed_and_never_dispatches` function L238-269 — `()` — binds (or doesn't) its own fresh instance.
+-  `wasm_hash_mismatch_is_typed_and_never_dispatches` function L272-291 — `()` — binds (or doesn't) its own fresh instance.
+-  `wasm_second_bind_is_refused` function L294-311 — `()` — binds (or doesn't) its own fresh instance.
+-  `wasm_bind_on_a_cdylib_handle_is_refused` function L314-328 — `()` — binds (or doesn't) its own fresh instance.
+
 #### crates/fidius-host/tests/wasm_record_stream_item.rs
 
 - pub `Row` struct L33-36 — `{ id: u64, name: String }` — `#[derive(WitType)]` — it no longer forces the user-type (build.rs WIT) path.
@@ -1859,6 +2149,31 @@
 ### crates/fidius-macro/src
 
 > *Semantic summary to be generated by AI agent.*
+
+#### crates/fidius-macro/src/host_interface.rs
+
+- pub `HostInterfaceAttrs` struct L50-54 — `{ version: u32, crate_path: Path }` — Parsed attributes from `#[host_interface(version = N)]`.
+- pub `generate_host_interface` function L273-834 — `( attrs: &HostInterfaceAttrs, item: &ItemTrait, ) -> syn::Result<TokenStream>` — Generate all code for a `#[host_interface]` invocation.
+-  `HostInterfaceAttrs` type L56-98 — `impl Parse for HostInterfaceAttrs` — for the threading/reentrancy contract.
+-  `parse` function L57-97 — `(input: ParseStream) -> syn::Result<Self>` — for the threading/reentrancy contract.
+-  `HostMethod` struct L101-110 — `{ name: Ident, arg_names: Vec<Ident>, arg_types: Vec<Type>, return_type: Option<...` — IR for a single host-function method.
+-  `last_segment` function L113-118 — `(ty: &Type) -> Option<&syn::PathSegment>` — Return `Some(&last_segment)` if `ty` is a path type.
+-  `result_types` function L121-134 — `(ty: &Type) -> Option<(&Type, &Type)>` — If `ty` is `Result<T, E>`, return `(T, E)`.
+-  `is_stream_marker` function L138-145 — `(ty: &Type) -> bool` — Return `true` if the type's final path segment is `Stream` with one
+-  `parse_method` function L148-270 — `(method: &TraitItemFn) -> syn::Result<HostMethod>` — Parse and validate one trait method into a [`HostMethod`].
+-  `strip_helper_attrs` function L837-847 — `(item: &ItemTrait) -> ItemTrait` — Strip fidius helper attributes so the emitted trait compiles bare.
+-  `tests` module L850-978 — `-` — for the threading/reentrancy contract.
+-  `attrs` function L854-859 — `(version: u32) -> HostInterfaceAttrs` — for the threading/reentrancy contract.
+-  `parse_trait` function L861-863 — `(tokens: proc_macro2::TokenStream) -> ItemTrait` — for the threading/reentrancy contract.
+-  `generates_for_a_simple_host_trait` function L866-879 — `()` — for the threading/reentrancy contract.
+-  `rejects_async_methods` function L882-890 — `()` — for the threading/reentrancy contract.
+-  `rejects_missing_send_sync` function L893-901 — `()` — for the threading/reentrancy contract.
+-  `rejects_non_plugin_error_result` function L904-912 — `()` — for the threading/reentrancy contract.
+-  `rejects_reference_arguments` function L915-923 — `()` — for the threading/reentrancy contract.
+-  `rejects_stream_marker` function L926-934 — `()` — for the threading/reentrancy contract.
+-  `rejects_mut_self` function L937-945 — `()` — for the threading/reentrancy contract.
+-  `hash_is_signature_sensitive` function L948-966 — `()` — for the threading/reentrancy contract.
+-  `attrs_parse_version_and_crate` function L969-977 — `()` — for the threading/reentrancy contract.
 
 #### crates/fidius-macro/src/impl_macro.rs
 
@@ -1936,13 +2251,15 @@
 
 #### crates/fidius-macro/src/lib.rs
 
-- pub `plugin_interface` function L43-54 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Define a plugin interface from a trait.
-- pub `plugin_impl` function L74-82 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Implement a plugin interface for a concrete type.
-- pub `derive_wit_type` function L98-102 — `(_item: TokenStream) -> TokenStream` — Mark a `struct`/`enum` as usable in a WASM plugin interface (FIDIUS-I-0023).
--  `impl_macro` module L15 — `-`
--  `interface` module L16 — `-`
--  `ir` module L17 — `-`
--  `wit` module L18 — `-`
+- pub `plugin_interface` function L45-56 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Define a plugin interface from a trait.
+- pub `host_interface` function L155-163 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Define a **host interface** from a trait — the plugin → host callback
+- pub `plugin_impl` function L183-191 — `(attr: TokenStream, item: TokenStream) -> TokenStream` — Implement a plugin interface for a concrete type.
+- pub `derive_wit_type` function L207-211 — `(_item: TokenStream) -> TokenStream` — Mark a `struct`/`enum` as usable in a WASM plugin interface (FIDIUS-I-0023).
+-  `host_interface` module L15 — `-`
+-  `impl_macro` module L16 — `-`
+-  `interface` module L17 — `-`
+-  `ir` module L18 — `-`
+-  `wit` module L19 — `-`
 
 #### crates/fidius-macro/src/wit.rs
 
@@ -2459,6 +2776,20 @@
 -  `sum` function L22-28 — `(&self, mut rows: Stream<u64>) -> u64` — Run: `cargo run -p fidius-examples --example 07_client_streaming`
 -  `main` function L33-43 — `()` — Run: `cargo run -p fidius-examples --example 07_client_streaming`
 
+#### examples/examples/08_host_functions.rs
+
+- pub `SlotHost` interface L22-29 — `{ fn release_slot(), fn reclaim_slot(), fn free_slots() }` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+- pub `Task` interface L34-36 — `{ fn execute() }` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+- pub `DeferringTask` struct L38 — `-` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `DeferringTask` type L41-61 — `impl Task for DeferringTask` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `execute` function L42-60 — `(&self, task_id: String) -> Result<String, PluginError>` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `Executor` struct L67-69 — `{ free: AtomicI64 }` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `Executor` type L71-85 — `impl SlotHost for Executor` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `release_slot` function L72-76 — `(&self, task_id: String) -> Result<(), PluginError>` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `reclaim_slot` function L77-81 — `(&self, task_id: String) -> Result<(), PluginError>` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `free_slots` function L82-84 — `(&self) -> i64` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+-  `main` function L87-109 — `()` — Run: `cargo run -p fidius-examples --example 08_host_functions`
+
 ### python/fidius
 
 > *Semantic summary to be generated by AI agent.*
@@ -2490,6 +2821,23 @@
 - pub `test_plugin_error_carries_code_message_details` function L91-97 — `def test_plugin_error_carries_code_message_details()`
 - pub `test_plugin_error_details_optional` function L100-102 — `def test_plugin_error_details_optional()`
 - pub `test_module_importable_from_vendor_layout` function L105-134 — `def test_module_importable_from_vendor_layout(tmp_path)` — Simulate the vendored-load pattern: copy fidius/ into a temp dir,
+
+### tests/test-plugin-hostcall/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/test-plugin-hostcall/src/lib.rs
+
+- pub `TestHost` interface L30-45 — `{ fn release_slot(), fn reclaim_slot(), fn get_value(), fn panicky() }` — The host functions this plugin can call back into.
+- pub `Deferrable` interface L49-71 — `{ fn run_deferred(), fn value_from_thread(), fn observe_host_panic(), fn host_bo...` — The plugin interface the host drives.
+- pub `DeferrablePlugin` struct L73 — `-` — host → plugin → host path end to end.
+-  `DeferrablePlugin` type L76-131 — `impl Deferrable for DeferrablePlugin` — host → plugin → host path end to end.
+-  `run_deferred` function L77-93 — `(&self, task_id: String) -> Result<String, PluginError>` — host → plugin → host path end to end.
+-  `value_from_thread` function L95-102 — `(&self, key: String) -> String` — host → plugin → host path end to end.
+-  `observe_host_panic` function L104-110 — `(&self) -> String` — host → plugin → host path end to end.
+-  `host_bound` function L112-114 — `(&self) -> bool` — host → plugin → host path end to end.
+-  `try_release` function L116-124 — `(&self, task_id: String) -> String` — host → plugin → host path end to end.
+-  `panic_after_callback` function L126-130 — `(&self, task_id: String) -> String` — host → plugin → host path end to end.
 
 ### tests/test-plugin-py-configured
 
@@ -2530,8 +2878,11 @@
 - pub `ArenaEchoer` struct L90 — `-`
 - pub `BytePipe` interface L103-110 — `{ fn reverse(), fn name() }`
 - pub `ReverseBytes` struct L112 — `-`
-- pub `Ticker` interface L134-137 — `{ fn tick() }`
-- pub `TickerImpl` struct L142 — `-`
+- pub `Greeter` interface L134-136 — `{ fn greet() }`
+- pub `GreetConfig` struct L139-141 — `{ greeting: String }`
+- pub `ConfiguredGreeter` struct L143-145 — `{ cfg: GreetConfig }`
+- pub `Ticker` interface L168-171 — `{ fn tick() }`
+- pub `TickerImpl` struct L176 — `-`
 -  `BasicCalculator` type L61-81 — `impl Calculator for BasicCalculator`
 -  `add` function L62-66 — `(&self, input: AddInput) -> AddOutput`
 -  `add_direct` function L68-70 — `(&self, a: i64, b: i64) -> i64`
@@ -2542,8 +2893,12 @@
 -  `ReverseBytes` type L115-125 — `impl BytePipe for ReverseBytes`
 -  `reverse` function L117-120 — `(&self, mut data: Vec<u8>) -> Vec<u8>`
 -  `name` function L122-124 — `(&self) -> String`
--  `TickerImpl` type L145-149 — `impl Ticker for TickerImpl`
--  `tick` function L146-148 — `(&self, count: u32) -> fidius::Stream<u64>`
+-  `ConfiguredGreeter` type L148-153 — `impl Greeter for ConfiguredGreeter`
+-  `greet` function L149-152 — `(&self, name: String) -> String`
+-  `ConfiguredGreeter` type L155-159 — `= ConfiguredGreeter`
+-  `configure` function L156-158 — `(cfg: GreetConfig) -> Self`
+-  `TickerImpl` type L179-183 — `impl Ticker for TickerImpl`
+-  `tick` function L180-182 — `(&self, count: u32) -> fidius::Stream<u64>`
 
 ### tests/wasm-fixtures/bidi-stream/src
 
@@ -2617,6 +2972,21 @@
 - pub `probe_env` method L27-29 — `def probe_env(self) -> bool`
 - pub `fidius_interface_hash` method L31-33 — `def fidius_interface_hash(self) -> int`
 
+### tests/wasm-fixtures/hostcall/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/hostcall/src/lib.rs
+
+- pub `WasmSlotHost` interface L13-22 — `{ fn release_slot(), fn reclaim_slot(), fn get_value(), fn panicky() }`
+- pub `WasmDeferrable` interface L25-34 — `{ fn run(), fn host_bound(), fn try_release(), fn observe_host_panic() }`
+- pub `WasmDeferrablePlugin` struct L36 — `-`
+-  `WasmDeferrablePlugin` type L39-81 — `impl WasmDeferrable for WasmDeferrablePlugin`
+-  `run` function L40-56 — `(&self, task_id: String) -> String`
+-  `host_bound` function L58-60 — `(&self) -> bool`
+-  `try_release` function L62-70 — `(&self, task_id: String) -> String`
+-  `observe_host_panic` function L72-80 — `(&self) -> String`
+
 ### tests/wasm-fixtures/keyword-fields
 
 > *Semantic summary to be generated by AI agent.*
@@ -2651,6 +3021,20 @@
 -  `greet` function L27-29 — `(&self, name: String) -> String`
 -  `ConfGreeter` type L32-36 — `= ConfGreeter`
 -  `configure` function L33-35 — `(cfg: Cfg) -> Self`
+
+### tests/wasm-fixtures/macro-configured-fs/src
+
+> *Semantic summary to be generated by AI agent.*
+
+#### tests/wasm-fixtures/macro-configured-fs/src/lib.rs
+
+- pub `Cfg` struct L15-17 — `{ suffix: String }`
+- pub `ConfiguredFs` interface L20-24 — `{ fn read_file() }`
+- pub `ConfFsPlugin` struct L26-28 — `{ cfg: Cfg }`
+-  `ConfFsPlugin` type L31-36 — `impl ConfiguredFs for ConfFsPlugin`
+-  `read_file` function L32-35 — `(&self, path: String) -> String`
+-  `ConfFsPlugin` type L38-42 — `= ConfFsPlugin`
+-  `configure` function L39-41 — `(cfg: Cfg) -> Self`
 
 ### tests/wasm-fixtures/macro-configured-stream/src
 
@@ -2732,7 +3116,7 @@
 
 #### tests/wasm-fixtures/record-stream-user-types/build.rs
 
--  `main` function L1-3 — `()`
+-  `main` function L15-17 — `()`
 
 ### tests/wasm-fixtures/record-stream-user-types/src
 
@@ -2804,10 +3188,12 @@
 #### tests/wasm-fixtures/tcp-echo/src/lib.rs
 
 -  `Component` struct L24 — `-`
--  `Component` type L26-36 — `impl Guest for Component`
+-  `Component` type L26-50 — `impl Guest for Component`
 -  `connect_and_echo` function L27-29 — `(addr: String, payload: Vec<u8>) -> Vec<u8>`
--  `fidius_interface_hash` function L33-35 — `() -> u64` — Interface-hash carrier; the host's `load_wasm` checks it against the
--  `do_echo` function L38-45 — `(addr: &str, payload: &[u8]) -> std::io::Result<Vec<u8>>`
+-  `connect_seq` function L33-38 — `(addrs: Vec<String>, payload: Vec<u8>) -> Vec<Vec<u8>>` — FIDIUS-I-0034: sequential dials in ONE instance, so all dials share
+-  `fidius_configure` function L43 — `(_cfg: Vec<u8>)` — No-op: this fixture has no config, but exporting the binder lets the
+-  `fidius_interface_hash` function L47-49 — `() -> u64` — Interface-hash carrier; the host's `load_wasm` checks it against the
+-  `do_echo` function L52-59 — `(addr: &str, payload: &[u8]) -> std::io::Result<Vec<u8>>`
 
 ### tests/wasm-fixtures/ticker/src
 

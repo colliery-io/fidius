@@ -47,3 +47,10 @@ policy-gated socket) is exactly that combination, so it's worth a dedicated fixt
 Filed from FIDIUS-I-0033 / T-0190. Needs a new component fixture (WIT + build), so it's
 a bounded feature-test effort rather than a quick add — deferred out of the initiative
 deliberately, not silently skipped.
+
+**2026-08-24 (FIDIUS-I-0034):** when this fixture is built, add the **hostname**
+dimension for the tcp variant: a streaming call takes its own store (its own
+resolve-and-pin table), so the test should also assert `authorize_tcp_target`
+receives the dialed hostname (`TcpTarget { host: Some(name), .. }`) on connects
+made during stream production — the streaming-path counterpart of
+`hostname_egress_e2e.rs`.

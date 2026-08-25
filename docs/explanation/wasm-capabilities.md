@@ -367,15 +367,50 @@ impl EgressPolicy for DbEgress {
 ```
 
 `authorize_tcp` is called for **every** outbound connect, on the **resolved**
-peer (`IP:port`). A hostname the guest dialed
-(`std::net::TcpStream::connect(("db.internal", 5432))`) is resolved via
-`wasi:sockets` name-lookup *first*, then the resolved address is gated — so, just
-as with `http`, **DNS-rebinding is the embedder's residual to close** with
-resolve-and-pin. Only `TcpConnect` reaches the policy; `bind`/`listen` and UDP
+peer (`IP:port`). Only `TcpConnect` reaches the policy; `bind`/`listen` and UDP
 are refused outright, so the grant is strictly outbound `tcp.connect`.
 
 > `authorize_tcp` **defaults to deny**. An existing HTTP-only `EgressPolicy`
 > therefore never silently gains TCP reach — you opt in by overriding it.
+
+### Hostname allow-lists: `authorize_tcp_target` (resolve-and-pin)
+
+IP allow-lists are operationally brittle — managed database endpoints (RDS,
+Cloud SQL, Azure) rotate IPs on failover. To allow-list by **name**, override
+`authorize_tcp_target` instead: fidius **resolves-and-pins** the guest's
+`wasi:sockets` name lookups (it owns the lookup implementation), and every
+connect arrives carrying the hostname the guest actually dialed:
+
+```rust
+use fidius_host::executor::{EgressPolicy, EgressDenied, TcpTarget};
+
+impl EgressPolicy for DbEgress {
+    // ...
+    fn authorize_tcp_target(&self, target: &TcpTarget<'_>) -> Result<(), EgressDenied> {
+        match target.host {
+            // The name the guest dialed, pinned through fidius's own lookup.
+            Some("db.internal") if target.addr.port() == 5432 => Ok(()),
+            // IP-literal dials (no lookup, no pin) arrive as host: None — a
+            // name-keyed policy denies them, the honest default.
+            _ => Err(EgressDenied::new("not allow-listed")),
+        }
+    }
+}
+```
+
+The default `authorize_tcp_target` delegates to `authorize_tcp(&target.addr)`,
+so a policy that only overrides the old method is byte-identical. The pin
+narrows lookup→connect TOCTOU to "an address this instance was actually given
+for that name" (it cannot eliminate it); pins live per store — per call for
+normal dispatch, for the instance's lifetime on a configured resident
+instance, where a re-resolution replaces the pin wholesale (a rotated-away IP
+loses the name's authority immediately).
+
+There is also `authorize_dns(&self, name: &str)` — a hook on the lookup
+itself, called **before** resolution. It **defaults to allow** (name lookup is
+already open whenever the tier is granted; the connect stays gated
+regardless), but overriding it stops a granted guest from probing arbitrary
+DNS: a denial fails the lookup exactly like an unresolvable name.
 
 Miss either key and the connect is refused: with no policy (or no `tcp`
 capability) **no socket check is installed**, so the deny-all `WasiCtx` rejects

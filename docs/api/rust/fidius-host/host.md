@@ -22,6 +22,9 @@ Host for loading and managing plugins.
 | `trusted_keys` | `Vec < VerifyingKey >` |  |
 | `expected_hash` | `Option < u64 >` |  |
 | `expected_strategy` | `Option < BufferStrategyKind >` |  |
+| `egress` | `Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > >` | Host-wide default `wasi:http` egress policy (FIDIUS-I-0027). Applied to
+every `load_wasm`; `load_wasm_with_egress` overrides it per plugin. `None`
+→ no egress (a guest importing `wasi:http` fails closed at load). |
 
 #### Methods
 
@@ -351,6 +354,52 @@ Available only when fidius-host is built with the `python` feature.
 
 
 
+##### `load_python_configured` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn load_python_configured < C : serde :: Serialize > (& self , name : & str , descriptor : & 'static fidius_core :: python_descriptor :: PythonInterfaceDescriptor , config : & C ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a **configured** Python plugin (FIDIUS-A-0006 / CI.4): serialize `config` and bind it once via the module's `__fidius_configure__(config) -> instance`; methods then run on the configured instance. N differently-configured instances coexist. Available only with the `python` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_python_configured<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
+        config: &C,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let dir = self.find_python_package(name)?;
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let cfg = serde_json::to_value(config)
+            .map_err(|e| LoadError::PythonLoad(format!("config serialize: {e}")))?;
+        let py = fidius_python::load_python_plugin_configured(&dir, descriptor, &cfg)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Python,
+        };
+        Ok(crate::handle::PluginHandle::from_python(py, info))
+    }
+```
+
+</details>
+
+
+
 ##### `find_wasm_package` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
@@ -409,6 +458,10 @@ Load a WASM component plugin package by name and validate it against the supplie
 The component is sandboxed: WASI is wired into the `Linker` but the guest
 gets a zero-grant `WasiCtx` (no FS preopens, no env, no sockets). The
 capability allow-list in `[wasm].capabilities` is applied in T-0104.
+Outbound HTTP is governed by the host's egress policy: a guest that
+declares the `http` capability gets `wasi:http` only when the host was
+given a policy (via [`PluginHostBuilder::egress`] or
+[`Self::load_wasm_with_egress`]) — otherwise it fails closed.
 Available only with the `wasm` feature.
 
 <details>
@@ -419,6 +472,135 @@ Available only with the `wasm` feature.
         &self,
         name: &str,
         descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), None, None)
+    }
+```
+
+</details>
+
+
+
+##### `load_wasm_configured` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn load_wasm_configured < C : serde :: Serialize > (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , config : & C ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a **configured** WASM plugin (FIDIUS-A-0006 / CI.3): serialize `config` and bind it once via the guest's `fidius-configure` export. The component then runs on a persistent store, so methods dispatch on the configured instance and config crosses the sandbox boundary exactly once. Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm_configured<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        config: &C,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::WasmLoad(format!("config serialize: {e}")))?;
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), Some(&cfg), None)
+    }
+```
+
+</details>
+
+
+
+##### `load_wasm_configured_with_grants` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn load_wasm_configured_with_grants < C : serde :: Serialize > (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , config : & C , capabilities : Vec < String > , egress : Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > > ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a **configured** WASM plugin with a caller-supplied capability allow-list and egress policy, overriding the package manifest's `[wasm].capabilities` (FIDIUS-I-0033 / cloacina constructor grants).
+
+This is the entry point for embedders that authorize a plugin's host
+access *at load time* rather than trusting the (signed-but-author-chosen)
+manifest caps — e.g. cloacina's tenant-granted constructor capabilities,
+where the filesystem path / env key / http+tcp intent are decided by the
+deploying tenant, not the plugin author. `capabilities` fully **replaces**
+the manifest list (it is not merged): pass exactly what the tenant
+granted. Default-closed falls out naturally — an empty `capabilities`
+builds a zero-grant `WasiCtx`, and `egress: None` denies all brokered
+HTTP/TCP (the two-key gate's host key is absent).
+`capabilities` uses the same vocabulary as `[wasm].capabilities`
+(`http`, `tcp`, `udp`, `network`/`sockets`, `fs:ro:<path>`/`fs:rw:<path>`,
+`env:<NAME>`, …) and is validated identically; an unknown or coarse
+(`env` / `fs`) entry fails the load.
+Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm_configured_with_grants<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        config: &C,
+        capabilities: Vec<String>,
+        egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::WasmLoad(format!("config serialize: {e}")))?;
+        self.load_wasm_impl(name, descriptor, egress, Some(&cfg), Some(capabilities))
+    }
+```
+
+</details>
+
+
+
+##### `load_wasm_with_egress` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn load_wasm_with_egress (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , egress : impl crate :: executor :: wasm :: EgressPolicy ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress policy that overrides any host-wide default (FIDIUS-I-0027). This is the right primitive for isolating connectors: a host-wide policy only sees the outbound *request*, not which plugin issued it, so per-plugin policies are how you bound connector A to one set of hosts and connector B to another.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm_with_egress(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        egress: impl crate::executor::wasm::EgressPolicy,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        self.load_wasm_impl(name, descriptor, Some(Arc::new(egress)), None, None)
+    }
+```
+
+</details>
+
+
+
+##### `load_wasm_impl` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn load_wasm_impl (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , egress : Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > > , config : Option < & [u8] > , caps_override : Option < Vec < String > > ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn load_wasm_impl(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
+        config: Option<&[u8]>,
+        caps_override: Option<Vec<String>>,
     ) -> Result<crate::handle::PluginHandle, LoadError> {
         use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
 
@@ -453,7 +635,10 @@ Available only with the `wasm` feature.
             runtime: crate::types::PluginRuntimeKind::Wasm,
         };
         let interface = descriptor.interface_export.to_string();
-        let capabilities = wasm_meta.capabilities.clone();
+        // A caller-supplied allow-list (e.g. tenant-granted constructor caps)
+        // fully replaces the manifest's author-chosen `[wasm].capabilities`;
+        // absent an override we honor the manifest as before.
+        let capabilities = caps_override.unwrap_or_else(|| wasm_meta.capabilities.clone());
 
         // Resolve a precompiled .cwasm: explicit `[wasm].precompiled`, or an
         // auto-detected sibling `<component-stem>.cwasm`. The AOT path is purely
@@ -471,11 +656,12 @@ Available only with the `wasm` feature.
 
         let jit = |interface: String, methods, capabilities, info| -> Result<_, LoadError> {
             let bytes = std::fs::read(dir.join(&wasm_meta.component))?;
-            WasmComponentExecutor::from_component_bytes(
+            WasmComponentExecutor::from_component_bytes_with_egress(
                 &bytes,
                 interface,
                 methods,
                 capabilities,
+                egress.clone(),
                 info,
             )
             .map_err(|e| LoadError::WasmLoad(e.to_string()))
@@ -488,11 +674,12 @@ Available only with the `wasm` feature.
                 // (Engine::precompile_component); wasmtime validates the header
                 // and refuses a mismatched engine/version (→ Err → JIT fallback).
                 let aot = unsafe {
-                    WasmComponentExecutor::from_cwasm(
+                    WasmComponentExecutor::from_cwasm_with_egress(
                         &bytes,
                         interface.clone(),
                         methods.clone(),
                         capabilities.clone(),
+                        egress.clone(),
                         info.clone(),
                     )
                 };
@@ -523,6 +710,14 @@ Available only with the `wasm` feature.
             });
         }
 
+        // FIDIUS-A-0006 / CI.3: bind config once via the guest `fidius-configure`
+        // export, retaining a persistent store for subsequent method calls.
+        let mut executor = executor;
+        if let Some(cfg) = config {
+            executor
+                .configure(cfg)
+                .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        }
         Ok(crate::handle::PluginHandle::from_wasm(executor))
     }
 ```
@@ -550,6 +745,7 @@ Builder for configuring a PluginHost.
 | `trusted_keys` | `Vec < VerifyingKey >` |  |
 | `expected_hash` | `Option < u64 >` |  |
 | `expected_strategy` | `Option < BufferStrategyKind >` |  |
+| `egress` | `Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > >` |  |
 
 #### Methods
 
@@ -572,7 +768,55 @@ fn new () -> Self
             trusted_keys: Vec::new(),
             expected_hash: None,
             expected_strategy: None,
+            #[cfg(feature = "wasm")]
+            egress: None,
         }
+    }
+```
+
+</details>
+
+
+
+##### `egress` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn egress (mut self , policy : impl crate :: executor :: wasm :: EgressPolicy) -> Self
+```
+
+Set a host-wide default `wasi:http` egress policy (FIDIUS-I-0027). Every `load_wasm` then enables outbound HTTP for a guest that declares the `http` capability, routing each request through `policy`. Without this (and without a per-load policy), `wasi:http` is never linked and a guest that imports it fails closed. Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn egress(mut self, policy: impl crate::executor::wasm::EgressPolicy) -> Self {
+        self.egress = Some(Arc::new(policy));
+        self
+    }
+```
+
+</details>
+
+
+
+##### `egress_policy` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn egress_policy (mut self , policy : Arc < dyn crate :: executor :: wasm :: EgressPolicy >) -> Self
+```
+
+Like [`Self::egress`] but accepts an already-erased `Arc<dyn EgressPolicy>` — for a policy that is shared across hosts, or selected/constructed at runtime (where the concrete type isn't known at the call site). Threads through `load_wasm` exactly like `egress`. Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn egress_policy(mut self, policy: Arc<dyn crate::executor::wasm::EgressPolicy>) -> Self {
+        self.egress = Some(policy);
+        self
     }
 ```
 
@@ -739,6 +983,8 @@ Build the PluginHost.
             trusted_keys: self.trusted_keys,
             expected_hash: self.expected_hash,
             expected_strategy: self.expected_strategy,
+            #[cfg(feature = "wasm")]
+            egress: self.egress,
         })
     }
 ```

@@ -51,6 +51,61 @@ pub fn plugin_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 
 
+### `fidius-macro::host_interface`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn host_interface (attr : TokenStream , item : TokenStream) -> TokenStream
+```
+
+Define a **host interface** from a trait — the plugin → host callback channel (the reverse direction of [`macro@plugin_interface`]).
+
+The host implements the trait and offers it to plugins as a C-ABI
+function table; plugin code calls back into the host mid-execution
+through a generated typed client. Arguments and returns are
+bincode-serialized with the same wire conventions as the host → plugin
+direction.
+
+**Examples:**
+
+```ignore
+// Interface crate — shared by host and plugins:
+#[fidius::host_interface(version = 1)]
+pub trait CloacinaHost: Send + Sync {
+    fn release_slot(&self, task_execution_id: String) -> Result<(), PluginError>;
+    fn reclaim_slot(&self, task_execution_id: String) -> Result<(), PluginError>;
+}
+
+// Plugin code — call the host mid-execution:
+let host = CloacinaHostClient::bound()?;   // Err(NotBound) if the host didn't bind
+host.release_slot(&id)?;
+
+// Host application — implement + bind after loading the plugin library:
+let lib = fidius_host::loader::load_library(path)?;
+CloacinaHostBinding::bind(&lib, std::sync::Arc::new(MyHost { .. }))?;
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn host_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attrs = parse_macro_input!(attr as HostInterfaceAttrs);
+    let item_trait = parse_macro_input!(item as ItemTrait);
+
+    match host_interface::generate_host_interface(&attrs, &item_trait) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+```
+
+</details>
+
+
+
 ### `fidius-macro::plugin_impl`
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
