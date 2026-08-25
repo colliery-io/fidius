@@ -41,6 +41,10 @@ handle's lifetime via `_library` Arc (or forever for in-process). |
 | `capabilities` | `u64` | Capability bitfield for optional method support. |
 | `method_count` | `u32` | Total number of methods in the vtable. |
 | `info` | `PluginInfo` | Owned plugin metadata. |
+| `instance` | `* mut c_void` | The plugin instance this handle owns (FIDIUS-A-0006), returned by the
+descriptor's `construct` and passed to every vtable method. Freed via
+`destroy` on drop. Null only for a malformed/legacy descriptor. |
+| `destroy` | `Option < unsafe extern "C" fn (* mut c_void) >` | Destructor for `instance` (from the descriptor). |
 
 #### Methods
 
@@ -66,6 +70,8 @@ Create a new CdylibExecutor. Crate-private — use `from_loaded()` instead.
         method_count: u32,
         info: PluginInfo,
     ) -> Self {
+        let instance = unsafe { construct_instance(descriptor, &[]) };
+        let destroy = unsafe { (*descriptor).destroy };
         Self {
             _library: Some(library),
             vtable,
@@ -74,6 +80,8 @@ Create a new CdylibExecutor. Crate-private — use `from_loaded()` instead.
             capabilities,
             method_count,
             info,
+            instance,
+            destroy,
         }
     }
 ```
@@ -96,6 +104,30 @@ Create a CdylibExecutor from a LoadedPlugin.
 
 ```rust
     pub fn from_loaded(plugin: crate::loader::LoadedPlugin) -> Self {
+        Self::from_loaded_with_config(plugin, &[])
+    }
+```
+
+</details>
+
+
+
+##### `from_loaded_with_config` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn from_loaded_with_config (plugin : crate :: loader :: LoadedPlugin , cfg : & [u8]) -> Self
+```
+
+Like [`Self::from_loaded`] but binds serialized `cfg` config bytes at construction — the DYNAMIC *configured* path (FIDIUS-A-0006 / CI.2). A `#[plugin_impl(Trait, config = C)]` loaded from a dylib whose `configure` constructor receives the bound config once; methods then close over it without re-passing. `cfg` is bincode of the plugin's config type; empty (`&[]`) reproduces [`Self::from_loaded`]'s singleton construction. This is the dynamic-load analogue of [`Self::from_descriptor_with_config`].
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn from_loaded_with_config(plugin: crate::loader::LoadedPlugin, cfg: &[u8]) -> Self {
+        let instance = unsafe { construct_instance(plugin.descriptor, cfg) };
+        let destroy = unsafe { (*plugin.descriptor).destroy };
         Self {
             _library: Some(plugin.library),
             vtable: plugin.vtable,
@@ -104,6 +136,8 @@ Create a CdylibExecutor from a LoadedPlugin.
             capabilities: plugin.info.capabilities,
             method_count: plugin.method_count,
             info: plugin.info,
+            instance,
+            destroy,
         }
     }
 ```
@@ -129,6 +163,31 @@ Host applications normally use [`CdylibExecutor::from_loaded`] instead.
 
 ```rust
     pub fn from_descriptor(desc: &'static PluginDescriptor) -> Result<Self, LoadError> {
+        Self::from_descriptor_with_config(desc, &[])
+    }
+```
+
+</details>
+
+
+
+##### `from_descriptor_with_config` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn from_descriptor_with_config (desc : & 'static PluginDescriptor , cfg : & [u8] ,) -> Result < Self , LoadError >
+```
+
+Like [`Self::from_descriptor`] but constructs the instance from serialized config bytes (FIDIUS-A-0006 / CI.2) — the in-process *configured* path. `cfg` is bincode of the plugin's config type (empty = the singleton).
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn from_descriptor_with_config(
+        desc: &'static PluginDescriptor,
+        cfg: &[u8],
+    ) -> Result<Self, LoadError> {
         let info = PluginInfo {
             name: unsafe { desc.plugin_name_str() }.to_string(),
             interface_name: unsafe { desc.interface_name_str() }.to_string(),
@@ -140,14 +199,18 @@ Host applications normally use [`CdylibExecutor::from_loaded`] instead.
                 .map_err(|v| LoadError::UnknownBufferStrategy { value: v })?,
             runtime: crate::types::PluginRuntimeKind::Cdylib,
         };
+        let descriptor = desc as *const PluginDescriptor;
+        let instance = unsafe { construct_instance(descriptor, cfg) };
         Ok(Self {
             _library: None,
             vtable: desc.vtable,
-            descriptor: desc as *const PluginDescriptor,
+            descriptor,
             free_buffer: desc.free_buffer,
             capabilities: desc.capabilities,
             method_count: desc.method_count,
             info,
+            instance,
+            destroy: desc.destroy,
         })
     }
 ```
@@ -298,9 +361,11 @@ PluginAllocated path: plugin allocates an output buffer via `Box::into_raw(Box<[
         index: usize,
         input_bytes: &[u8],
     ) -> Result<O, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const FfiFn;
-            *fn_ptrs.add(index)
+        // Read the slot as `Option<fn>`: an optional method the plugin did not
+        // implement has a NULL vtable slot — never call into it (would segfault).
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<FfiFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
@@ -308,6 +373,7 @@ PluginAllocated path: plugin allocates an output buffer via `Box::into_raw(Box<[
 
         let status = unsafe {
             fn_ptr(
+                self.instance,
                 input_bytes.as_ptr(),
                 input_bytes.len() as u32,
                 &mut out_ptr,
@@ -396,9 +462,9 @@ Arena path: host supplies a buffer from the thread-local pool. If the plugin rep
         index: usize,
         input_bytes: &[u8],
     ) -> Result<O, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const ArenaFn;
-            *fn_ptrs.add(index)
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<ArenaFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut arena = acquire_arena(DEFAULT_ARENA_CAPACITY);
@@ -409,6 +475,7 @@ Arena path: host supplies a buffer from the thread-local pool. If the plugin rep
         let status = loop {
             let s = unsafe {
                 fn_ptr(
+                    self.instance,
                     input_bytes.as_ptr(),
                     input_bytes.len() as u32,
                     arena.as_mut_ptr(),
@@ -502,9 +569,11 @@ PluginAllocated raw path — same FFI shape as `call_plugin_allocated`, but the 
         index: usize,
         input_bytes: &[u8],
     ) -> Result<Vec<u8>, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const FfiFn;
-            *fn_ptrs.add(index)
+        // Read the slot as `Option<fn>`: an optional method the plugin did not
+        // implement has a NULL vtable slot — never call into it (would segfault).
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<FfiFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
@@ -512,6 +581,7 @@ PluginAllocated raw path — same FFI shape as `call_plugin_allocated`, but the 
 
         let status = unsafe {
             fn_ptr(
+                self.instance,
                 input_bytes.as_ptr(),
                 input_bytes.len() as u32,
                 &mut out_ptr,
@@ -582,6 +652,114 @@ PluginAllocated raw path — same FFI shape as `call_plugin_allocated`, but the 
 
 
 
+##### `call_client_streaming_raw` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+ <span class="plissken-badge plissken-badge-unsafe" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #f44336; color: white;">unsafe</span>
+
+
+```rust
+unsafe fn call_client_streaming_raw (& self , index : usize , handle : * mut fidius_core :: stream_ffi :: FidiusStreamHandle , input_bytes : & [u8] ,) -> Result < Vec < u8 > , CallError >
+```
+
+Client-streaming raw call (FIDIUS-I-0030 CS2.2). The vtable slot is a `ClientStreamFn` that also takes the host's producer `handle`, from which the plugin pulls its `Stream<T>` argument. `input_bytes` is the bincode of the **non-stream** args; the bincode of the method's result is returned. The plugin's consumer frees `handle` via its `drop_fn` — the host must not.
+
+# Safety
+`handle` must be a valid, exclusively-owned producer handle (e.g. from [`crate::client_stream::host_producer_handle`]); it is consumed by the call.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub unsafe fn call_client_streaming_raw(
+        &self,
+        index: usize,
+        handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,
+        input_bytes: &[u8],
+    ) -> Result<Vec<u8>, CallError> {
+        if index >= self.method_count as usize {
+            return Err(CallError::InvalidMethodIndex {
+                index,
+                count: self.method_count,
+            });
+        }
+        type ClientStreamFn = unsafe extern "C" fn(
+            *mut c_void,
+            *mut fidius_core::stream_ffi::FidiusStreamHandle,
+            *const u8,
+            u32,
+            *mut *mut u8,
+            *mut u32,
+        ) -> i32;
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<ClientStreamFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
+        };
+
+        let mut out_ptr: *mut u8 = std::ptr::null_mut();
+        let mut out_len: u32 = 0;
+        let status = unsafe {
+            fn_ptr(
+                self.instance,
+                handle,
+                input_bytes.as_ptr(),
+                input_bytes.len() as u32,
+                &mut out_ptr,
+                &mut out_len,
+            )
+        };
+
+        match status {
+            STATUS_OK => {}
+            STATUS_SERIALIZATION_ERROR => {
+                return Err(CallError::Serialization("FFI serialization failed".into()))
+            }
+            STATUS_PLUGIN_ERROR => {
+                let err = if !out_ptr.is_null() && out_len > 0 {
+                    let slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let pe: PluginError = wire::deserialize(slice)
+                        .unwrap_or_else(|_| PluginError::new("UNKNOWN", "plugin error"));
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+                    pe
+                } else {
+                    PluginError::new("UNKNOWN", "plugin returned error but no data")
+                };
+                return Err(CallError::Plugin(err));
+            }
+            STATUS_PANIC => {
+                let msg = if !out_ptr.is_null() && out_len > 0 {
+                    let slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) };
+                    let m = wire::deserialize::<String>(slice)
+                        .unwrap_or_else(|_| "unknown panic".into());
+                    if let Some(free) = self.free_buffer {
+                        unsafe { free(out_ptr, out_len as usize) };
+                    }
+                    m
+                } else {
+                    "unknown panic".into()
+                };
+                return Err(CallError::Panic(msg));
+            }
+            _ => return Err(CallError::UnknownStatus { code: status }),
+        }
+
+        if out_ptr.is_null() {
+            return Err(CallError::Serialization(
+                "plugin returned null output buffer".into(),
+            ));
+        }
+        let result = unsafe { std::slice::from_raw_parts(out_ptr, out_len as usize) }.to_vec();
+        if let Some(free) = self.free_buffer {
+            unsafe { free(out_ptr, out_len as usize) };
+        }
+        Ok(result)
+    }
+```
+
+</details>
+
+
+
 ##### `call_arena_raw` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
 
 
@@ -596,9 +774,9 @@ Arena raw path — same FFI shape as `call_arena`, success bytes returned as a `
 
 ```rust
     fn call_arena_raw(&self, index: usize, input_bytes: &[u8]) -> Result<Vec<u8>, CallError> {
-        let fn_ptr = unsafe {
-            let fn_ptrs = self.vtable as *const ArenaFn;
-            *fn_ptrs.add(index)
+        let fn_ptr = match unsafe { *(self.vtable as *const Option<ArenaFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
         };
 
         let mut arena = acquire_arena(DEFAULT_ARENA_CAPACITY);
@@ -609,6 +787,7 @@ Arena raw path — same FFI shape as `call_arena`, success bytes returned as a `
         let status = loop {
             let s = unsafe {
                 fn_ptr(
+                    self.instance,
                     input_bytes.as_ptr(),
                     input_bytes.len() as u32,
                     arena.as_mut_ptr(),
@@ -708,13 +887,6 @@ FIDIUS-T-0137). Dropping the stream runs the guest's `drop_fn` (cancel).
         input_bytes: &[u8],
         decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallError>,
     ) -> Result<crate::stream::ChunkStream, CallError> {
-        use fidius_core::stream_ffi::FidiusStreamHandle;
-        use fidius_core::Value;
-
-        /// Bounded backpressure/memory window between the pump thread and the
-        /// async consumer (mirrors the Python/WASM bridges).
-        const STREAM_CHANNEL_CAP: usize = 4;
-
         if index >= self.method_count as usize {
             return Err(CallError::InvalidMethodIndex {
                 index,
@@ -722,12 +894,17 @@ FIDIUS-T-0137). Dropping the stream runs the guest's `drop_fn` (cancel).
             });
         }
 
-        // init: call the streaming method's vtable slot (FfiFn shape) → handle.
-        let init = unsafe { *(self.vtable as *const FfiFn).add(index) };
+        // init: the streaming method's vtable slot (FfiFn shape) → handle. Guard
+        // the null slot of an unimplemented optional method.
+        let init = match unsafe { *(self.vtable as *const Option<FfiFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
+        };
         let mut out_ptr: *mut u8 = std::ptr::null_mut();
         let mut out_len: u32 = 0;
         let status = unsafe {
             init(
+                self.instance,
                 input_bytes.as_ptr(),
                 input_bytes.len() as u32,
                 &mut out_ptr,
@@ -751,91 +928,100 @@ FIDIUS-T-0137). Dropping the stream runs the guest's `drop_fn` (cancel).
             });
         }
 
-        // Send-wrap the raw handle for the pump thread (single-owner for the
-        // stream's lifetime).
-        struct SendHandle(*mut FidiusStreamHandle);
-        unsafe impl Send for SendHandle {}
-        let send_handle = SendHandle(out_ptr as *mut FidiusStreamHandle);
+        // Pump the returned handle into a `ChunkStream` (shared with the
+        // bidirectional path, which reaches the same output-stream handle).
+        Ok(pump_stream_handle(
+            out_ptr,
+            decode_item,
+            self._library.clone(),
+        ))
+    }
+```
 
-        let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
+</details>
 
-        std::thread::spawn(move || {
-            // Force capture of the whole `SendHandle` (which is `Send`), not the
-            // disjoint raw-pointer field (2021 edition closure capture).
-            let send_handle = send_handle;
-            let handle = send_handle.0;
 
-            // ONE reusable buffer for the whole stream (FIDIUS-T-0138): the guest
-            // writes each item into it, so there's no per-item heap alloc and no
-            // `free_buffer` FFI crossing — just one `next` call per item. Grows on
-            // demand when the guest reports BUFFER_TOO_SMALL.
-            const INITIAL_ITEM_CAP: usize = 64;
-            let mut buf = vec![0u8; INITIAL_ITEM_CAP];
 
-            loop {
-                let next = unsafe { (*handle).next };
-                let mut out_len: u32 = 0;
-                let mut status =
-                    unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
-                if status == STATUS_BUFFER_TOO_SMALL {
-                    // Guest reported the size it needs; grow + retry once. The guest
-                    // retains the serialized item across the retry, so nothing is lost.
-                    buf.resize(out_len as usize, 0);
-                    status =
-                        unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
-                }
-                match status {
-                    STATUS_OK => {
-                        let item = decode_item(&buf[..out_len as usize]);
-                        let is_err = item.is_err();
-                        if tx.blocking_send(item).is_err() {
-                            break; // consumer dropped → cancel
-                        }
-                        if is_err {
-                            break;
-                        }
-                    }
-                    STATUS_STREAM_END => break,
-                    STATUS_PLUGIN_ERROR => {
-                        let pe = if out_len > 0 {
-                            wire::deserialize::<PluginError>(&buf[..out_len as usize])
-                                .unwrap_or_else(|_| {
-                                    PluginError::new("UNKNOWN", "malformed stream error")
-                                })
-                        } else {
-                            PluginError::new("UNKNOWN", "stream error without data")
-                        };
-                        let _ = tx.blocking_send(Err(CallError::Plugin(pe)));
-                        break;
-                    }
-                    STATUS_BUFFER_TOO_SMALL => {
-                        // Still too small after the grow-and-retry — misbehaving guest.
-                        let _ = tx.blocking_send(Err(CallError::BufferTooSmall));
-                        break;
-                    }
-                    STATUS_PANIC => {
-                        let _ = tx.blocking_send(Err(CallError::Panic(
-                            "plugin panicked in stream next".into(),
-                        )));
-                        break;
-                    }
-                    code => {
-                        let _ = tx.blocking_send(Err(CallError::UnknownStatus { code }));
-                        break;
-                    }
-                }
+##### `call_bidi_streaming_raw` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+ <span class="plissken-badge plissken-badge-unsafe" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #f44336; color: white;">unsafe</span>
+
+
+```rust
+unsafe fn call_bidi_streaming_raw (& self , index : usize , handle : * mut fidius_core :: stream_ffi :: FidiusStreamHandle , input_bytes : & [u8] , decode_item : fn (& [u8]) -> Result < fidius_core :: Value , CallError > ,) -> Result < crate :: stream :: ChunkStream , CallError >
+```
+
+Bidirectional streaming (FIDIUS-I-0032 / ADR-0010): call a method whose vtable slot is a `ClientStreamFn` returning the OUTPUT stream handle. `handle` is the host's INPUT producer (the plugin pulls its `Stream<In>` from it); `input_bytes` is the bincode of the non-stream args. Returns a `ChunkStream` over the plugin's `Stream<Out>` — pulling it drives the plugin, which re-enters `handle.next()` on demand (the synchronous lazy-pull composition).
+
+# Safety
+`handle` must be a valid, exclusively-owned producer handle; it is consumed by the call (the plugin's output stream frees it via its `drop_fn`).
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub unsafe fn call_bidi_streaming_raw(
+        &self,
+        index: usize,
+        handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,
+        input_bytes: &[u8],
+        decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallError>,
+    ) -> Result<crate::stream::ChunkStream, CallError> {
+        if index >= self.method_count as usize {
+            return Err(CallError::InvalidMethodIndex {
+                index,
+                count: self.method_count,
+            });
+        }
+        // Same FFI shape as client-streaming: instance + input handle + args + out.
+        type ClientStreamFn = unsafe extern "C" fn(
+            *mut c_void,
+            *mut fidius_core::stream_ffi::FidiusStreamHandle,
+            *const u8,
+            u32,
+            *mut *mut u8,
+            *mut u32,
+        ) -> i32;
+        let init = match unsafe { *(self.vtable as *const Option<ClientStreamFn>).add(index) } {
+            Some(f) => f,
+            None => return Err(CallError::NotImplemented { bit: index as u32 }),
+        };
+        let mut out_ptr: *mut u8 = std::ptr::null_mut();
+        let mut out_len: u32 = 0;
+        let status = unsafe {
+            init(
+                self.instance,
+                handle,
+                input_bytes.as_ptr(),
+                input_bytes.len() as u32,
+                &mut out_ptr,
+                &mut out_len,
+            )
+        };
+        match status {
+            STATUS_OK => {}
+            STATUS_SERIALIZATION_ERROR => {
+                return Err(CallError::Serialization(
+                    "bidi stream init: argument decode failed".into(),
+                ))
             }
-            // Run the guest destructor + free the handle (exactly once).
-            unsafe {
-                let drop_fn = (*handle).drop_fn;
-                drop_fn(handle);
+            STATUS_PANIC => {
+                return Err(CallError::Panic(
+                    "plugin panicked in bidi stream init".into(),
+                ))
             }
-        });
-
-        let body = futures::stream::unfold(rx, |mut rx| async move {
-            rx.recv().await.map(|item| (item, rx))
-        });
-        Ok(crate::stream::ChunkStream::new(body))
+            code => return Err(CallError::UnknownStatus { code }),
+        }
+        if out_ptr.is_null() {
+            return Err(CallError::Backend {
+                runtime: "cdylib".into(),
+                message: "bidi stream init returned a null output handle".into(),
+            });
+        }
+        Ok(pump_stream_handle(
+            out_ptr,
+            decode_item,
+            self._library.clone(),
+        ))
     }
 ```
 
@@ -994,6 +1180,161 @@ Returns an empty `Vec` if no trait-level metadata was declared.
 </details>
 
 
+
+
+
+## Functions
+
+### `fidius-host::executor::cdylib::construct_instance`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+unsafe fn construct_instance (descriptor : * const PluginDescriptor , cfg : & [u8]) -> * mut c_void
+```
+
+Construct the plugin instance via the descriptor's `construct` (FIDIUS-A-0006). Empty config bytes = the zero-config / singleton case (CI.1; typed config is CI.2).
+
+# Safety
+`descriptor` must point to a valid `PluginDescriptor`.
+
+<details>
+<summary>Source</summary>
+
+```rust
+unsafe fn construct_instance(descriptor: *const PluginDescriptor, cfg: &[u8]) -> *mut c_void {
+    match (*descriptor).construct {
+        Some(ctor) => ctor(cfg.as_ptr(), cfg.len() as u32),
+        None => std::ptr::null_mut(),
+    }
+}
+```
+
+</details>
+
+
+
+### `fidius-host::executor::cdylib::pump_stream_handle`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn pump_stream_handle (out_ptr : * mut u8 , decode_item : fn (& [u8]) -> Result < fidius_core :: Value , CallError > , library : Option < Arc < Library > > ,) -> crate :: stream :: ChunkStream
+```
+
+Pump a returned `FidiusStreamHandle` into a [`crate::stream::ChunkStream`] on a dedicated thread (cdylib is synchronous), into a bounded channel for backpressure. Shared by server-streaming ([`CdylibExecutor::call_streaming_raw`]) and bidirectional ([`CdylibExecutor::call_bidi_streaming_raw`]) — both reach the same output-stream handle shape; only the init shim that produced it differs. Each item crosses as concrete bincode and is lifted to a `Value` by `decode_item` (FIDIUS-T-0137). One reusable buffer per stream (FIDIUS-T-0138); dropping the stream runs the guest's `drop_fn` (cancel).
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn pump_stream_handle(
+    out_ptr: *mut u8,
+    decode_item: fn(&[u8]) -> Result<fidius_core::Value, CallError>,
+    library: Option<Arc<Library>>,
+) -> crate::stream::ChunkStream {
+    use fidius_core::stream_ffi::FidiusStreamHandle;
+    use fidius_core::Value;
+
+    /// Bounded backpressure/memory window between the pump thread and the async
+    /// consumer (mirrors the Python/WASM bridges).
+    const STREAM_CHANNEL_CAP: usize = 4;
+
+    // Send-wrap the raw handle for the pump thread (single-owner for the
+    // stream's lifetime).
+    struct SendHandle(*mut FidiusStreamHandle);
+    unsafe impl Send for SendHandle {}
+    let send_handle = SendHandle(out_ptr as *mut FidiusStreamHandle);
+
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Value, CallError>>(STREAM_CHANNEL_CAP);
+
+    std::thread::spawn(move || {
+        // Keep the dylib mapped until this thread is done executing guest
+        // code: the consumer can drop its handle (and with it the executor's
+        // `Arc<Library>`) while this detached thread is still inside the
+        // guest's `next`/`drop_fn` — without this clone, that `dlclose`
+        // unmaps the code mid-execution (a segfault race).
+        let _library = library;
+        // Force capture of the whole `SendHandle` (which is `Send`), not the
+        // disjoint raw-pointer field (2021 edition closure capture).
+        let send_handle = send_handle;
+        let handle = send_handle.0;
+
+        // ONE reusable buffer for the whole stream (FIDIUS-T-0138): the guest
+        // writes each item into it, so there's no per-item heap alloc and no
+        // `free_buffer` FFI crossing — just one `next` call per item. Grows on
+        // demand when the guest reports BUFFER_TOO_SMALL.
+        const INITIAL_ITEM_CAP: usize = 64;
+        let mut buf = vec![0u8; INITIAL_ITEM_CAP];
+
+        loop {
+            let next = unsafe { (*handle).next };
+            let mut out_len: u32 = 0;
+            let mut status =
+                unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
+            if status == STATUS_BUFFER_TOO_SMALL {
+                // Guest reported the size it needs; grow + retry once. The guest
+                // retains the serialized item across the retry, so nothing is lost.
+                buf.resize(out_len as usize, 0);
+                status = unsafe { next(handle, buf.as_mut_ptr(), buf.len() as u32, &mut out_len) };
+            }
+            match status {
+                STATUS_OK => {
+                    let item = decode_item(&buf[..out_len as usize]);
+                    let is_err = item.is_err();
+                    if tx.blocking_send(item).is_err() {
+                        break; // consumer dropped → cancel
+                    }
+                    if is_err {
+                        break;
+                    }
+                }
+                STATUS_STREAM_END => break,
+                STATUS_PLUGIN_ERROR => {
+                    let pe = if out_len > 0 {
+                        wire::deserialize::<PluginError>(&buf[..out_len as usize]).unwrap_or_else(
+                            |_| PluginError::new("UNKNOWN", "malformed stream error"),
+                        )
+                    } else {
+                        PluginError::new("UNKNOWN", "stream error without data")
+                    };
+                    let _ = tx.blocking_send(Err(CallError::Plugin(pe)));
+                    break;
+                }
+                STATUS_BUFFER_TOO_SMALL => {
+                    // Still too small after the grow-and-retry — misbehaving guest.
+                    let _ = tx.blocking_send(Err(CallError::BufferTooSmall));
+                    break;
+                }
+                STATUS_PANIC => {
+                    let _ = tx.blocking_send(Err(CallError::Panic(
+                        "plugin panicked in stream next".into(),
+                    )));
+                    break;
+                }
+                code => {
+                    let _ = tx.blocking_send(Err(CallError::UnknownStatus { code }));
+                    break;
+                }
+            }
+        }
+        // Run the guest destructor + free the handle (exactly once).
+        unsafe {
+            let drop_fn = (*handle).drop_fn;
+            drop_fn(handle);
+        }
+    });
+
+    let body = futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|item| (item, rx))
+    });
+    crate::stream::ChunkStream::new(body)
+}
+```
+
+</details>
 
 
 

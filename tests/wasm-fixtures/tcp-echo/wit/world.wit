@@ -13,6 +13,17 @@ interface tcp-echo {
     /// returns an empty list — a denied connect is indistinguishable from an
     /// unreachable peer, by design.
     connect-and-echo: func(addr: string, payload: list<u8>) -> list<u8>;
+    /// Dial each `addr` in order within ONE instance (one store, so one
+    /// resolve-and-pin table — FIDIUS-I-0034's rotation/pin tests need
+    /// sequential dials that share pins). Each dial writes `payload` and reads
+    /// it back; the per-dial result is empty on any failure (denied egress
+    /// included), and one dial's failure does not stop the next.
+    connect-seq: func(addrs: list<string>, payload: list<u8>) -> list<list<u8>>;
+    /// No-op config binder (FIDIUS-A-0006 shape): lets the host `configure()`
+    /// this fixture onto a PERSISTENT store, so tests can prove resolve-and-pin
+    /// state (FIDIUS-I-0034) persists across separate method calls on a
+    /// resident instance.
+    fidius-configure: func(cfg: list<u8>);
     /// Interface-hash carrier (parity with fidius plugins) — lets the high-level
     /// `PluginHost::load_wasm` path load this fixture as a package.
     fidius-interface-hash: func() -> u64;

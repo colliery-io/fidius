@@ -2,6 +2,65 @@
 
 # Changelog
 
+## 0.5.8 — hostname-carrying TCP egress: resolve-and-pin (FIDIUS-I-0034)
+
+### Added
+
+- **`EgressPolicy::authorize_tcp_target(&TcpTarget)`** — name-aware TCP
+  authorization. `TcpTarget` carries both the **hostname the guest actually
+  dialed** and the resolved peer, so an embedder can allow-list databases by
+  *name* (`allowed_hosts: ["db.example.internal"]`) instead of by IPs that
+  rotate under managed endpoints (RDS / Cloud SQL / Azure). The default
+  implementation delegates to `authorize_tcp(&target.addr)`, so every
+  existing policy keeps byte-identical behavior with zero changes.
+- **Resolve-and-pin, owned by fidius.** The hostname is recovered via a
+  fidius-owned shadow of `wasi:sockets/ip-name-lookup`
+  (`executor/name_lookup.rs`): guest lookups resolve host-side and pin
+  `name ↔ IPs` per store; `socket_addr_check` hands the policy
+  `TcpTarget { host: Some(name), addr }` for hostname dials and
+  `host: None` for IP-literal dials (no lookup → no pin — a name-keyed
+  policy denies those, the honest default). Names are pinned
+  ASCII-lowercase, IPs canonicalized (v4-mapped-v6 can't dodge a pin);
+  re-resolution replaces a name's pins wholesale, so a rotated-away IP
+  loses the name's authority immediately. The shadow installs only under
+  the existing two-key gate (`tcp`/`udp` grant AND an embedder policy) —
+  without it, upstream's lookup stands untouched.
+- **`EgressPolicy::authorize_dns(&str)`** — a hook on the lookup itself,
+  consulted before resolution. Defaults to **allow** (lookup was already
+  open whenever the tier is granted; connects stay gated regardless);
+  overriding it stops a granted guest from probing arbitrary DNS — a
+  denial fails the lookup exactly like an unresolvable name
+  (`permanent-resolver-failure`), resolving and pinning nothing.
+- `TcpTarget` exported alongside `EgressPolicy`/`EgressDenied` from
+  `fidius_host` and the `fidius` facade. E2E coverage in
+  `crates/fidius-host/tests/hostname_egress_e2e.rs`: name-keyed
+  allow-list, same-IP/two-names pin correctness (no IP fallthrough),
+  rotation (stale pin loses authority) — including on a **configured
+  resident instance**, where pins persist and rotate across separate
+  calls on the persistent store — pin attribution for literal dials to a
+  pinned IP, case-insensitive matching, multi-address resolution with
+  connect fallback, the `PluginHost::builder()` path, and both
+  `authorize_dns` polarities.
+
+### Changed
+
+- `authorize_tcp` docs no longer punt resolve-and-pin to the embedder —
+  fidius ships the mechanism; the docs (`docs/explanation/wasm-capabilities.md`)
+  now show the hostname allow-list pattern. The pin narrows lookup→connect
+  TOCTOU to "an address this instance was actually given for that name";
+  connects to a pinned IP (even dialed as a literal) carry that name's
+  authority for the store's lifetime or until re-resolution replaces it.
+- `wasmtime-wasi-io` (same major as wasmtime-wasi) is now a dependency of
+  the `wasm` feature — one more crate in the lockstep wasmtime pin
+  (relevant to the pin-bump automation, FIDIUS-T-0159).
+
+### Compatibility
+
+Released as a **patch**: `ABI_VERSION` unchanged, no guest-facing change of
+any kind (`std::net` dialing untouched, no WIT bump), and an embedder that
+overrides only the old `authorize_tcp` observes byte-identical behavior
+(proven by test). UDP semantics unchanged.
+
 ## 0.5.7 — host functions: a plugin → host callback channel
 
 ### Added

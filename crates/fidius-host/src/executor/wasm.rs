@@ -35,6 +35,7 @@ use fidius_core::Value;
 use wasmtime::component::{Component, InstancePre, Linker, Val};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::p2::add_to_linker_sync;
+use wasmtime_wasi::p2::bindings::sockets::ip_name_lookup;
 use wasmtime_wasi::sockets::SocketAddrUse;
 use wasmtime_wasi::{
     DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
@@ -49,6 +50,9 @@ use wasmtime_wasi_http::p2::{
 use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::error::CallError;
+use crate::executor::name_lookup::{
+    default_resolver, FidiusNameLookup, NameLookupView, PinTable, Resolver,
+};
 use crate::executor::{PluginExecutor, ValueExecutor};
 use crate::types::PluginInfo;
 
@@ -82,6 +86,24 @@ impl EgressDenied {
 /// one-time gate. Inspect `parts.uri` / `parts.method`, mutate `parts.headers`
 /// to inject credentials, or return `Err(EgressDenied)` to refuse (the guest
 /// then sees an HTTP error and the request is never dispatched).
+/// The target of an outbound TCP connect, as the guest expressed it
+/// (FIDIUS-I-0034). Handed to [`EgressPolicy::authorize_tcp_target`].
+///
+/// Plain public fields on purpose: an embedder constructs these literally in
+/// policy tests. Additional context (e.g. exhaustive name candidates for an
+/// IP) would land as new fields in a breaking rev, not `#[non_exhaustive]`.
+pub struct TcpTarget<'a> {
+    /// The hostname the guest dialed, when it dialed by name and fidius could
+    /// pin the lookup (lowercased; DNS is case-insensitive). `None` = the
+    /// guest dialed an IP literal (no lookup happened), or no pin was
+    /// available for the resolved IP. A name-keyed policy should deny `None`
+    /// — that is the honest default for an allow-list that speaks names.
+    pub host: Option<&'a str>,
+    /// The resolved peer the connect will actually reach (the same value
+    /// [`EgressPolicy::authorize_tcp`] has always received).
+    pub addr: SocketAddr,
+}
+
 pub trait EgressPolicy: Send + Sync + 'static {
     /// Authorize (and optionally decorate) one outbound request before dispatch.
     fn authorize(&self, parts: &mut http::request::Parts) -> Result<(), EgressDenied>;
@@ -98,15 +120,51 @@ pub trait EgressPolicy: Send + Sync + 'static {
     ///
     /// `addr` is the **resolved** peer (`IP:port`). A hostname the guest dialed
     /// (`std::net::TcpStream::connect(("db.internal", 5432))`) is resolved via
-    /// `wasi:sockets` name-lookup *first*, so — exactly as the `http` path leaves
-    /// SSRF/DNS-rebinding to the embedder — the policy sees the IP it will
-    /// actually connect to and closes rebinding with resolve-and-pin if it cares.
-    /// Only `TcpConnect` reaches here; bind/listen and UDP are denied outright.
+    /// `wasi:sockets` name-lookup *first*; fidius pins that lookup and hands the
+    /// dialed name to [`authorize_tcp_target`](Self::authorize_tcp_target)
+    /// (FIDIUS-I-0034), so a policy that cares about names overrides that method
+    /// instead of re-deriving resolve-and-pin itself. Only `TcpConnect` reaches
+    /// here; bind/listen and UDP are denied outright.
     ///
     /// **Defaults to deny.** An existing HTTP-only [`EgressPolicy`] therefore
     /// never silently grants raw TCP; an embedder opts in by overriding this.
     fn authorize_tcp(&self, _addr: &SocketAddr) -> Result<(), EgressDenied> {
         Err(EgressDenied::new("tcp egress not permitted by this policy"))
+    }
+
+    /// Name-aware TCP authorization (FIDIUS-I-0034): like
+    /// [`authorize_tcp`](Self::authorize_tcp), but the target carries the
+    /// hostname the guest actually dialed, recovered from fidius's
+    /// resolve-and-pin of the guest's `wasi:sockets` name lookups. This is the
+    /// method a hostname allow-list implements — IP allow-lists are
+    /// operationally broken for managed endpoints that rotate IPs.
+    ///
+    /// `target.host` is `Some(name)` only when the guest dialed by name and
+    /// this instance's lookup was pinned; an IP-literal dial arrives as
+    /// `None` (deny it if your policy speaks names). The pin narrows
+    /// lookup→connect TOCTOU to "an address this instance was actually given
+    /// for that name" — it cannot eliminate it.
+    ///
+    /// **Default delegates to `authorize_tcp(&target.addr)`**, so an embedder
+    /// overriding only that method observes byte-identical behavior.
+    fn authorize_tcp_target(&self, target: &TcpTarget<'_>) -> Result<(), EgressDenied> {
+        self.authorize_tcp(&target.addr)
+    }
+
+    /// Authorize one guest DNS lookup, **before** resolution (FIDIUS-I-0034).
+    /// Without this hook a guest granted the `tcp`/`udp` tier can probe
+    /// arbitrary DNS even when every connect would be denied; a denial here
+    /// fails the guest's lookup (it sees the same resolver failure as a
+    /// lookup denied outright), resolves nothing, and pins nothing.
+    ///
+    /// **Defaults to allow** — deliberately the opposite polarity of
+    /// [`authorize_tcp`](Self::authorize_tcp)'s default-deny: name lookup is
+    /// already open whenever the tcp/udp tier is granted, so a deny default
+    /// would break every existing embedder's hostname dials. The connect
+    /// itself is still gated by
+    /// [`authorize_tcp_target`](Self::authorize_tcp_target).
+    fn authorize_dns(&self, _name: &str) -> Result<(), EgressDenied> {
+        Ok(())
     }
 
     /// Authorize one outbound **UDP** datagram before it leaves (FIDIUS-I-0033) —
@@ -177,6 +235,26 @@ struct HostState {
     /// instantiation (including after `configure`'s persistent store was
     /// created) are visible to the `fidius:host-call` import.
     host_tables: HostTables,
+    /// Resolve-and-pin table (FIDIUS-I-0034): what this store's name lookups
+    /// resolved to, written by the shadowed `ip-name-lookup` and read by the
+    /// same store's `socket_addr_check` (which holds a clone of the `Arc`).
+    pins: PinTable,
+    /// Host-side resolution function for the shadowed lookup. The executor's
+    /// default matches upstream (std `ToSocketAddrs`); tests may inject one
+    /// via `WasmComponentExecutor::set_resolver`.
+    resolver: Resolver,
+}
+
+/// Accessor handed to `ip_name_lookup::add_to_linker` for the shadowed
+/// instance: project the store's state into the lookup view (FIDIUS-I-0034).
+/// The policy rides in via the (always-present) `EgressHooks`.
+fn name_lookup_view(state: &mut HostState) -> NameLookupView<'_> {
+    NameLookupView {
+        table: &mut state.table,
+        pins: &state.pins,
+        policy: state.hooks.policy.as_ref(),
+        resolver: &state.resolver,
+    }
 }
 
 /// The executor-wide registry of bound host-function tables, keyed by
@@ -359,7 +437,15 @@ fn validate_capabilities(caps: &[String]) -> Result<(), CallError> {
 /// inherits nothing and has no preopens) and grants only what's listed.
 /// Filesystem is granted only per `fs:ro:<path>` / `fs:rw:<path>` — a path-scoped
 /// preopen, never the whole filesystem (FIDIUS-A-0008).
-fn build_wasi_ctx(caps: &[String], egress: Option<Arc<dyn EgressPolicy>>) -> WasiCtx {
+///
+/// `pins` is the same table the store's shadowed `ip-name-lookup` writes
+/// (FIDIUS-I-0034) — the `socket_addr_check` installed here reads it to
+/// recover the hostname the guest dialed for a connect's IP.
+fn build_wasi_ctx(
+    caps: &[String],
+    egress: Option<Arc<dyn EgressPolicy>>,
+    pins: PinTable,
+) -> WasiCtx {
     let mut b = WasiCtxBuilder::new();
     // FIDIUS-I-0033: the policy-gated egress tier (`tcp`/`udp`) shares ONE
     // `socket_addr_check`, which is last-call-wins on the builder. We accumulate
@@ -470,8 +556,22 @@ fn build_wasi_ctx(caps: &[String], egress: Option<Arc<dyn EgressPolicy>>) -> Was
                 // Route each resolved peer through the matching hook; fidius ships
                 // the mechanism, the embedder's policy is the allow-list.
                 let allowed = match use_ {
-                    // Outbound TCP connect → authorize_tcp.
-                    SocketAddrUse::TcpConnect => wants_tcp && policy.authorize_tcp(&addr).is_ok(),
+                    // Outbound TCP connect → authorize_tcp_target (FIDIUS-I-0034),
+                    // with the dialed hostname recovered from this store's
+                    // resolve-and-pin table. An IP-literal dial (no lookup, no
+                    // pin) arrives as `host: None`, and the default delegation
+                    // to `authorize_tcp` keeps host-unaware policies
+                    // byte-identical.
+                    SocketAddrUse::TcpConnect => {
+                        let host = pins.lock().unwrap().host_for(&addr.ip().to_canonical());
+                        wants_tcp
+                            && policy
+                                .authorize_tcp_target(&TcpTarget {
+                                    host: host.as_deref(),
+                                    addr,
+                                })
+                                .is_ok()
+                    }
                     // Outbound UDP (connected send or one-shot datagram) →
                     // authorize_udp, on the remote peer.
                     SocketAddrUse::UdpConnect | SocketAddrUse::UdpOutgoingDatagram => {
@@ -627,6 +727,10 @@ pub struct WasmComponentExecutor {
     /// channel, wasm variant), keyed by interface name. Populated by
     /// [`Self::bind_host_table`]; read by the `fidius:host-call` import.
     host_tables: HostTables,
+    /// Host-side resolver behind the shadowed `ip-name-lookup`
+    /// (FIDIUS-I-0034). Defaults to std `ToSocketAddrs` (upstream parity);
+    /// [`Self::set_resolver`] injects one for deterministic tests.
+    resolver: Resolver,
 }
 
 /// A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
@@ -766,6 +870,26 @@ impl WasmComponentExecutor {
                 message: e.to_string(),
             })?;
         }
+        // FIDIUS-I-0034 resolve-and-pin: shadow `wasi:sockets/ip-name-lookup`
+        // with fidius's pinning implementation, under exactly the two-key
+        // condition that turns name lookup on at all (a `tcp`/`udp` grant AND
+        // an embedder policy — the same gate as `allow_ip_name_lookup(true)`
+        // in `build_wasi_ctx`). Without it, upstream's implementation stands
+        // and its default-off lookup flag keeps resolution dead, so
+        // non-granted guests are byte-identical to pre-0034 behavior.
+        let sockets_enabled = capabilities.iter().any(|c| c == "tcp" || c == "udp");
+        if sockets_enabled && egress.is_some() {
+            linker.allow_shadowing(true);
+            ip_name_lookup::add_to_linker::<HostState, FidiusNameLookup>(
+                &mut linker,
+                name_lookup_view,
+            )
+            .map_err(|e| CallError::Backend {
+                runtime: "wasm".into(),
+                message: e.to_string(),
+            })?;
+            linker.allow_shadowing(false);
+        }
         // Client-streaming (FIDIUS-I-0030 CS2.3): provide the `fidius:stream-pull`
         // import the guest pulls its `Stream<T>` argument through. Always linked
         // (harmless for components that don't import it); backed per call by
@@ -875,7 +999,21 @@ impl WasmComponentExecutor {
             configured: None,
             config_bytes: None,
             host_tables,
+            resolver: default_resolver(),
         })
+    }
+
+    /// Replace the host-side resolver behind the shadowed `ip-name-lookup`
+    /// (FIDIUS-I-0034). Test seam — lets the e2e suite model multi-name/
+    /// same-IP and rotation without real DNS. Not part of the stable API.
+    /// Takes effect for stores created after the call (per-call stores and
+    /// a subsequent `configure`'s persistent store).
+    #[doc(hidden)]
+    pub fn set_resolver(
+        &mut self,
+        resolver: Arc<dyn Fn(&str) -> std::io::Result<Vec<IpAddr>> + Send + Sync>,
+    ) {
+        self.resolver = resolver;
     }
 
     /// Bind a host-function table (plugin → host callback channel) to this
@@ -1042,8 +1180,14 @@ impl WasmComponentExecutor {
     /// `InstancePre`. Per-call instantiation gives isolation; the linking cost is
     /// already paid in `build` (FIDIUS-I-0024).
     fn instantiate(&self) -> Result<(Store<HostState>, wasmtime::component::Instance), CallError> {
+        // One pin table per store (FIDIUS-I-0034): the shadowed lookup writes
+        // through `HostState.pins`, the `socket_addr_check` closure inside the
+        // `WasiCtx` reads through its own clone. Lifetime = this store —
+        // per-call for unary dispatch, the persistent store's lifetime for
+        // configured instances (replace-on-re-resolve is the eviction policy).
+        let pins = PinTable::default();
         let host = HostState {
-            ctx: build_wasi_ctx(&self.capabilities, self.egress.clone()),
+            ctx: build_wasi_ctx(&self.capabilities, self.egress.clone(), pins.clone()),
             table: ResourceTable::new(),
             http_ctx: WasiHttpCtx::new(),
             hooks: EgressHooks {
@@ -1051,6 +1195,8 @@ impl WasmComponentExecutor {
             },
             client_stream: None,
             host_tables: self.host_tables.clone(),
+            pins,
+            resolver: self.resolver.clone(),
         };
         let mut store = Store::new(&self.engine, host);
         let instance =
@@ -1750,7 +1896,7 @@ mod fs_capability_tests {
         // then see exactly that dir).
         let tmp = tempfile::TempDir::new().unwrap();
         let cap = format!("fs:rw:{}", tmp.path().display());
-        let _ctx = build_wasi_ctx(&[cap], None);
+        let _ctx = build_wasi_ctx(&[cap], None, PinTable::default());
     }
 }
 
@@ -1839,14 +1985,14 @@ mod tcp_egress_tests {
         // peers). The no-policy path is the fail-closed default (no check → all
         // connects denied), covered by the e2e fixture.
         let policy: Arc<dyn EgressPolicy> = Arc::new(AllowOnePort(5432));
-        let _ctx = build_wasi_ctx(&["tcp".into()], Some(policy));
+        let _ctx = build_wasi_ctx(&["tcp".into()], Some(policy), PinTable::default());
     }
 
     #[test]
     fn tcp_grant_without_policy_builds_a_ctx() {
         // `tcp` declared but no policy: no socket check is installed, so the
         // deny-all default stands — building the ctx must still succeed.
-        let _ctx = build_wasi_ctx(&["tcp".into()], None);
+        let _ctx = build_wasi_ctx(&["tcp".into()], None, PinTable::default());
     }
 
     #[test]
@@ -1854,10 +2000,14 @@ mod tcp_egress_tests {
         // `udp` alone, and `tcp`+`udp` together (one dispatching check), each build
         // a ctx without panicking — with and without a policy (fail-closed default).
         let policy: Arc<dyn EgressPolicy> = Arc::new(AllowOnePort(5432));
-        let _ = build_wasi_ctx(&["udp".into()], Some(policy.clone()));
-        let _ = build_wasi_ctx(&["udp".into()], None);
-        let _ = build_wasi_ctx(&["tcp".into(), "udp".into()], Some(policy));
-        let _ = build_wasi_ctx(&["tcp".into(), "udp".into()], None);
+        let _ = build_wasi_ctx(&["udp".into()], Some(policy.clone()), PinTable::default());
+        let _ = build_wasi_ctx(&["udp".into()], None, PinTable::default());
+        let _ = build_wasi_ctx(
+            &["tcp".into(), "udp".into()],
+            Some(policy),
+            PinTable::default(),
+        );
+        let _ = build_wasi_ctx(&["tcp".into(), "udp".into()], None, PinTable::default());
     }
 }
 
@@ -1905,5 +2055,64 @@ mod wasi_http_version_tests {
             ["wasi:cli/environment@0.2.6", "wasi:io/streams@0.2.6"].into_iter()
         )
         .is_none());
+    }
+}
+
+#[cfg(test)]
+mod egress_policy_tests {
+    use super::{EgressDenied, EgressPolicy, TcpTarget};
+    use std::net::SocketAddr;
+
+    /// A policy written before FIDIUS-I-0034: overrides ONLY `authorize_tcp`.
+    struct LegacyLoopbackOnly;
+    impl EgressPolicy for LegacyLoopbackOnly {
+        fn authorize(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied> {
+            Err(EgressDenied::new("http denied"))
+        }
+        fn authorize_tcp(&self, addr: &SocketAddr) -> Result<(), EgressDenied> {
+            if addr.ip().is_loopback() {
+                Ok(())
+            } else {
+                Err(EgressDenied::new("only loopback"))
+            }
+        }
+    }
+
+    #[test]
+    fn authorize_tcp_target_default_delegates_to_authorize_tcp() {
+        let policy = LegacyLoopbackOnly;
+        for (addr, allowed) in [
+            ("127.0.0.1:5432", true),
+            ("[::1]:5432", true),
+            ("10.0.0.5:5432", false),
+        ] {
+            let addr: SocketAddr = addr.parse().unwrap();
+            // With and without a pinned host, the default must give exactly
+            // authorize_tcp's verdict on the resolved addr.
+            for host in [None, Some("db.internal")] {
+                assert_eq!(
+                    policy
+                        .authorize_tcp_target(&TcpTarget { host, addr })
+                        .is_ok(),
+                    policy.authorize_tcp(&addr).is_ok(),
+                    "delegation must match authorize_tcp for {addr} (host: {host:?})"
+                );
+                assert_eq!(
+                    policy
+                        .authorize_tcp_target(&TcpTarget { host, addr })
+                        .is_ok(),
+                    allowed
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn authorize_dns_defaults_to_allow() {
+        // Opposite polarity of authorize_tcp's default-deny — see the trait docs.
+        assert!(LegacyLoopbackOnly.authorize_dns("anything.example").is_ok());
+        assert!(LegacyLoopbackOnly
+            .authorize_tcp(&"8.8.8.8:53".parse().unwrap())
+            .is_err());
     }
 }

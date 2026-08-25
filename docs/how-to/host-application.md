@@ -45,16 +45,24 @@ let src = host.load_wasm_configured("rest-source", &Source_WASM_DESCRIPTOR, &cfg
 ```
 `examples/02_configure`.
 
-## Brokered HTTP egress (WASM)
+## Brokered egress (WASM): HTTP and raw TCP
 
-A sandboxed connector gets outbound HTTP only with the two-key gate — the package
-declares `capabilities = ["http"]` **and** the host supplies an `EgressPolicy`:
+A sandboxed connector gets outbound reach only with the two-key gate — the package
+declares the capability (`"http"`, `"tcp"`, or `"udp"`) **and** the host supplies
+an `EgressPolicy`:
 
 ```rust
 let host = PluginHost::builder().egress(my_policy).build()?;   // or .egress_policy(arc)
 ```
-See [Capabilities & the WASM Sandbox](../explanation/wasm-capabilities.md). The
-guest calls `fidius_guest::http::get(url)`.
+
+For HTTP the guest calls `fidius_guest::http::get(url)` and the policy's
+`authorize` sees every request. For raw TCP (a DB driver over
+`std::net::TcpStream`) every connect routes through the policy; override
+`authorize_tcp_target` to allow-list **by hostname** — fidius resolves-and-pins
+the guest's name lookups, so the policy is handed the name the guest dialed
+(`TcpTarget { host, addr }`), which survives managed-database IP rotation. An
+`authorize_dns` hook can additionally gate the lookups themselves. See
+[Capabilities & the WASM Sandbox](../explanation/wasm-capabilities.md).
 
 ## Consume a stream
 

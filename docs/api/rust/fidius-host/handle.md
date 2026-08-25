@@ -78,6 +78,66 @@ Create a `PluginHandle` from a descriptor already registered in the current proc
 
 
 
+##### `configure_in_process` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn configure_in_process < C : Serialize > (desc : & 'static PluginDescriptor , config : & C ,) -> Result < Self , LoadError >
+```
+
+Construct a **configured** in-process plugin instance (FIDIUS-A-0006 / CI.2): serialize `config` and bind it once at construction. The plugin's `#[plugin_impl(Trait, config = C)]` `configure` constructor receives it; methods then close over it without re-passing. The config crosses the boundary exactly once, and N differently-configured instances can coexist.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn configure_in_process<C: Serialize>(
+        desc: &'static PluginDescriptor,
+        config: &C,
+    ) -> Result<Self, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::ConfigSerialization(e.to_string()))?;
+        Ok(Self {
+            backend: Backend::Cdylib(CdylibExecutor::from_descriptor_with_config(desc, &cfg)?),
+        })
+    }
+```
+
+</details>
+
+
+
+##### `configure_from_loaded` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn configure_from_loaded < C : Serialize > (plugin : crate :: loader :: LoadedPlugin , config : & C ,) -> Result < Self , LoadError >
+```
+
+Construct a **configured** plugin instance from a DYNAMICALLY loaded cdylib — the dynamic-load analogue of [`Self::configure_in_process`]. A [`LoadedPlugin`](crate::loader::LoadedPlugin) from [`load_library`](crate::loader::load_library) / [`PluginHost::load`] is constructed with `config` bound once (the plugin's `#[plugin_impl(Trait, config = C)]` `configure` constructor receives it) instead of the singleton [`Self::from_loaded`] builds. This lets a host load a configured provider cdylib at runtime and bind N differently-configured instances from the same library. The config crosses the boundary exactly once, at construction.
+
+[`PluginHost::load`]: crate::PluginHost::load
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn configure_from_loaded<C: Serialize>(
+        plugin: crate::loader::LoadedPlugin,
+        config: &C,
+    ) -> Result<Self, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::ConfigSerialization(e.to_string()))?;
+        Ok(Self {
+            backend: Backend::Cdylib(CdylibExecutor::from_loaded_with_config(plugin, &cfg)),
+        })
+    }
+```
+
+</details>
+
+
+
 ##### `find_in_process_descriptor` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
@@ -260,6 +320,65 @@ here (FIDIUS-T-0137).
 
 
 
+##### `call_bidi_streaming` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+ <span class="plissken-badge plissken-badge-async" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-primary-fg-color); color: white;">async</span>
+
+
+```rust
+async fn call_bidi_streaming < I , A , O > (& self , index : usize , items : impl IntoIterator < Item = I , IntoIter : Send + 'static > , args : & A ,) -> Result < crate :: stream :: ChunkStream , CallError > where I : Serialize + 'static , A : Serialize , O : DeserializeOwned + Serialize ,
+```
+
+Start a **bidirectional** streaming call (FIDIUS-I-0032 / ADR-0010): the host produces `items` (the plugin's `Stream<In>` argument) and consumes the plugin's `Stream<Out>` return as the returned [`crate::stream::ChunkStream`]. Pulling the output drives the plugin, which pulls the input on demand — the synchronous lazy-pull composition. `args` are the non-stream arguments. `O` is the output item type. Wired for cdylib; WASM/Python are BD.3/BD.4.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub async fn call_bidi_streaming<I, A, O>(
+        &self,
+        index: usize,
+        items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
+        args: &A,
+    ) -> Result<crate::stream::ChunkStream, CallError>
+    where
+        I: Serialize + 'static,
+        A: Serialize,
+        O: DeserializeOwned + Serialize,
+    {
+        match &self.backend {
+            // Lazy producer — items are encoded only as the plugin pulls them (T-0172).
+            Backend::Cdylib(e) => {
+                let handle = crate::client_stream::host_producer_handle_typed(items.into_iter());
+                let arg_bytes = fidius_core::wire::serialize(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                // SAFETY: `handle` is a freshly-built, exclusively-owned producer.
+                unsafe {
+                    e.call_bidi_streaming_raw(index, handle, &arg_bytes, cdylib_stream_decode::<O>)
+                }
+            }
+            #[cfg(feature = "python")]
+            Backend::Python(e) => {
+                // Python crosses via the self-describing `Value` currency, streamed lazily.
+                let producer = lazy_json_producer(items);
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                e.call_bidi_streaming(index, producer, arg_value)
+            }
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(e) => {
+                let producer = lazy_bincode_producer(items);
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                e.call_bidi_streaming(index, producer, arg_value).await
+            }
+        }
+    }
+```
+
+</details>
+
+
+
 ##### `call_method_raw` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
@@ -280,6 +399,170 @@ Call a `#[wire(raw)]` method: raw bytes in, raw bytes out, no bincode.
             Backend::Python(e) => PluginExecutor::call_raw(e, index, input),
             #[cfg(feature = "wasm")]
             Backend::Wasm(e) => PluginExecutor::call_raw(e, index, input),
+        }
+    }
+```
+
+</details>
+
+
+
+##### `call_client_streaming_raw` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+ <span class="plissken-badge plissken-badge-unsafe" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #f44336; color: white;">unsafe</span>
+
+
+```rust
+unsafe fn call_client_streaming_raw (& self , index : usize , handle : * mut fidius_core :: stream_ffi :: FidiusStreamHandle , input : & [u8] ,) -> Result < Vec < u8 > , CallError >
+```
+
+Client-streaming raw call (FIDIUS-I-0030 CS2.2): pass the host's producer `handle` (built via [`crate::client_stream::host_producer_handle`]) and the bincode of the non-stream args; returns the bincode of the method's result. Wired for the cdylib backend; WASM/Python land in CS2.3/CS2.4. The typed `call_client_streaming` wrapper is CS2.5.
+
+# Safety
+`handle` must be a valid, exclusively-owned producer handle (e.g. from [`crate::client_stream::host_producer_handle`]); it is consumed by the call.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub unsafe fn call_client_streaming_raw(
+        &self,
+        index: usize,
+        handle: *mut fidius_core::stream_ffi::FidiusStreamHandle,
+        input: &[u8],
+    ) -> Result<Vec<u8>, CallError> {
+        match &self.backend {
+            // SAFETY: forwarded per this fn's contract.
+            Backend::Cdylib(e) => unsafe { e.call_client_streaming_raw(index, handle, input) },
+            #[cfg(feature = "python")]
+            Backend::Python(_) => Err(CallError::Backend {
+                runtime: "python".into(),
+                message: "client-streaming is not yet wired for Python (FIDIUS-I-0030 CS2.4)"
+                    .into(),
+            }),
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(_) => Err(CallError::Backend {
+                runtime: "wasm".into(),
+                message: "use the typed `call_client_streaming` for the WASM backend".into(),
+            }),
+        }
+    }
+```
+
+</details>
+
+
+
+##### `call_client_streaming` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+```rust
+fn call_client_streaming < I , A , O > (& self , method : usize , items : impl IntoIterator < Item = I , IntoIter : Send + 'static > , args : & A ,) -> Result < O , CallError > where I : Serialize + 'static , A : Serialize , O : DeserializeOwned ,
+```
+
+Typed client-streaming (FIDIUS-I-0030): the host produces `items` (the `Stream<T>` argument); the plugin pulls + consumes them and returns `O`. `args` are the method's non-stream arguments (a tuple). Wired for cdylib (in-process producer handle) and WASM (the `fidius:stream-pull` import); Python is CS2.4. The safe wrapper over the per-backend mechanisms.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn call_client_streaming<I, A, O>(
+        &self,
+        method: usize,
+        items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
+        args: &A,
+    ) -> Result<O, CallError>
+    where
+        I: Serialize + 'static,
+        A: Serialize,
+        O: DeserializeOwned,
+    {
+        match &self.backend {
+            // cdylib: a lazy producer handle — each item is bincode-encoded only as the
+            // plugin pulls it, so an unbounded input stays bounded in memory (T-0172).
+            Backend::Cdylib(e) => {
+                let handle = crate::client_stream::host_producer_handle_typed(items.into_iter());
+                let arg_bytes = fidius_core::wire::serialize(args)
+                    .map_err(|e| CallError::Serialization(e.to_string()))?;
+                // SAFETY: `handle` is a freshly-built, exclusively-owned producer.
+                let out = unsafe { e.call_client_streaming_raw(method, handle, &arg_bytes) }?;
+                fidius_core::wire::deserialize(&out)
+                    .map_err(|e| CallError::Deserialization(e.to_string()))
+            }
+            // WASM: same laziness — the boxed producer encodes on pull from the import.
+            #[cfg(feature = "wasm")]
+            Backend::Wasm(e) => {
+                let producer = lazy_bincode_producer(items);
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let out = e.call_client_streaming(method, producer, arg_value)?;
+                fidius_core::from_value(out)
+                    .map_err(|err| CallError::Deserialization(err.to_string()))
+            }
+            // Python crosses via the self-describing `Value` currency, streamed lazily
+            // (FIDIUS-T-0174) — each item is converted only as the Python iterator pulls it.
+            #[cfg(feature = "python")]
+            Backend::Python(e) => {
+                let producer = lazy_json_producer(items);
+                let arg_value = fidius_core::to_value(args)
+                    .map_err(|err| CallError::Serialization(err.to_string()))?;
+                let out = e.call_client_streaming(method, producer, arg_value)?;
+                fidius_core::from_value(out)
+                    .map_err(|err| CallError::Deserialization(err.to_string()))
+            }
+        }
+    }
+```
+
+</details>
+
+
+
+##### `bind_wasm_host_table` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+ <span class="plissken-badge plissken-badge-unsafe" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #f44336; color: white;">unsafe</span>
+
+
+```rust
+unsafe fn bind_wasm_host_table (& self , table : * const fidius_core :: host_ffi :: HostFunctionTable ,) -> Result < () , LoadError >
+```
+
+Bind a host-function table (plugin → host callback channel) to a **WASM-backed** handle. The generated `<Trait>Binding::bind_wasm` resolves through this: `table` must be a process-lifetime table built by a `#[host_interface]`-generated binding (`<Trait>Binding::table`). The guest's `fidius:host-call` import gates every dispatch against the table's version + signature hash, so a mismatched surface fails with a typed error and can never mis-dispatch.
+
+Returns `LoadError::HostBindFailed` with
+[`fidius_core::host_ffi::BIND_ERR_WRONG_BACKEND`] for non-WASM
+backends — cdylib handles bind through `<Trait>Binding::bind` /
+`bind_plugin` (the dylib import registry) instead.
+
+# Safety
+`table` must be null or a valid, **process-lifetime** [`fidius_core::host_ffi::HostFunctionTable`] (e.g. the leaked table a generated `<Trait>Binding::table` builds); the backend retains it and dispatches through it for its remaining lifetime.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub unsafe fn bind_wasm_host_table(
+        &self,
+        table: *const fidius_core::host_ffi::HostFunctionTable,
+    ) -> Result<(), LoadError> {
+        match &self.backend {
+            // SAFETY: forwarded per this fn's contract.
+            Backend::Wasm(e) => unsafe { e.bind_host_table(table) },
+            _ => {
+                use fidius_core::host_ffi::{bind_status_message, BIND_ERR_WRONG_BACKEND};
+                let interface = if table.is_null() {
+                    "<null>".to_string()
+                } else {
+                    // SAFETY: non-null table per the bind contract.
+                    unsafe { std::ffi::CStr::from_ptr((*table).interface_name) }
+                        .to_str()
+                        .unwrap_or("<invalid>")
+                        .to_string()
+                };
+                Err(LoadError::HostBindFailed {
+                    interface,
+                    code: BIND_ERR_WRONG_BACKEND,
+                    message: bind_status_message(BIND_ERR_WRONG_BACKEND).to_string(),
+                })
+            }
         }
     }
 ```
@@ -442,6 +725,66 @@ fn cdylib_stream_decode<O: DeserializeOwned + Serialize>(
     let item: O = fidius_core::wire::deserialize(bytes)
         .map_err(|e| CallError::Deserialization(e.to_string()))?;
     fidius_core::to_value(&item).map_err(|e| CallError::Serialization(e.to_string()))
+}
+```
+
+</details>
+
+
+
+### `fidius-host::handle::lazy_bincode_producer`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn lazy_bincode_producer < I : Serialize + 'static > (items : impl IntoIterator < Item = I , IntoIter : Send + 'static > ,) -> Box < dyn Iterator < Item = Vec < u8 > > + Send >
+```
+
+A lazy, boxed bincode producer for the WASM client/bidi streaming input path: each item is bincode-encoded only when the guest's `fidius:stream-pull` import pulls it (FIDIUS-T-0172), so an unbounded input stays bounded in host memory. An item that fails to encode is skipped (bincode of a `Serialize` type is effectively infallible, and a panic must not cross the host→guest call).
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn lazy_bincode_producer<I: Serialize + 'static>(
+    items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
+) -> Box<dyn Iterator<Item = Vec<u8>> + Send> {
+    Box::new(
+        items
+            .into_iter()
+            .filter_map(|i| fidius_core::wire::serialize(&i).ok()),
+    )
+}
+```
+
+</details>
+
+
+
+### `fidius-host::handle::lazy_json_producer`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn lazy_json_producer < I : Serialize + 'static > (items : impl IntoIterator < Item = I , IntoIter : Send + 'static > ,) -> Box < dyn Iterator < Item = serde_json :: Value > + Send >
+```
+
+A lazy, boxed producer of `Value`-shaped JSON for the Python client/bidi streaming input path (FIDIUS-T-0174): each item is converted (`I` → `Value` → `serde_json`) only as the Python iterator pulls it, so an unbounded input stays bounded in host memory. An item that fails to convert is skipped (effectively infallible for real types; a panic must not cross into the interpreter).
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn lazy_json_producer<I: Serialize + 'static>(
+    items: impl IntoIterator<Item = I, IntoIter: Send + 'static>,
+) -> Box<dyn Iterator<Item = serde_json::Value> + Send> {
+    Box::new(items.into_iter().filter_map(|i| {
+        fidius_core::to_value(&i)
+            .ok()
+            .and_then(|v| serde_json::to_value(v).ok())
+    }))
 }
 ```
 

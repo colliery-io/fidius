@@ -61,6 +61,13 @@ and the host supplies an `EgressPolicy`. See
 `macro-fetcher` fixture's `fetch_timeout` test
 (`crates/fidius-host/tests/macro_egress_e2e.rs`).
 
+A **raw-TCP** connector (a pure-Rust DB driver over `std::net::TcpStream`)
+declares `capabilities = ["tcp"]` instead, and the host's policy gates every
+connect — allow-list managed database endpoints **by hostname** with
+`EgressPolicy::authorize_tcp_target` (fidius resolves-and-pins the guest's
+lookups, so the policy sees the name the guest dialed, not just an IP that
+rotates on failover). Same explanation doc, "Hostname allow-lists" section.
+
 ## Putting it together
 
 A REST-source connector = `Source::events` streams `Event` records, each page

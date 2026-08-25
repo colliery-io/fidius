@@ -527,9 +527,10 @@ fn render_python_stub(trait_name: &str, methods: &[MethodSpec]) -> String {
                 &m.arg_types,
                 &m.return_type_string,
                 m.wire_raw,
-                // The Python stub generator does not yet model server-streaming
-                // methods (Phase-1 streaming-Python authoring is a later task);
-                // non-streaming until then.
+                // The Python stub generator does not yet model server- or
+                // client-streaming methods (streaming-Python authoring is a later
+                // task); non-streaming until then.
+                false,
                 false,
             )
         })
