@@ -22,6 +22,7 @@ nav:
     - fidius-host::client_stream: rust/fidius-host/client_stream.md
     - fidius-host::error: rust/fidius-host/error.md
     - fidius-host::executor: rust/fidius-host/executor.md
+    - fidius-host::executor::body_tee: rust/fidius-host/executor/body_tee.md
     - fidius-host::executor::cdylib: rust/fidius-host/executor/cdylib.md
     - fidius-host::executor::name_lookup: rust/fidius-host/executor/name_lookup.md
     - fidius-host::executor::python: rust/fidius-host/executor/python.md

@@ -180,7 +180,7 @@ pub use fidius_host::{ChunkStream, StreamExecutor};
 // `EgressPolicy::authorize` impl can name `http_types::request::Parts` without depending on
 // `http` directly. Requires the `wasm` feature.
 #[cfg(feature = "wasm")]
-pub use fidius_host::{http_types, EgressDenied, EgressPolicy, TcpTarget};
+pub use fidius_host::{http_types, EgressDenied, EgressPolicy, ResponseDirective, TcpTarget};
 
 // Re-export inventory so fidius_plugin_registry!() works via fidius_core
 pub use fidius_core::inventory;
