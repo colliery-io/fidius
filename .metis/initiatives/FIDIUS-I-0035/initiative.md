@@ -4,14 +4,14 @@ level: initiative
 title: "Egress response hook — on_response observation + bounded auth-retry for wasi:http"
 short_code: "FIDIUS-I-0035"
 created_at: 2026-08-31T18:18:35.746008+00:00
-updated_at: 2026-08-31T18:27:29.652089+00:00
+updated_at: 2026-09-05T13:14:08.029554+00:00
 parent: FIDIUS-V-0001
 blocked_by: []
 archived: false
 
 tags:
   - "#initiative"
-  - "#phase/active"
+  - "#phase/completed"
 
 
 exit_criteria_met: false
@@ -126,6 +126,8 @@ pub trait EgressPolicy: Send + Sync + 'static {
   5. Policy returns `RetryOnce` on the second observation → ignored, response forwards.
 
 ## Status Updates
+
+**2026-09-05 — SHIPPED.** Merged to main via PR #10 (merge `93ca7a8`, feature commit `3b53dca`); feature branch deleted local+remote; initiative transitioned to completed on user instruction.
 
 **2026-09-03 — ALL TASKS COMPLETE; initiative left in active for user review.**
 
