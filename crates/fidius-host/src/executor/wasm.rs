@@ -42,14 +42,17 @@ use wasmtime_wasi::{
 };
 use wasmtime_wasi_http::p2::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
-use wasmtime_wasi_http::p2::types::{HostFutureIncomingResponse, OutgoingRequestConfig};
+use wasmtime_wasi_http::p2::types::{
+    HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig,
+};
 use wasmtime_wasi_http::p2::{
-    add_only_http_to_linker_sync, default_send_request, HttpResult, WasiHttpCtxView, WasiHttpHooks,
-    WasiHttpView,
+    add_only_http_to_linker_sync, default_send_request, default_send_request_handler, HttpResult,
+    WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
 };
 use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::error::CallError;
+use crate::executor::body_tee::{replay_body, CaptureHandle, TeeBody};
 use crate::executor::name_lookup::{
     default_resolver, FidiusNameLookup, NameLookupView, PinTable, Resolver,
 };
@@ -92,6 +95,28 @@ impl EgressDenied {
 /// Plain public fields on purpose: an embedder constructs these literally in
 /// policy tests. Additional context (e.g. exhaustive name candidates for an
 /// IP) would land as new fields in a breaking rev, not `#[non_exhaustive]`.
+/// What an [`EgressPolicy`] wants done with a response it has observed via
+/// [`on_response`](EgressPolicy::on_response) (FIDIUS-I-0035).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseDirective {
+    /// Hand the response to the guest unchanged (the default).
+    Forward,
+    /// Discard this response; re-run [`authorize`](EgressPolicy::authorize) on
+    /// a fresh clone of the **original** (pre-`authorize`) request parts —
+    /// letting the policy inject a fresh credential — and dispatch again. The
+    /// second response is forwarded to the guest unconditionally.
+    ///
+    /// Bounded by fidius to **at most one retry per original guest request**;
+    /// a `RetryOnce` returned when `retry_available` is `false` (second
+    /// observation, or a non-replayable body) is ignored and the response
+    /// forwards. Each dispatch attempt gets its own connect/first-byte
+    /// timeouts, so a retried request can take up to ~2× the configured
+    /// budget. If the re-run `authorize` denies, the guest sees the same
+    /// generic HTTP "request denied" as any refused request — the policy
+    /// consumed the original response and then refused to re-stamp.
+    RetryOnce,
+}
+
 pub struct TcpTarget<'a> {
     /// The hostname the guest dialed, when it dialed by name and fidius could
     /// pin the lookup (lowercased; DNS is case-insensitive). `None` = the
@@ -185,6 +210,52 @@ pub trait EgressPolicy: Send + Sync + 'static {
     fn authorize_udp(&self, _addr: &SocketAddr) -> Result<(), EgressDenied> {
         Err(EgressDenied::new("udp egress not permitted by this policy"))
     }
+
+    /// Opt-in gate for [`on_response`](Self::on_response) (FIDIUS-I-0035).
+    ///
+    /// **Defaults to `false`**, and while it stays `false` the dispatch path
+    /// is byte-identical to a fidius without the response hook: no body tee,
+    /// no observation, zero overhead. A policy that overrides `on_response`
+    /// must also override this to return `true`, accepting the (small) cost
+    /// of teeing every outgoing request body up to 64 KiB for possible replay.
+    fn observes_responses(&self) -> bool {
+        false
+    }
+
+    /// Observe the response HEAD for a request this policy authorized,
+    /// **before** the guest sees it (FIDIUS-I-0035). Called only when
+    /// [`observes_responses`](Self::observes_responses) returns `true`.
+    ///
+    /// This is the auth-retry seam: a policy that injects credentials in
+    /// [`authorize`](Self::authorize) can match an expired-credential response
+    /// here (typically a 401), invalidate its cache, and return
+    /// [`ResponseDirective::RetryOnce`] — the request is re-authorized (fresh
+    /// credential) and dispatched once more, invisibly to the guest.
+    ///
+    /// - `request` is the **as-dispatched** (post-`authorize`) parts — it
+    ///   carries whatever this policy injected. The retry's `authorize` runs
+    ///   on a clean pre-`authorize` clone instead, so a stale injected header
+    ///   never feeds back into re-stamping.
+    /// - Head-only: status + headers, never the response body.
+    /// - `retry_available` is `false` when the request body was not replayable
+    ///   (streamed past 64 KiB, carried trailers, or never finished before the
+    ///   response arrived) and on the observation of a retried dispatch — a
+    ///   `RetryOnce` returned then is ignored and the response forwards.
+    /// - Transport errors never reach this method; the guest sees them as
+    ///   today.
+    ///
+    /// **Defaults to [`ResponseDirective::Forward`]** — existing policies are
+    /// unaffected.
+    fn on_response(
+        &self,
+        request: &http::request::Parts,
+        status: http::StatusCode,
+        headers: &http::HeaderMap,
+        retry_available: bool,
+    ) -> ResponseDirective {
+        let _ = (request, status, headers, retry_available);
+        ResponseDirective::Forward
+    }
 }
 
 /// fidius's [`WasiHttpHooks`] adapter: routes every outbound request through the
@@ -208,14 +279,105 @@ impl WasiHttpHooks for EgressHooks {
         // Split off the body so the policy works in pure `http`-crate types,
         // then reassemble for dispatch.
         let (mut parts, body) = request.into_parts();
+
+        if !policy.observes_responses() {
+            // The pre-FIDIUS-I-0035 path, kept literally: no tee, no
+            // observation. Byte-identical for every policy that doesn't opt
+            // into the response hook.
+            if policy.authorize(&mut parts).is_err() {
+                return Err(ErrorCode::HttpRequestDenied.into());
+            }
+            return Ok(default_send_request(
+                http::Request::from_parts(parts, body),
+                config,
+            ));
+        }
+
+        // Observing path (FIDIUS-I-0035). The clone MUST be taken before
+        // `authorize` runs: a retry re-stamps this clean copy, never a
+        // request already carrying the policy's own (stale) injected headers.
+        let original = parts.clone();
         if policy.authorize(&mut parts).is_err() {
             return Err(ErrorCode::HttpRequestDenied.into());
         }
-        Ok(default_send_request(
-            http::Request::from_parts(parts, body),
-            config,
-        ))
+        let (teed, capture) = TeeBody::wrap(body);
+        let policy = Arc::clone(policy);
+        // Mirror `default_send_request`: spawn the dispatch and hand back the
+        // pending future the guest polls.
+        let handle = wasmtime_wasi::runtime::spawn(async move {
+            Ok(dispatch_observed(policy, original, parts, teed, capture, config).await)
+        });
+        Ok(HostFutureIncomingResponse::pending(handle))
     }
+}
+
+/// Copy an [`OutgoingRequestConfig`] (all-`Copy` fields; the type itself isn't
+/// `Clone` upstream). The retry attempt reuses the same budget, so connect and
+/// first-byte timeouts apply **per attempt**.
+fn copy_config(c: &OutgoingRequestConfig) -> OutgoingRequestConfig {
+    OutgoingRequestConfig {
+        use_tls: c.use_tls,
+        connect_timeout: c.connect_timeout,
+        first_byte_timeout: c.first_byte_timeout,
+        between_bytes_timeout: c.between_bytes_timeout,
+    }
+}
+
+/// The observing dispatch (FIDIUS-I-0035): send the request, show the policy
+/// the response head, and honor at most one `RetryOnce` — structurally, a
+/// straight-line function with a single possible second dispatch; no loop
+/// exists for a policy to drive.
+///
+/// `original` is the pre-`authorize` parts; `dispatched` the as-sent parts.
+async fn dispatch_observed(
+    policy: Arc<dyn EgressPolicy>,
+    original: http::request::Parts,
+    dispatched: http::request::Parts,
+    body: HyperOutgoingBody,
+    capture: CaptureHandle,
+    config: OutgoingRequestConfig,
+) -> Result<IncomingResponse, ErrorCode> {
+    let retry_config = copy_config(&config);
+    // A transport error (`Err`) propagates to the guest exactly as today —
+    // `on_response` observes only actual responses.
+    let first =
+        default_send_request_handler(http::Request::from_parts(dispatched.clone(), body), config)
+            .await?;
+
+    let replay = capture.replayable();
+    let directive = policy.on_response(
+        &dispatched,
+        first.resp.status(),
+        first.resp.headers(),
+        replay.is_some(),
+    );
+    let (ResponseDirective::RetryOnce, Some(bytes)) = (directive, replay) else {
+        return Ok(first);
+    };
+
+    // Discard the observed response (dropping it aborts its body worker) and
+    // re-authorize a clean clone of the original parts — the policy injects
+    // its fresh credential here. A denial is terminal: the policy consumed
+    // the response and then refused to re-stamp.
+    drop(first);
+    let mut retry_parts = original;
+    if policy.authorize(&mut retry_parts).is_err() {
+        return Err(ErrorCode::HttpRequestDenied);
+    }
+    let second = default_send_request_handler(
+        http::Request::from_parts(retry_parts.clone(), replay_body(bytes)),
+        retry_config,
+    )
+    .await?;
+    // Observability only: `retry_available = false`, directive ignored — the
+    // second response forwards unconditionally.
+    let _ = policy.on_response(
+        &retry_parts,
+        second.resp.status(),
+        second.resp.headers(),
+        false,
+    );
+    Ok(second)
 }
 
 /// Per-store host state. The `WasiCtx` is built from the capability allow-list
@@ -2114,5 +2276,370 @@ mod egress_policy_tests {
         assert!(LegacyLoopbackOnly
             .authorize_tcp(&"8.8.8.8:53".parse().unwrap())
             .is_err());
+    }
+
+    /// FIDIUS-I-0035: the response hook is strictly opt-in.
+    #[test]
+    fn response_hook_defaults_are_opt_out() {
+        use super::ResponseDirective;
+
+        let policy = LegacyLoopbackOnly;
+        assert!(!policy.observes_responses());
+
+        let (parts, _) = http::Request::builder()
+            .uri("https://api.example/v1/thing")
+            .body(())
+            .unwrap()
+            .into_parts();
+        let headers = parts.headers.clone();
+        for retry_available in [true, false] {
+            assert_eq!(
+                policy.on_response(
+                    &parts,
+                    http::StatusCode::UNAUTHORIZED,
+                    &headers,
+                    retry_available,
+                ),
+                ResponseDirective::Forward,
+                "a policy that overrides nothing must always forward"
+            );
+        }
+    }
+}
+
+/// FIDIUS-I-0035: the observing dispatch (`dispatch_observed`) against real
+/// loopback servers — retry mechanics without a wasm guest (the guest-visible
+/// path is covered by the response-hook e2e suite).
+#[cfg(test)]
+mod response_hook_dispatch_tests {
+    use super::{
+        dispatch_observed, EgressDenied, EgressPolicy, OutgoingRequestConfig, ResponseDirective,
+        TeeBody,
+    };
+    use crate::executor::body_tee::replay_body;
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    const R401: &str =
+        "HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+    const R200: &str = "HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+
+    /// Scripted loopback server: serves `responses` in order, one connection
+    /// each, recording every request head it saw. Extra connections are not
+    /// accepted — a runaway retry loop shows up as a client-side error.
+    fn scripted_server(
+        responses: &'static [&'static str],
+    ) -> (String, std::sync::mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for resp in responses {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
+                let mut buf = Vec::new();
+                let mut chunk = [0u8; 4096];
+                while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match stream.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    }
+                }
+                let _ = tx.send(String::from_utf8_lossy(&buf).into_owned());
+                let _ = stream.write_all(resp.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        (addr.to_string(), rx)
+    }
+
+    fn parts_for(addr: &str) -> http::request::Parts {
+        http::Request::builder()
+            .method(http::Method::GET)
+            .uri(format!("http://{addr}/v1/data"))
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0
+    }
+
+    fn config() -> OutgoingRequestConfig {
+        let t = std::time::Duration::from_secs(5);
+        OutgoingRequestConfig {
+            use_tls: false,
+            connect_timeout: t,
+            first_byte_timeout: t,
+            between_bytes_timeout: t,
+        }
+    }
+
+    /// An empty body in the shape wasi-http's `BodyImpl` hands us: end only
+    /// observable by POLLING (`is_end_stream()` stays false), exactly like a
+    /// guest that finished its (empty) outgoing body before dispatch.
+    struct ChannelShapedEmpty;
+    impl http_body::Body for ChannelShapedEmpty {
+        type Data = bytes::Bytes;
+        type Error = super::ErrorCode;
+        fn poll_frame(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+            std::task::Poll::Ready(None)
+        }
+    }
+
+    /// Run the observing dispatch the way `send_request` does: pre-authorize
+    /// clone, authorize, tee a wasi-http-shaped empty body, dispatch.
+    async fn run(
+        policy: Arc<dyn EgressPolicy>,
+        addr: &str,
+    ) -> Result<super::IncomingResponse, super::ErrorCode> {
+        use http_body_util::BodyExt;
+        let mut parts = parts_for(addr);
+        let original = parts.clone();
+        policy
+            .authorize(&mut parts)
+            .expect("first authorize allows");
+        let (teed, capture) = TeeBody::wrap(ChannelShapedEmpty.boxed_unsync());
+        dispatch_observed(policy, original, parts, teed, capture, config()).await
+    }
+
+    /// The motivating policy: stamps a credential, refreshes it on 401.
+    /// `authorize` asserts it always sees a CLEAN request — the retry must
+    /// re-stamp the pre-authorize clone, not the as-dispatched parts.
+    struct RefreshOn401 {
+        stamps: AtomicUsize,
+        observations: Mutex<Vec<(u16, bool)>>,
+    }
+
+    impl RefreshOn401 {
+        fn new() -> Self {
+            Self {
+                stamps: AtomicUsize::new(0),
+                observations: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl EgressPolicy for RefreshOn401 {
+        fn authorize(&self, parts: &mut http::request::Parts) -> Result<(), EgressDenied> {
+            assert!(
+                parts.headers.get("x-cred").is_none(),
+                "retry must re-authorize a clean pre-authorize clone"
+            );
+            let n = self.stamps.fetch_add(1, Ordering::SeqCst);
+            let cred = if n == 0 { "stale" } else { "fresh" };
+            parts.headers.insert("x-cred", cred.parse().unwrap());
+            Ok(())
+        }
+        fn observes_responses(&self) -> bool {
+            true
+        }
+        fn on_response(
+            &self,
+            _request: &http::request::Parts,
+            status: http::StatusCode,
+            _headers: &http::HeaderMap,
+            retry_available: bool,
+        ) -> ResponseDirective {
+            self.observations
+                .lock()
+                .unwrap()
+                .push((status.as_u16(), retry_available));
+            if status == http::StatusCode::UNAUTHORIZED && retry_available {
+                ResponseDirective::RetryOnce
+            } else {
+                ResponseDirective::Forward
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn retry_once_restamps_and_forwards_the_second_response() {
+        let (addr, heads) = scripted_server(&[R401, R200]);
+        let policy = Arc::new(RefreshOn401::new());
+
+        let resp = run(policy.clone(), &addr).await.expect("dispatch succeeds");
+        assert_eq!(resp.resp.status(), http::StatusCode::OK);
+
+        // The server saw exactly two requests: stale credential, then fresh.
+        let first = heads.recv().unwrap();
+        let second = heads.recv().unwrap();
+        assert!(first.contains("x-cred: stale"), "first head: {first}");
+        assert!(second.contains("x-cred: fresh"), "second head: {second}");
+        assert!(heads.try_recv().is_err(), "exactly two requests");
+
+        // Both responses were observed; the second with retry_available=false.
+        assert_eq!(
+            *policy.observations.lock().unwrap(),
+            vec![(401, true), (200, false)]
+        );
+    }
+
+    /// A policy that consumes the 401 and then refuses to re-stamp: the guest
+    /// gets the generic request-denied error, not the stale 401.
+    struct DenyOnRetry(AtomicUsize);
+
+    impl EgressPolicy for DenyOnRetry {
+        fn authorize(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied> {
+            match self.0.fetch_add(1, Ordering::SeqCst) {
+                0 => Ok(()),
+                _ => Err(EgressDenied::new("re-mint failed")),
+            }
+        }
+        fn observes_responses(&self) -> bool {
+            true
+        }
+        fn on_response(
+            &self,
+            _request: &http::request::Parts,
+            _status: http::StatusCode,
+            _headers: &http::HeaderMap,
+            _retry_available: bool,
+        ) -> ResponseDirective {
+            ResponseDirective::RetryOnce
+        }
+    }
+
+    #[tokio::test]
+    async fn deny_on_retry_maps_to_request_denied() {
+        let (addr, heads) = scripted_server(&[R401]);
+        let err = run(Arc::new(DenyOnRetry(AtomicUsize::new(0))), &addr)
+            .await
+            .expect_err("retry authorize denied");
+        assert!(
+            matches!(err, super::ErrorCode::HttpRequestDenied),
+            "got: {err:?}"
+        );
+        let _ = heads.recv().unwrap();
+        assert!(heads.try_recv().is_err(), "exactly one request dispatched");
+    }
+
+    /// An always-RetryOnce policy is bounded to a single retry: the second
+    /// 401 forwards (its directive is ignored) and the server sees exactly
+    /// two requests.
+    struct AlwaysRetry;
+
+    impl EgressPolicy for AlwaysRetry {
+        fn authorize(&self, _parts: &mut http::request::Parts) -> Result<(), EgressDenied> {
+            Ok(())
+        }
+        fn observes_responses(&self) -> bool {
+            true
+        }
+        fn on_response(
+            &self,
+            _request: &http::request::Parts,
+            _status: http::StatusCode,
+            _headers: &http::HeaderMap,
+            _retry_available: bool,
+        ) -> ResponseDirective {
+            ResponseDirective::RetryOnce
+        }
+    }
+
+    #[tokio::test]
+    async fn retry_is_bounded_to_one() {
+        let (addr, heads) = scripted_server(&[R401, R401]);
+        let resp = run(Arc::new(AlwaysRetry), &addr).await.expect("forwarded");
+        assert_eq!(resp.resp.status(), http::StatusCode::UNAUTHORIZED);
+        let _ = heads.recv().unwrap();
+        let _ = heads.recv().unwrap();
+        assert!(
+            heads.try_recv().is_err(),
+            "exactly two requests, never more"
+        );
+    }
+
+    /// A body streaming past the 64 KiB cap is not replayable: the 401
+    /// forwards even though the policy asked to retry.
+    #[tokio::test]
+    async fn oversized_body_forwards() {
+        // Bespoke server: read the head, respond 401, then drain the rest of
+        // the body to EOF so the client's in-flight write never sees a reset.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 65536];
+            while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                match stream.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                }
+            }
+            let _ = tx.send(());
+            let _ = stream.write_all(R401.as_bytes());
+            let _ = stream.flush();
+            while matches!(stream.read(&mut chunk), Ok(n) if n > 0) {}
+        });
+
+        let policy: Arc<dyn EgressPolicy> = Arc::new(AlwaysRetry);
+        let mut parts = parts_for(&addr);
+        parts.method = http::Method::POST;
+        let original = parts.clone();
+        policy.authorize(&mut parts).unwrap();
+        let big = bytes::Bytes::from(vec![0u8; 2 * crate::executor::body_tee::REPLAY_CAP]);
+        let (teed, capture) = TeeBody::wrap(replay_body(big));
+        let resp = dispatch_observed(policy, original, parts, teed, capture, config())
+            .await
+            .expect("401 forwards");
+        assert_eq!(resp.resp.status(), http::StatusCode::UNAUTHORIZED);
+        rx.recv().unwrap();
+        assert!(rx.try_recv().is_err(), "no retry for an oversized body");
+    }
+
+    /// A non-replayable body (here: carrying trailers) forwards the 401
+    /// untouched even though the policy asked to retry.
+    #[tokio::test]
+    async fn non_replayable_body_forwards() {
+        use http_body::{Body, Frame};
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        struct TrailerBody(Vec<Frame<bytes::Bytes>>);
+        impl Body for TrailerBody {
+            type Data = bytes::Bytes;
+            type Error = super::ErrorCode;
+            fn poll_frame(
+                mut self: Pin<&mut Self>,
+                _cx: &mut Context<'_>,
+            ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+                Poll::Ready(if self.0.is_empty() {
+                    None
+                } else {
+                    Some(Ok(self.0.remove(0)))
+                })
+            }
+        }
+
+        let (addr, heads) = scripted_server(&[R401]);
+        let policy: Arc<dyn EgressPolicy> = Arc::new(AlwaysRetry);
+        let mut parts = parts_for(&addr);
+        parts.method = http::Method::POST;
+        let original = parts.clone();
+        policy.authorize(&mut parts).unwrap();
+        let body = {
+            use http_body_util::BodyExt;
+            TrailerBody(vec![
+                Frame::data(bytes::Bytes::from_static(b"payload")),
+                Frame::trailers(http::HeaderMap::new()),
+            ])
+            .boxed_unsync()
+        };
+        let (teed, capture) = TeeBody::wrap(body);
+        let resp = dispatch_observed(policy, original, parts, teed, capture, config())
+            .await
+            .expect("401 forwards");
+        assert_eq!(resp.resp.status(), http::StatusCode::UNAUTHORIZED);
+        let _ = heads.recv().unwrap();
+        assert!(heads.try_recv().is_err(), "no retry for a trailered body");
     }
 }

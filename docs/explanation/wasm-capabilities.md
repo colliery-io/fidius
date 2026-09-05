@@ -254,6 +254,76 @@ impl EgressPolicy for ApiEgress {
 `crates/fidius-host/tests/wasm_egress_e2e.rs` exercises allow/deny/fail-closed
 against a real `wasi:http` guest with policies like this.)
 
+### Response observation + auth-retry: `on_response` (opt-in)
+
+A policy that injects credentials has a failure mode `authorize` alone can't
+heal: the injected token **expires mid-run**, the API answers 401, and the
+guest — which by design knows nothing about credentials — just fails. The
+response hook closes that loop with the standard HTTP-client pattern: *on
+401, refresh the credential and replay that one request, once*.
+
+Opt in by overriding two methods:
+
+```rust
+use fidius_host::executor::{EgressPolicy, EgressDenied, ResponseDirective};
+
+impl EgressPolicy for ApiEgress {
+    fn authorize(&self, parts: &mut http::request::Parts) -> Result<(), EgressDenied> {
+        // ... allow-list / SSRF checks ...
+        // stamp the CURRENT token (re-minting it first if we invalidated it)
+        Ok(())
+    }
+
+    // Opt-in gate: without this, the dispatch path is byte-identical to a
+    // fidius without the hook (no observation, zero overhead).
+    fn observes_responses(&self) -> bool { true }
+
+    // Called with the response HEAD (status + headers, never the body)
+    // before the guest sees it.
+    fn on_response(
+        &self,
+        _request: &http::request::Parts,   // as dispatched (post-authorize)
+        status: http::StatusCode,
+        _headers: &http::HeaderMap,
+        retry_available: bool,
+    ) -> ResponseDirective {
+        if status == http::StatusCode::UNAUTHORIZED && retry_available {
+            self.invalidate_cached_token();   // the re-run authorize re-mints
+            return ResponseDirective::RetryOnce;
+        }
+        ResponseDirective::Forward
+    }
+}
+```
+
+On `RetryOnce`, fidius discards the response, re-runs `authorize` on a
+**fresh, clean clone** of the original request (so the policy re-stamps from
+scratch — it never sees its own stale header), dispatches again, and forwards
+the second response to the guest unconditionally. The guest sees exactly one
+response per request; a healed 401 is invisible to it.
+
+The guardrails:
+
+- **Bounded by fidius**: at most one retry per guest request — a policy
+  cannot loop. The second response's `on_response` gets
+  `retry_available = false` and its directive is ignored.
+- **Replayable bodies only**: the request body is captured up to 64 KiB for
+  replay. A body finished before dispatch (bodiless GETs, small JSON POSTs —
+  the typical connector shape) is always replayable; a body that streamed
+  past the cap, carried trailers, or was still streaming when the response
+  arrived is not — `RetryOnce` is then ignored (`retry_available` says so up
+  front) and the response forwards untouched.
+- **Two-key unchanged**: only requests that passed `authorize` are observed,
+  and the retry re-passes `authorize`. If that re-run *denies* (the re-mint
+  failed), the guest gets the same generic denied error as any refused
+  request.
+- **Timeouts are per attempt**, so a retried request can take up to ~2× the
+  configured budget.
+
+The E2E suite in `crates/fidius-host/tests/response_hook_e2e.rs` exercises
+the full loop — a real guest whose single fetch succeeds while the wire saw
+401-then-200 with a fresh credential on the second request.
+
 ### The guest side: `fidius_guest::http`
 
 The policy is half the loop; the connector is the other half. A connector written

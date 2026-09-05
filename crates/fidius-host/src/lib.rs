@@ -41,7 +41,7 @@ pub use types::{LoadPolicy, PluginInfo, PluginRuntimeKind};
 // `EgressPolicy` for `PluginHost::builder().egress(..)`. Lifted to the crate root so
 // downstreams (incl. the `fidius` facade) can name them without the internal module path.
 #[cfg(feature = "wasm")]
-pub use executor::wasm::{EgressDenied, EgressPolicy, TcpTarget};
+pub use executor::wasm::{EgressDenied, EgressPolicy, ResponseDirective, TcpTarget};
 // The `http` crate, re-exported so an embedder can name `http::request::Parts` (+ `Uri`,
 // `HeaderMap`, …) in their `EgressPolicy::authorize` impl without a separate `http` dep.
 #[cfg(feature = "wasm")]

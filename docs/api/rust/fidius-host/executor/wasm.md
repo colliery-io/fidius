@@ -65,22 +65,6 @@ A denial with a reason.
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
 
 
-Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP** (FIDIUS-I-0027). This is the *only* egress seam fidius ships — it contains **no** allow-list, SSRF, or credential logic; those are deployment-specific policy the embedder implements here.
-
-`wasi:http` is enabled for a guest only when its package declares the `http`
-capability **and** a `PluginHost`/executor was given one of these (two-key,
-fail-closed). [`authorize`](EgressPolicy::authorize) is then called for
-**every** outbound request the guest makes — every request is a host call
-across the sandbox boundary, so this is a true per-request checkpoint, not a
-one-time gate. Inspect `parts.uri` / `parts.method`, mutate `parts.headers`
-to inject credentials, or return `Err(EgressDenied)` to refuse (the guest
-then sees an HTTP error and the request is never dispatched).
-The target of an outbound TCP connect, as the guest expressed it
-(FIDIUS-I-0034). Handed to [`EgressPolicy::authorize_tcp_target`].
-Plain public fields on purpose: an embedder constructs these literally in
-policy tests. Additional context (e.g. exhaustive name candidates for an
-IP) would land as new fields in a breaking rev, not `#[non_exhaustive]`.
-
 #### Fields
 
 | Name | Type | Description |
@@ -1141,7 +1125,151 @@ A configured instance's persistent store + instance (FIDIUS-A-0006 / CI.3).
 
 
 
+## Enums
+
+### `fidius-host::executor::wasm::ResponseDirective` <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: #4caf50; color: white;">pub</span>
+
+
+Embedder-supplied policy governing a sandboxed WASM guest's **outbound HTTP** (FIDIUS-I-0027). This is the *only* egress seam fidius ships — it contains **no** allow-list, SSRF, or credential logic; those are deployment-specific policy the embedder implements here.
+
+`wasi:http` is enabled for a guest only when its package declares the `http`
+capability **and** a `PluginHost`/executor was given one of these (two-key,
+fail-closed). [`authorize`](EgressPolicy::authorize) is then called for
+**every** outbound request the guest makes — every request is a host call
+across the sandbox boundary, so this is a true per-request checkpoint, not a
+one-time gate. Inspect `parts.uri` / `parts.method`, mutate `parts.headers`
+to inject credentials, or return `Err(EgressDenied)` to refuse (the guest
+then sees an HTTP error and the request is never dispatched).
+The target of an outbound TCP connect, as the guest expressed it
+(FIDIUS-I-0034). Handed to [`EgressPolicy::authorize_tcp_target`].
+Plain public fields on purpose: an embedder constructs these literally in
+policy tests. Additional context (e.g. exhaustive name candidates for an
+IP) would land as new fields in a breaking rev, not `#[non_exhaustive]`.
+What an [`EgressPolicy`] wants done with a response it has observed via
+[`on_response`](EgressPolicy::on_response) (FIDIUS-I-0035).
+
+#### Variants
+
+- **`Forward`** - Hand the response to the guest unchanged (the default).
+- **`RetryOnce`** - Discard this response; re-run [`authorize`](EgressPolicy::authorize) on
+a fresh clone of the **original** (pre-`authorize`) request parts —
+letting the policy inject a fresh credential — and dispatch again. The
+second response is forwarded to the guest unconditionally.
+
+Bounded by fidius to **at most one retry per original guest request**;
+a `RetryOnce` returned when `retry_available` is `false` (second
+observation, or a non-replayable body) is ignored and the response
+forwards. Each dispatch attempt gets its own connect/first-byte
+timeouts, so a retried request can take up to ~2× the configured
+budget. If the re-run `authorize` denies, the guest sees the same
+generic HTTP "request denied" as any refused request — the policy
+consumed the original response and then refused to re-stamp.
+
+
+
 ## Functions
+
+### `fidius-host::executor::wasm::copy_config`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+fn copy_config (c : & OutgoingRequestConfig) -> OutgoingRequestConfig
+```
+
+Copy an [`OutgoingRequestConfig`] (all-`Copy` fields; the type itself isn't `Clone` upstream). The retry attempt reuses the same budget, so connect and first-byte timeouts apply **per attempt**.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn copy_config(c: &OutgoingRequestConfig) -> OutgoingRequestConfig {
+    OutgoingRequestConfig {
+        use_tls: c.use_tls,
+        connect_timeout: c.connect_timeout,
+        first_byte_timeout: c.first_byte_timeout,
+        between_bytes_timeout: c.between_bytes_timeout,
+    }
+}
+```
+
+</details>
+
+
+
+### `fidius-host::executor::wasm::dispatch_observed`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.1em 0.35em; font-size: 0.55em; font-weight: 600; border-radius: 0.2em; vertical-align: middle; background: var(--md-default-fg-color--light); color: white;">private</span>
+
+
+```rust
+async fn dispatch_observed (policy : Arc < dyn EgressPolicy > , original : http :: request :: Parts , dispatched : http :: request :: Parts , body : HyperOutgoingBody , capture : CaptureHandle , config : OutgoingRequestConfig ,) -> Result < IncomingResponse , ErrorCode >
+```
+
+The observing dispatch (FIDIUS-I-0035): send the request, show the policy the response head, and honor at most one `RetryOnce` — structurally, a straight-line function with a single possible second dispatch; no loop exists for a policy to drive.
+
+`original` is the pre-`authorize` parts; `dispatched` the as-sent parts.
+
+<details>
+<summary>Source</summary>
+
+```rust
+async fn dispatch_observed(
+    policy: Arc<dyn EgressPolicy>,
+    original: http::request::Parts,
+    dispatched: http::request::Parts,
+    body: HyperOutgoingBody,
+    capture: CaptureHandle,
+    config: OutgoingRequestConfig,
+) -> Result<IncomingResponse, ErrorCode> {
+    let retry_config = copy_config(&config);
+    // A transport error (`Err`) propagates to the guest exactly as today —
+    // `on_response` observes only actual responses.
+    let first =
+        default_send_request_handler(http::Request::from_parts(dispatched.clone(), body), config)
+            .await?;
+
+    let replay = capture.replayable();
+    let directive = policy.on_response(
+        &dispatched,
+        first.resp.status(),
+        first.resp.headers(),
+        replay.is_some(),
+    );
+    let (ResponseDirective::RetryOnce, Some(bytes)) = (directive, replay) else {
+        return Ok(first);
+    };
+
+    // Discard the observed response (dropping it aborts its body worker) and
+    // re-authorize a clean clone of the original parts — the policy injects
+    // its fresh credential here. A denial is terminal: the policy consumed
+    // the response and then refused to re-stamp.
+    drop(first);
+    let mut retry_parts = original;
+    if policy.authorize(&mut retry_parts).is_err() {
+        return Err(ErrorCode::HttpRequestDenied);
+    }
+    let second = default_send_request_handler(
+        http::Request::from_parts(retry_parts.clone(), replay_body(bytes)),
+        retry_config,
+    )
+    .await?;
+    // Observability only: `retry_available = false`, directive ignored — the
+    // second response forwards unconditionally.
+    let _ = policy.on_response(
+        &retry_parts,
+        second.resp.status(),
+        second.resp.headers(),
+        false,
+    );
+    Ok(second)
+}
+```
+
+</details>
+
+
 
 ### `fidius-host::executor::wasm::name_lookup_view`
 

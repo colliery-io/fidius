@@ -39,6 +39,8 @@
 //!   implement it — `PluginHandle` routes cdylib typed calls through its own
 //!   bincode `call_method`, keeping the bytes byte-identical to pre-refactor.
 
+#[cfg(feature = "wasm")]
+pub(crate) mod body_tee;
 pub mod cdylib;
 #[cfg(feature = "wasm")]
 pub(crate) mod name_lookup;
@@ -57,8 +59,8 @@ pub use cdylib::CdylibExecutor;
 pub use python::Pyo3Executor;
 #[cfg(feature = "wasm")]
 pub use wasm::{
-    precompile_component, validate_component, EgressDenied, EgressPolicy, TcpTarget,
-    WasmComponentExecutor, WasmMethod,
+    precompile_component, validate_component, EgressDenied, EgressPolicy, ResponseDirective,
+    TcpTarget, WasmComponentExecutor, WasmMethod,
 };
 
 /// The surface every execution backend shares.

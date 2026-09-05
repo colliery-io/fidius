@@ -2,6 +2,55 @@
 
 # Changelog
 
+## 0.5.9 — egress response hook: observation + bounded auth-retry (FIDIUS-I-0035)
+
+### Added
+
+- **`EgressPolicy::on_response(...) -> ResponseDirective`** — the policy can
+  now observe the response **HEAD** (status + headers, never the body) of
+  every request it authorized, before the guest sees it. Returning
+  **`ResponseDirective::RetryOnce`** discards that response, re-runs
+  `authorize` on a **fresh pre-authorize clone** of the request (so a
+  credential-injecting policy re-stamps from scratch — it never sees its own
+  stale header), dispatches once more, and forwards the second response to
+  the guest unconditionally. This closes the expired-credential loop
+  (feature request from embedder weir): on a 401, the policy invalidates its
+  cached token and retries — the re-run `authorize` mints a fresh one — and
+  the guest's single request simply succeeds. Fidius enforces the bound:
+  **at most one retry per guest request**; the second observation carries
+  `retry_available = false` and its directive is ignored. If the retry's
+  `authorize` denies, the guest gets the same generic denied error as any
+  refused request. Timeouts apply per attempt.
+- **`EgressPolicy::observes_responses()` opt-in gate** — defaults to
+  `false`, and while it does the dispatch path is **byte-identical** to
+  0.5.8 (no observation, no body tee, zero overhead). Policies opt in
+  explicitly; every existing embedder is unaffected without code changes.
+- **Tee/replay bodies** (`executor/body_tee.rs`): under an observing policy
+  the outgoing body streams to the wire as usual while its bytes are
+  captured (up to **64 KiB**) for a possible single replay. The tee is
+  *primed* at dispatch: a body the guest finished before sending — bodiless
+  GETs, small JSON POSTs, the typical connector shape — is deterministically
+  replayable, even against a server that 401s instantly (wasi-http guest
+  bodies are channel-backed, so end-of-stream is only observable by
+  polling; priming drains what's already buffered, synchronously). Bodies
+  that stream past the cap, carry trailers, or are still streaming at
+  decision time are not replayable: `RetryOnce` is ignored (the policy is
+  told via `retry_available: false`) and the response forwards untouched.
+- `ResponseDirective` exported alongside `EgressPolicy`/`EgressDenied` from
+  `fidius_host` and the `fidius` facade. E2E coverage in
+  `crates/fidius-host/tests/response_hook_e2e.rs` (a real guest's single
+  fetch succeeds while the wire saw 401-then-200 with a fresh credential on
+  the second request; retry bound; deny-on-retry; no-override
+  byte-identity), plus dispatch-level tests for the non-replayable shapes.
+
+### Notes
+
+- The two-key gate is unchanged: only requests that passed `authorize` are
+  observed, and the retry re-passes `authorize`. Response **bodies** are
+  never shown to the policy; TCP-tier (`wasi:sockets`) traffic is out of
+  scope. Non-goal (unchanged): retry/backoff *policies* remain the
+  embedder's job — this is strictly the single-shot auth-refresh seam.
+
 ## 0.5.8 — hostname-carrying TCP egress: resolve-and-pin (FIDIUS-I-0034)
 
 ### Added
