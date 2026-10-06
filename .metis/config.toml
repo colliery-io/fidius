@@ -1,8 +1,0 @@
-[project]
-prefix = "FIDIUS"
-
-[flight_levels]
-initiatives_enabled = true
-
-[viewer]
-suppress_proactive_ticket_opening = false
