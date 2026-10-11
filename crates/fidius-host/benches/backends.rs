@@ -111,7 +111,7 @@ fn greeter_component() -> Vec<u8> {
         .args(["component", "build", "--release"])
         .current_dir(&fixture)
         .status()
-        .expect("cargo component build (toolchain: see docs/how-to/wasm-component-toolchain.md)");
+        .expect("cargo component build (toolchain: see docs/src/content/docs/how-to/wasm-component-toolchain.md)");
     assert!(status.success(), "greeter build failed");
     std::fs::read(fixture.join("target/wasm32-wasip1/release/greeter_guest.wasm")).unwrap()
 }
