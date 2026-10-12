@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Colliery, Inc. Licensed under Apache 2.0 -->
 
 <p align="center">
-  <img src="docs/assets/logo.png" alt="fidius" width="220" />
+  <img src="docs/public/assets/logo.png" alt="fidius" width="220" />
 </p>
 
 # fidius
@@ -21,7 +21,7 @@ fidius lets you define a Rust trait, annotate it with a macro, and get a compile
 - **Sandboxed WASM plugins** — compile a plugin to a WebAssembly component that runs in a deny-all wasmtime sandbox with a capability allow-list; polyglot (Rust *and* other languages implement the same interface). Outbound HTTP is host-brokered and policy-gated (`wasi:http` + a required egress hook).
 - **Streaming, all three directions** — `fidius::Stream<T>` works in return position (**server-streaming** — the plugin produces), argument position (**client-streaming** — the host produces), or both (**bidirectional** — a plugin-owned transform). Pull-based, backpressured, drop-to-cancel, with bounded memory for unbounded inputs — on all three backends (Rust/Python/WASM), and server-streaming proven across Rust, JS, Python, and C guests.
 - **Configured instances** — bind config once and call many (`#[plugin_impl(Trait, config = C)]` + `configure`): config crosses the boundary once, config-bound setup runs once, and N differently-configured instances coexist — on all three backends (cdylib/WASM/Python).
-- **Host functions (plugin → host callbacks)** — declare a `#[host_interface(version = N)]` trait the host implements and plugins call **mid-execution** (e.g. release/reclaim a concurrency slot around a wait). Same bincode wire, its own version + signature-hash gate (bind-time for dylibs, per-call for WASM's `fidius:host-call` import), panic-safe in both directions, typed errors. Works for dylib and sandboxed WASM plugins; see `docs/explanation/host-functions.md`.
+- **Host functions (plugin → host callbacks)** — declare a `#[host_interface(version = N)]` trait the host implements and plugins call **mid-execution** (e.g. release/reclaim a concurrency slot around a wait). Same bincode wire, its own version + signature-hash gate (bind-time for dylibs, per-call for WASM's `fidius:host-call` import), panic-safe in both directions, typed errors. Works for dylib and sandboxed WASM plugins; see [Host Functions](https://colliery-io.github.io/fidius/explanation/host-functions/).
 - **CLI tooling** — scaffold interfaces and plugins, sign, inspect, and package.
 
 ## Workspace Layout
@@ -95,7 +95,7 @@ fidius sign --key mykey.secret target/debug/libmy_plugin.dylib
 fidius inspect target/debug/libmy_plugin.dylib
 ```
 
-The host loads the resulting dylib through `fidius-host` and calls `apply()` through a generated `ImageFilterClient` proxy. See [Your First Plugin](docs/tutorials/your-first-plugin.md) for the full walkthrough including the host crate.
+The host loads the resulting dylib through `fidius-host` and calls `apply()` through a generated `ImageFilterClient` proxy. See [Your First Plugin](https://colliery-io.github.io/fidius/tutorials/your-first-plugin/) for the full walkthrough including the host crate.
 
 ## Development
 
@@ -113,15 +113,15 @@ angreal license-header  # add/check license headers
 
 ## Documentation
 
-Full documentation lives in [`docs/`](docs/index.md) and covers tutorials, how-to guides, reference, and architecture explanation. Build it locally with `mkdocs serve`.
+Full documentation is at [colliery-io.github.io/fidius](https://colliery-io.github.io/fidius/) and covers tutorials, how-to guides, reference, and architecture explanation. The source is in `docs/`; build it locally with `angreal docs serve`.
 
-- [Your First Plugin](docs/tutorials/your-first-plugin.md)
-- [Your First Python Plugin](docs/tutorials/python-plugin.md)
-- [Your First WASM Plugin](docs/tutorials/your-first-wasm-plugin.md)
-- [Capabilities & the WASM Sandbox](docs/explanation/wasm-capabilities.md)
-- [Architecture Overview](docs/explanation/architecture.md)
-- [ABI Specification](docs/reference/abi-specification.md)
-- [CLI Reference](docs/reference/cli.md)
+- [Your First Plugin](https://colliery-io.github.io/fidius/tutorials/your-first-plugin/)
+- [Your First Python Plugin](https://colliery-io.github.io/fidius/tutorials/python-plugin/)
+- [Your First WASM Plugin](https://colliery-io.github.io/fidius/tutorials/your-first-wasm-plugin/)
+- [Capabilities & the WASM Sandbox](https://colliery-io.github.io/fidius/explanation/wasm-capabilities/)
+- [Architecture Overview](https://colliery-io.github.io/fidius/explanation/architecture/)
+- [ABI Specification](https://colliery-io.github.io/fidius/reference/abi-specification/)
+- [CLI Reference](https://colliery-io.github.io/fidius/reference/cli/)
 
 ## License
 

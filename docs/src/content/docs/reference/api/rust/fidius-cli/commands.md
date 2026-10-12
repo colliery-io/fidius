@@ -1,0 +1,1263 @@
+---
+title: "fidius-cli::commands"
+description: "API reference of the Rust module fidius-cli::commands."
+sidebar:
+  order: 3
+  hidden: true
+---
+
+<span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
+
+
+## Functions
+
+### <span id="fn.resolve_dep"></span>`fn resolve_dep`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn resolve_dep (value : & str , version_override : Option < & str >) -> String
+```
+
+Resolve a dependency string to a Cargo.toml dependency value.
+
+Logic:
+1. If `value` is a path that exists on disk → `{ path = "..." }`
+2. If `version_override` is set → `"<version>"`
+3. Check crates.io for `value` → if found, use latest version
+4. Warn and fall back to `{ path = "<value>" }`
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn resolve_dep(value: &str, version_override: Option<&str>) -> String {
+    // Check if it's a filesystem path
+    if Path::new(value).exists() {
+        // Canonicalize so the path works from any crate directory
+        if let Ok(abs) = std::fs::canonicalize(value) {
+            return format!("{{ path = \"{}\" }}", abs.display());
+        }
+        return format!("{{ path = \"{}\" }}", value);
+    }
+
+    // If version explicitly pinned, use it
+    if let Some(ver) = version_override {
+        return format!("\"{}\"", ver);
+    }
+
+    // Try crates.io
+    if let Some(ver) = check_crates_io(value) {
+        return format!("\"{}\"", ver);
+    }
+
+    // Warn and fall back to path dep
+    eprintln!(
+        "warning: could not find '{}' as a local path or on crates.io, using path dep",
+        value
+    );
+    format!("{{ path = \"{}\" }}", value)
+}
+```
+
+</details>
+
+
+
+### <span id="fn.check_crates_io"></span>`fn check_crates_io`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn check_crates_io (name : & str) -> Option < String >
+```
+
+Check crates.io for a crate and return its latest version, if found.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn check_crates_io(name: &str) -> Option<String> {
+    let url = format!("https://crates.io/api/v1/crates/{}", name);
+    let mut response = ureq::get(&url)
+        .header(
+            "User-Agent",
+            "fidius-cli (https://github.com/colliery-io/fidius)",
+        )
+        .call()
+        .ok()?;
+
+    let body_str = response.body_mut().read_to_string().ok()?;
+    let body: serde_json::Value = serde_json::from_str(&body_str).ok()?;
+    body["crate"]["max_stable_version"]
+        .as_str()
+        .map(String::from)
+}
+```
+
+</details>
+
+
+
+### <span id="fn.init_interface"></span>`fn init_interface`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn init_interface (name : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > , extension : Option < & str > ,) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn init_interface(
+    name: &str,
+    trait_name: &str,
+    path: Option<&Path>,
+    version: Option<&str>,
+    extension: Option<&str>,
+) -> Result {
+    let base = path.unwrap_or_else(|| Path::new("."));
+    let crate_dir = base.join(name);
+
+    if crate_dir.exists() {
+        return Err(format!("directory '{}' already exists", crate_dir.display()).into());
+    }
+
+    let src_dir = crate_dir.join("src");
+    std::fs::create_dir_all(&src_dir)?;
+
+    // Resolve fidius dependency
+    let fidius_dep = resolve_dep("fidius", version);
+
+    let cargo_toml = format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Enable host-side typed Client generation ({trait_name}Client).
+# Plugin cdylibs (consumers of this crate via `{interface_crate_name}`
+# default features) do NOT enable this. Host applications depend on this
+# crate with `features = ["host"]` to receive the Client type.
+host = ["fidius/host"]
+
+[dependencies]
+fidius = {fidius_dep}
+"#,
+        interface_crate_name = name,
+    );
+
+    let lib_rs = format!(
+        r#"pub use fidius::{{plugin_impl, PluginError}};
+
+#[fidius::plugin_interface(version = 1, buffer = PluginAllocated)]
+pub trait {trait_name}: Send + Sync {{
+    fn process(&self, input: String) -> String;
+}}
+"#
+    );
+
+    std::fs::write(crate_dir.join("Cargo.toml"), cargo_toml)?;
+    std::fs::write(src_dir.join("lib.rs"), lib_rs)?;
+
+    // Write fidius.toml with interface metadata (extension, etc.)
+    if let Some(ext) = extension {
+        let fidius_toml = format!("extension = \"{ext}\"\n");
+        std::fs::write(crate_dir.join("fidius.toml"), fidius_toml)?;
+    }
+
+    println!("Created interface crate: {}", crate_dir.display());
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.init_plugin"></span>`fn init_plugin`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn init_plugin (name : & str , interface : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > ,) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn init_plugin(
+    name: &str,
+    interface: &str,
+    trait_name: &str,
+    path: Option<&Path>,
+    version: Option<&str>,
+) -> Result {
+    let base = path.unwrap_or_else(|| Path::new("."));
+    let crate_dir = base.join(name);
+
+    if crate_dir.exists() {
+        return Err(format!("directory '{}' already exists", crate_dir.display()).into());
+    }
+
+    let src_dir = crate_dir.join("src");
+    std::fs::create_dir_all(&src_dir)?;
+
+    // Resolve dependencies
+    let interface_dep = resolve_dep(interface, version);
+    let fidius_dep = resolve_dep("fidius", version);
+
+    // Extract the crate name from the interface value (strip path components)
+    let interface_crate = Path::new(interface)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(interface);
+
+    // Convert crate name to Rust identifier (hyphens → underscores)
+    let interface_mod = interface_crate.replace('-', "_");
+
+    let fidius_test_dep = resolve_dep("fidius-test", version);
+
+    let interface_dev_dep = if interface_dep.trim_start().starts_with('{') {
+        let inner = interface_dep
+            .trim_start_matches('{')
+            .trim_end_matches('}')
+            .trim();
+        format!("{{ {inner}, features = [\"host\"] }}")
+    } else {
+        let ver = interface_dep.trim_matches('"');
+        format!("{{ version = \"{ver}\", features = [\"host\"] }}")
+    };
+
+    let cargo_toml = format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+{interface_crate} = {interface_dep}
+fidius = {fidius_dep}
+
+[dev-dependencies]
+# Re-declare the interface with the `host` feature enabled so the generated
+# {trait_name}Client is available in #[cfg(test)] code. The cdylib build
+# uses the non-dev dep above, so libloading stays out of the plugin.
+{interface_crate} = {interface_dev_dep}
+# Fidius testing helpers (dylib_fixture, signing fixtures).
+fidius-test = {fidius_test_dep}
+"#
+    );
+
+    let struct_name = format!("My{trait_name}");
+
+    let lib_rs = format!(
+        r#"use {interface_mod}::{{plugin_impl, {trait_name}, PluginError, __fidius_{trait_name}}};
+
+pub struct {struct_name};
+
+#[plugin_impl({trait_name})]
+impl {trait_name} for {struct_name} {{
+    fn process(&self, input: String) -> String {{
+        format!("processed: {{}}", input)
+    }}
+}}
+
+fidius::fidius_plugin_registry!();
+
+#[cfg(test)]
+mod tests {{
+    use {interface_mod}::{trait_name}Client;
+
+    #[test]
+    fn process_in_process() {{
+        // In-process test: invokes the plugin method directly without building
+        // a cdylib or loading via libloading. Fast dev loop.
+        let client = {trait_name}Client::in_process("{struct_name}").expect("plugin not registered");
+        let out = client.process(&"hello".to_string()).expect("call");
+        assert_eq!(out, "processed: hello");
+    }}
+}}
+"#
+    );
+
+    std::fs::write(crate_dir.join("Cargo.toml"), cargo_toml)?;
+    std::fs::write(src_dir.join("lib.rs"), lib_rs)?;
+
+    // Read interface's fidius.toml for extension (if interface is a local path)
+    let interface_path = Path::new(interface);
+    let extension = if interface_path.is_dir() {
+        let fidius_toml_path = interface_path.join("fidius.toml");
+        if fidius_toml_path.exists() {
+            let content = std::fs::read_to_string(&fidius_toml_path)?;
+            let table: toml::Table = content.parse().unwrap_or_default();
+            table
+                .get("extension")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Generate package.toml
+    let ext_line = match &extension {
+        Some(ext) => format!("\nextension = \"{ext}\""),
+        None => String::new(),
+    };
+    let package_toml = format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+interface = "{interface_crate}"
+interface_version = 1{ext_line}
+
+[metadata]
+"#
+    );
+    std::fs::write(crate_dir.join("package.toml"), package_toml)?;
+
+    println!("Created plugin crate: {}", crate_dir.display());
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.init_host"></span>`fn init_host`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn init_host (name : & str , interface : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > ,) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn init_host(
+    name: &str,
+    interface: &str,
+    trait_name: &str,
+    path: Option<&Path>,
+    version: Option<&str>,
+) -> Result {
+    let base = path.unwrap_or_else(|| Path::new("."));
+    let crate_dir = base.join(name);
+
+    if crate_dir.exists() {
+        return Err(format!("directory '{}' already exists", crate_dir.display()).into());
+    }
+
+    let src_dir = crate_dir.join("src");
+    std::fs::create_dir_all(&src_dir)?;
+
+    let interface_dep = resolve_dep(interface, version);
+    let fidius_host_dep = resolve_dep("fidius-host", version);
+
+    let interface_crate = Path::new(interface)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(interface);
+    let interface_mod = interface_crate.replace('-', "_");
+
+    // Interface dep with `host` feature enabled to pull the typed Client.
+    let interface_dep_with_host = if interface_dep.trim_start().starts_with('{') {
+        // table form: inject features
+        let inner = interface_dep
+            .trim_start_matches('{')
+            .trim_end_matches('}')
+            .trim();
+        format!("{{ {inner}, features = [\"host\"] }}")
+    } else {
+        // string version: promote to table with features
+        let ver = interface_dep.trim_matches('"');
+        format!("{{ version = \"{ver}\", features = [\"host\"] }}")
+    };
+
+    let client_name = format!("{trait_name}Client");
+
+    let fidius_test_dep = resolve_dep("fidius-test", version);
+
+    let cargo_toml = format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+{interface_crate} = {interface_dep_with_host}
+fidius-host = {fidius_host_dep}
+
+[dev-dependencies]
+# Testing helpers — dylib_fixture, signing fixtures, etc.
+# See https://docs.rs/fidius-test for the typical test patterns.
+fidius-test = {fidius_test_dep}
+"#
+    );
+
+    let main_rs = format!(
+        r#"use {interface_mod}::{client_name};
+use fidius_host::{{PluginHandle, PluginHost}};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {{
+    // Adjust search path to where your plugin .dylib/.so/.dll files live.
+    let host = PluginHost::builder().search_path("./plugins").build()?;
+
+    let plugins = host.discover()?;
+    if plugins.is_empty() {{
+        eprintln!("No plugins found. Build a plugin with `fidius init-plugin` + `cargo build`, ");
+        eprintln!("then place the compiled cdylib into ./plugins/.");
+        return Ok(());
+    }}
+
+    for info in &plugins {{
+        println!(
+            "Found plugin '{{}}' (interface '{{}}', version {{}})",
+            info.name, info.interface_name, info.interface_version,
+        );
+    }}
+
+    // Load the first plugin and call a method via the typed Client.
+    let first = &plugins[0];
+    let loaded = host.load(&first.name)?;
+    let handle = PluginHandle::from_loaded(loaded);
+    let _client = {client_name}::from_handle(handle);
+
+    // TODO: call methods on _client, e.g.:
+    //   let result = _client.process(&"hello".to_string())?;
+    //   println!("plugin returned: {{}}", result);
+
+    Ok(())
+}}
+"#
+    );
+
+    std::fs::write(crate_dir.join("Cargo.toml"), cargo_toml)?;
+    std::fs::write(src_dir.join("main.rs"), main_rs)?;
+
+    println!("Created host crate: {}", crate_dir.display());
+    println!();
+    println!("Next steps:");
+    println!("  1. Adjust search_path in src/main.rs to your plugins directory");
+    println!("  2. Fill in the TODO with actual method calls on _client");
+    println!("  3. Run: cd {name} && cargo run");
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.keygen"></span>`fn keygen`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn keygen (out : & str) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn keygen(out: &str) -> Result {
+    use rand::rngs::OsRng;
+
+    let signing_key = SigningKey::generate(&mut OsRng);
+    let verifying_key = signing_key.verifying_key();
+
+    let secret_path = format!("{}.secret", out);
+    let public_path = format!("{}.public", out);
+
+    std::fs::write(&secret_path, signing_key.to_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    std::fs::write(&public_path, verifying_key.to_bytes())?;
+
+    println!("Generated keypair:");
+    println!("  Secret: {}", secret_path);
+    println!("  Public: {}", public_path);
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.sign"></span>`fn sign`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn sign (key_path : & Path , dylib_path : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn sign(key_path: &Path, dylib_path: &Path) -> Result {
+    let key_bytes: [u8; 32] = std::fs::read(key_path)?
+        .try_into()
+        .map_err(|_| "secret key must be exactly 32 bytes")?;
+
+    let signing_key = SigningKey::from_bytes(&key_bytes);
+    let dylib_bytes = std::fs::read(dylib_path)?;
+    let signature = signing_key.sign(&dylib_bytes);
+
+    let sig_path = dylib_path.with_extension(format!(
+        "{}.sig",
+        dylib_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+    ));
+
+    std::fs::write(&sig_path, signature.to_bytes())?;
+    println!("Signed: {} -> {}", dylib_path.display(), sig_path.display());
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.verify"></span>`fn verify`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn verify (key_path : & Path , dylib_path : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn verify(key_path: &Path, dylib_path: &Path) -> Result {
+    let key_bytes: [u8; 32] = std::fs::read(key_path)?
+        .try_into()
+        .map_err(|_| "public key must be exactly 32 bytes")?;
+
+    let verifying_key =
+        VerifyingKey::from_bytes(&key_bytes).map_err(|e| format!("invalid public key: {e}"))?;
+
+    let dylib_bytes = std::fs::read(dylib_path)?;
+
+    let sig_path = dylib_path.with_extension(format!(
+        "{}.sig",
+        dylib_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+    ));
+
+    let sig_bytes: [u8; 64] = std::fs::read(&sig_path)
+        .map_err(|_| format!("signature file not found: {}", sig_path.display()))?
+        .try_into()
+        .map_err(|_| "signature must be exactly 64 bytes")?;
+
+    let signature = Signature::from_bytes(&sig_bytes);
+
+    match verifying_key.verify(&dylib_bytes, &signature) {
+        Ok(()) => {
+            println!("Signature valid: {}", dylib_path.display());
+            Ok(())
+        }
+        Err(_) => Err(format!("Signature INVALID: {}", dylib_path.display()).into()),
+    }
+}
+```
+
+</details>
+
+
+
+### <span id="fn.inspect"></span>`fn inspect`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn inspect (dylib_path : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn inspect(dylib_path: &Path) -> Result {
+    use fidius_host::PluginHandle;
+
+    let loaded = fidius_host::loader::load_library(dylib_path)
+        .map_err(|e| format!("failed to load {}: {e}", dylib_path.display()))?;
+
+    println!("Plugin Registry: {}", dylib_path.display());
+    println!("  Plugins: {}", loaded.plugins.len());
+    println!();
+
+    for (i, plugin) in loaded.plugins.into_iter().enumerate() {
+        let info = plugin.info.clone();
+        let method_count = plugin.method_count;
+        println!("  [{}] {}", i, info.name);
+        println!("      Interface: {}", info.interface_name);
+        println!("      Interface hash: {:#018x}", info.interface_hash);
+        println!("      Interface version: {}", info.interface_version);
+        println!("      Buffer strategy: {:?}", info.buffer_strategy);
+        println!("      Capabilities: {:#018x}", info.capabilities);
+
+        let handle = PluginHandle::from_loaded(plugin);
+        let trait_meta = handle.trait_metadata();
+        if !trait_meta.is_empty() {
+            println!("      Trait metadata:");
+            for (k, v) in &trait_meta {
+                println!("        {k} = {v}");
+            }
+        }
+
+        let any_method_meta = (0..method_count).any(|m| !handle.method_metadata(m).is_empty());
+        if any_method_meta {
+            println!("      Method metadata:");
+            for m in 0..method_count {
+                let metas = handle.method_metadata(m);
+                if metas.is_empty() {
+                    continue;
+                }
+                println!("        [{m}]:");
+                for (k, v) in &metas {
+                    println!("          {k} = {v}");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.test"></span>`fn test`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn test (dir : & Path , release : bool) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn test(dir: &Path, release: bool) -> Result {
+    use fidius_host::{CallError, PluginHandle};
+
+    // Build
+    let dylib_path = fidius_host::package::build_package(dir, release)?;
+    println!("Built: {}", dylib_path.display());
+
+    // Load
+    let loaded = fidius_host::loader::load_library(&dylib_path)
+        .map_err(|e| format!("failed to load plugin: {e}"))?;
+
+    if loaded.plugins.is_empty() {
+        return Err("no plugins found in registry".into());
+    }
+
+    let plugin_count = loaded.plugins.len();
+    let mut failed_methods = 0usize;
+    let mut smoke_ok = 0usize;
+
+    for plugin in loaded.plugins {
+        let info = plugin.info.clone();
+        let method_count = plugin.method_count;
+        let capabilities = info.capabilities;
+
+        println!();
+        println!(
+            "Plugin: {} (interface {} v{}, {} methods)",
+            info.name, info.interface_name, info.interface_version, method_count
+        );
+
+        let handle = PluginHandle::from_loaded(plugin);
+
+        for i in 0..method_count as usize {
+            // Smoke-test each method by invoking with a zero-arg input.
+            // - Zero-arg methods: full round-trip succeeds (or Deserialization if
+            //   the output isn't JSON-compatible, which still proves the call worked).
+            // - Methods with args: plugin-side deserialization fails → reported as
+            //   "needs input" (not a smoke failure, just a signal).
+            // - Unimplemented optional methods: reported distinctly.
+            let result = handle.call_method::<(), serde_json::Value>(i, &());
+            match result {
+                Ok(_) => {
+                    println!("  [{i}] ✓ invoked (output decoded as JSON)");
+                    smoke_ok += 1;
+                }
+                Err(CallError::Deserialization(_)) => {
+                    println!("  [{i}] ✓ invoked (output not JSON-compat — use a specific type to inspect)");
+                    smoke_ok += 1;
+                }
+                Err(CallError::Serialization(_)) => {
+                    println!("  [{i}] — needs input (method takes args)");
+                }
+                Err(CallError::NotImplemented { bit }) => {
+                    println!("  [{i}] — optional, not implemented (capability bit {bit})");
+                }
+                Err(CallError::InvalidMethodIndex { index, count }) => {
+                    println!("  [{i}] ✗ invalid index {index} (plugin has {count} methods)");
+                    failed_methods += 1;
+                }
+                Err(e) => {
+                    println!("  [{i}] ✗ error: {e}");
+                    failed_methods += 1;
+                }
+            }
+        }
+
+        let cap_bits_set = capabilities.count_ones();
+        if cap_bits_set > 0 {
+            println!("  capabilities: {cap_bits_set} bit(s) set ({capabilities:#018x})");
+        }
+    }
+
+    println!();
+    if failed_methods == 0 {
+        println!(
+            "Smoke passed: {plugin_count} plugin(s), {smoke_ok} zero-arg method(s) invoked cleanly"
+        );
+        Ok(())
+    } else {
+        Err(format!("{failed_methods} method(s) failed smoke test").into())
+    }
+}
+```
+
+</details>
+
+
+
+### <span id="fn.package_validate"></span>`fn package_validate`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn package_validate (dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_validate(dir: &Path) -> Result {
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    let pkg = &manifest.package;
+
+    println!("Package: {} v{}", pkg.name, pkg.version);
+    println!(
+        "  Interface: {} (version {})",
+        pkg.interface, pkg.interface_version
+    );
+    println!(
+        "  Metadata: {} field(s)",
+        manifest.metadata.as_table().map_or(0, |t| t.len())
+    );
+    println!("\nManifest valid.");
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.package_build"></span>`fn package_build`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn package_build (dir : & Path , release : bool) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_build(dir: &Path, release: bool) -> Result {
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    let cargo_toml = dir.join("Cargo.toml");
+    if !cargo_toml.exists() {
+        return Err(format!("Cargo.toml not found in {}", dir.display()).into());
+    }
+
+    println!(
+        "Building package: {} v{}",
+        manifest.package.name, manifest.package.version
+    );
+
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.arg("build").arg("--manifest-path").arg(&cargo_toml);
+    if release {
+        cmd.arg("--release");
+    }
+
+    let output = cmd.output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("build failed:\n{}", stderr).into());
+    }
+
+    let profile = if release { "release" } else { "debug" };
+    println!(
+        "Build successful. Output in {}/target/{}/",
+        dir.display(),
+        profile
+    );
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.package_inspect"></span>`fn package_inspect`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn package_inspect (dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_inspect(dir: &Path) -> Result {
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    let pkg = &manifest.package;
+
+    println!("Package: {}", dir.display());
+    println!("  Name: {}", pkg.name);
+    println!("  Version: {}", pkg.version);
+    println!("  Interface: {}", pkg.interface);
+    println!("  Interface version: {}", pkg.interface_version);
+    println!("  Runtime: {}", pkg.runtime());
+    if let Some(py) = manifest.python.as_ref() {
+        println!("  Python:");
+        println!("    Entry module: {}", py.entry_module);
+        println!("    Requirements: {}", py.requirements_path());
+    }
+    if let Some(w) = manifest.wasm.as_ref() {
+        println!("  WASM:");
+        println!("    Component: {}", w.component);
+        match &w.precompiled {
+            Some(pc) => println!("    Precompiled (.cwasm): {pc}"),
+            None => println!("    Precompiled (.cwasm): (none — JIT at load)"),
+        }
+        // The capability allow-list is the security-relevant bit a deployer
+        // reviews. Empty = deny-all; filesystem is never grantable in v1.
+        if w.capabilities.is_empty() {
+            println!("    Capabilities: (none — deny-all sandbox)");
+        } else {
+            println!("    Capabilities: {}", w.capabilities.join(", "));
+        }
+    }
+    if let Some(table) = manifest.metadata.as_table() {
+        println!("  Metadata:");
+        for (key, value) in table {
+            println!("    {} = {}", key, value);
+        }
+    }
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.package_sign"></span>`fn package_sign`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn package_sign (key_path : & Path , dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_sign(key_path: &Path, dir: &Path) -> Result {
+    if !dir.join("package.toml").exists() {
+        return Err(format!("package.toml not found in {}", dir.display()).into());
+    }
+
+    let key_bytes: [u8; 32] = std::fs::read(key_path)?
+        .try_into()
+        .map_err(|_| "secret key must be exactly 32 bytes")?;
+
+    let signing_key = SigningKey::from_bytes(&key_bytes);
+    let digest = fidius_core::package::package_digest(dir)?;
+    let signature = signing_key.sign(&digest);
+
+    let sig_path = dir.join("package.sig");
+    std::fs::write(&sig_path, signature.to_bytes())?;
+    println!(
+        "Signed package: {} -> {}",
+        dir.display(),
+        sig_path.display()
+    );
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.package_verify"></span>`fn package_verify`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn package_verify (key_path : & Path , dir : & Path) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_verify(key_path: &Path, dir: &Path) -> Result {
+    if !dir.join("package.toml").exists() {
+        return Err(format!("package.toml not found in {}", dir.display()).into());
+    }
+
+    let key_bytes: [u8; 32] = std::fs::read(key_path)?
+        .try_into()
+        .map_err(|_| "public key must be exactly 32 bytes")?;
+
+    let verifying_key =
+        VerifyingKey::from_bytes(&key_bytes).map_err(|e| format!("invalid public key: {e}"))?;
+
+    let sig_path = dir.join("package.sig");
+    let sig_bytes: [u8; 64] = std::fs::read(&sig_path)
+        .map_err(|_| format!("signature file not found: {}", sig_path.display()))?
+        .try_into()
+        .map_err(|_| "signature must be exactly 64 bytes")?;
+
+    let signature = Signature::from_bytes(&sig_bytes);
+    let digest = fidius_core::package::package_digest(dir)?;
+
+    match verifying_key.verify(&digest, &signature) {
+        Ok(()) => {
+            println!("Package signature valid: {}", dir.display());
+            Ok(())
+        }
+        Err(_) => Err(format!("Package signature INVALID: {}", dir.display()).into()),
+    }
+}
+```
+
+</details>
+
+
+
+### <span id="fn.package_pack"></span>`fn package_pack`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn package_pack (dir : & Path , output : Option < & Path > , precompile : bool) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_pack(dir: &Path, output: Option<&Path>, precompile: bool) -> Result {
+    use fidius_core::package::PackageRuntime;
+
+    // WASM packages: validate (and optionally precompile) the component before
+    // archiving. Building the component (cargo-component / componentize-py) is
+    // the author's job — pack only consumes a prebuilt `.wasm` (FIDIUS-T-0107).
+    let manifest = fidius_core::package::load_manifest_untyped(dir)?;
+    if manifest.package.runtime() == PackageRuntime::Wasm {
+        let component = manifest
+            .wasm
+            .as_ref()
+            .ok_or("runtime = \"wasm\" requires a [wasm] section with `component`")?
+            .component
+            .clone();
+        if !dir.join(&component).exists() {
+            return Err(format!("wasm component `{component}` not found in package dir").into());
+        }
+        prepare_wasm_pack(dir, &component, precompile)?;
+    } else if precompile {
+        return Err("--precompile only applies to wasm packages".into());
+    }
+
+    let result = fidius_core::package::pack_package(dir, output)?;
+
+    if result.unsigned {
+        eprintln!("warning: package is unsigned (no package.sig found)");
+    }
+
+    let size = std::fs::metadata(&result.path)?.len();
+    let human_size = if size >= 1024 * 1024 {
+        format!("{:.1} MB", size as f64 / (1024.0 * 1024.0))
+    } else if size >= 1024 {
+        format!("{:.1} KB", size as f64 / 1024.0)
+    } else {
+        format!("{size} B")
+    };
+
+    println!("Packed: {} ({human_size})", result.path.display());
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.prepare_wasm_pack"></span>`fn prepare_wasm_pack`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn prepare_wasm_pack (dir : & Path , component : & str , precompile : bool) -> Result
+```
+
+Validate (and optionally precompile) a wasm component at pack time. Requires the CLI built with `--features wasm` (pulls wasmtime via `fidius-host/wasm`).
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn prepare_wasm_pack(dir: &Path, component: &str, precompile: bool) -> Result {
+    let component_path = dir.join(component);
+    let bytes = std::fs::read(&component_path)?;
+    fidius_host::executor::validate_component(&bytes)
+        .map_err(|e| format!("component validation failed: {e}"))?;
+    println!("Validated wasm component: {component}");
+
+    if precompile {
+        let cwasm = fidius_host::executor::precompile_component(&bytes)
+            .map_err(|e| format!("precompile failed: {e}"))?;
+        let cwasm_path = component_path.with_extension("cwasm");
+        let cwasm_name = cwasm_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or("invalid component filename")?
+            .to_string();
+        std::fs::write(&cwasm_path, &cwasm)?;
+        record_precompiled(dir, &cwasm_name)?;
+        println!(
+            "Precompiled: {cwasm_name} ({:.1} KB)",
+            cwasm.len() as f64 / 1024.0
+        );
+    }
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.prepare_wasm_pack"></span>`fn prepare_wasm_pack`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn prepare_wasm_pack (_dir : & Path , component : & str , precompile : bool) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn prepare_wasm_pack(_dir: &Path, component: &str, precompile: bool) -> Result {
+    if precompile {
+        return Err("--precompile requires the CLI built with --features wasm".into());
+    }
+    eprintln!(
+        "warning: CLI built without wasm support — component `{component}` was not validated \
+         (rebuild with --features wasm to validate/precompile)"
+    );
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.record_precompiled"></span>`fn record_precompiled`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn record_precompiled (dir : & Path , cwasm_name : & str) -> Result
+```
+
+Record `precompiled = "<name>"` under the `[wasm]` table in package.toml, preserving the rest of the file (string-insert; skips if already present).
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn record_precompiled(dir: &Path, cwasm_name: &str) -> Result {
+    let manifest_path = dir.join("package.toml");
+    let content = std::fs::read_to_string(&manifest_path)?;
+    if content.contains("precompiled") {
+        return Ok(()); // already recorded (re-pack)
+    }
+    let header = "[wasm]";
+    let pos = content
+        .find(header)
+        .ok_or("package.toml missing [wasm] section")?;
+    let after_header = pos + header.len();
+    let line_end = content[after_header..]
+        .find('\n')
+        .map(|i| after_header + i + 1)
+        .unwrap_or(content.len());
+    let mut out = String::with_capacity(content.len() + 48);
+    out.push_str(&content[..line_end]);
+    out.push_str(&format!("precompiled = \"{cwasm_name}\"\n"));
+    out.push_str(&content[line_end..]);
+    std::fs::write(&manifest_path, out)?;
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.wit"></span>`fn wit`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn wit (dir : Option < & Path >) -> Result
+```
+
+Generate `<dir>/wit/<interface>.wit` from `<dir>/src/lib.rs` (the `#[plugin_interface]` trait + `#[derive(WitType)]` types). The `build.rs` helper (`fidius_build::emit_wit`) does this automatically on every build; this subcommand is for CI / manual inspection.
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn wit(dir: Option<&Path>) -> Result {
+    let dir = dir.unwrap_or_else(|| Path::new("."));
+    let lib = dir.join("src").join("lib.rs");
+    let generated = fidius_wit::generate_from_path(&lib)?;
+    let wit_dir = dir.join("wit");
+    std::fs::create_dir_all(&wit_dir)?;
+    let path = wit_dir.join(format!("{}.wit", generated.iface_kebab));
+    std::fs::write(&path, &generated.wit)?;
+    println!(
+        "Wrote {} (interface {}, {} user type(s))",
+        path.display(),
+        generated.interface_name,
+        generated.user_types.len()
+    );
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.package_unpack"></span>`fn package_unpack`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn package_unpack (archive : & Path , dest : Option < & Path >) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn package_unpack(archive: &Path, dest: Option<&Path>) -> Result {
+    let dest = dest.unwrap_or_else(|| Path::new("."));
+    let pkg_dir = fidius_core::package::unpack_package(archive, dest)?;
+    println!("Unpacked: {}", pkg_dir.display());
+    Ok(())
+}
+```
+
+</details>
+
+
+
+### <span id="fn.python_stub"></span>`fn python_stub`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn python_stub (interface_src : & Path , out : & Path , trait_name : Option < & str >) -> Result
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+pub fn python_stub(interface_src: &Path, out: &Path, trait_name: Option<&str>) -> Result {
+    crate::python_stub::write_stub(interface_src, out, trait_name)
+}
+```
+
+</details>
+
+
+

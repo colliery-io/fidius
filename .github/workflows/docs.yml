@@ -1,8 +1,20 @@
+# Builds the docs in docs/ and publishes them to the GitHub Pages of this
+# repository. Runs on a push to main that changes docs/.
+#
+# One-time setup: Settings → Pages → Source = "GitHub Actions".
+
 name: docs
 
 on:
   push:
     branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -11,34 +23,42 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          python-version: "3.12"
-
-      - run: pip install -r requirements-docs.txt
-
-      - run: mkdocs build --strict
-
-      - uses: actions/upload-pages-artifact@v3
+          node-version: 22
+      - id: pages
+        uses: actions/configure-pages@v6
+        if: github.event_name != 'pull_request'
+      # With a committed docs/package-lock.json, the build is the same each
+      # time (npm ci). Commit it after the first npm install.
+      - run: if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+      - run: npm run build
+        env:
+          DOCS_SITE: ${{ steps.pages.outputs.origin }}
+          DOCS_BASE: ${{ steps.pages.outputs.base_path }}
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
         with:
-          path: site
+          path: docs/dist
 
   deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - id: deployment
+        uses: actions/deploy-pages@v5

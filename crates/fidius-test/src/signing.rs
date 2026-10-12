@@ -33,7 +33,7 @@ pub fn fixture_keypair_with_seed(seed: u8) -> (SigningKey, VerifyingKey) {
     (signing, verifying)
 }
 
-/// Convenience: [`fixture_keypair_with_seed(1)`](fixture_keypair_with_seed).
+/// Convenience: [`fixture_keypair_with_seed`] with seed `1`.
 pub fn fixture_keypair() -> (SigningKey, VerifyingKey) {
     fixture_keypair_with_seed(1)
 }

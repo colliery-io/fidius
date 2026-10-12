@@ -1,0 +1,1086 @@
+---
+title: "fidius-host::host"
+description: "PluginHost builder and plugin discovery."
+sidebar:
+  order: 39
+  hidden: true
+---
+
+<span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
+
+
+PluginHost builder and plugin discovery.
+
+## Structs
+
+### <span id="struct.PluginHost"></span>`struct PluginHost`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+Host for loading and managing plugins.
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `search_paths` | `Vec < PathBuf >` |  |
+| `load_policy` | `LoadPolicy` |  |
+| `require_signature` | `bool` |  |
+| `trusted_keys` | `Vec < VerifyingKey >` |  |
+| `expected_hash` | `Option < u64 >` |  |
+| `expected_strategy` | `Option < BufferStrategyKind >` |  |
+| `egress` | `Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > >` | Host-wide default `wasi:http` egress policy (FIDIUS-I-0027). Applied to
+every `load_wasm`; `load_wasm_with_egress` overrides it per plugin. `None`
+→ no egress (a guest importing `wasi:http` fails closed at load). |
+
+#### Methods
+
+##### <span id="PluginHost.builder"></span>`builder`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn builder () -> PluginHostBuilder
+```
+
+Create a new builder.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn builder() -> PluginHostBuilder {
+        PluginHostBuilder::new()
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.discover"></span>`discover`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn discover (& self) -> Result < Vec < PluginInfo > , LoadError >
+```
+
+Discover all valid plugins in the configured search paths.
+
+Scans each path for both:
+- dylib files (cdylib plugins, the existing path), and
+- subdirectories containing a `package.toml` with `runtime = "python"`
+(when the `python` feature is enabled).
+Returns owned `PluginInfo` for every valid plugin found, with
+`PluginInfo::runtime` distinguishing the two kinds.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn discover(&self) -> Result<Vec<PluginInfo>, LoadError> {
+        #[cfg(feature = "tracing")]
+        tracing::info!(search_paths = ?self.search_paths, "discovering plugins");
+
+        let mut plugins = Vec::new();
+
+        for search_path in &self.search_paths {
+            if !search_path.is_dir() {
+                continue;
+            }
+
+            let entries = std::fs::read_dir(search_path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+
+                if is_dylib(&path) {
+                    self.discover_cdylib(&path, &mut plugins);
+                } else if path.is_dir() && path.join("package.toml").exists() {
+                    self.discover_package(&path, &mut plugins);
+                }
+            }
+        }
+
+        Ok(plugins)
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.discover_cdylib"></span>`discover_cdylib`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn discover_cdylib (& self , path : & Path , plugins : & mut Vec < PluginInfo >)
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn discover_cdylib(&self, path: &Path, plugins: &mut Vec<PluginInfo>) {
+        // Verify signature before dlopen to prevent code execution from untrusted dylibs
+        if self.require_signature && signing::verify_signature(path, &self.trusted_keys).is_err() {
+            return;
+        }
+
+        let Ok(loaded) = loader::load_library(path) else {
+            return; // Skip invalid dylibs during discovery
+        };
+        for plugin in &loaded.plugins {
+            if loader::validate_against_interface(
+                plugin,
+                self.expected_hash,
+                self.expected_strategy,
+            )
+            .is_ok()
+            {
+                plugins.push(plugin.info.clone());
+            }
+        }
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.discover_package"></span>`discover_package`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn discover_package (& self , dir : & Path , plugins : & mut Vec < PluginInfo >)
+```
+
+Discover a directory-based package (`package.toml`) and surface it by runtime. Rust source packages are discovered via their built dylib (the loadable artifact), not here, so they're skipped.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn discover_package(&self, dir: &Path, plugins: &mut Vec<PluginInfo>) {
+        let Ok(manifest) = fidius_core::package::load_manifest_untyped(dir) else {
+            return;
+        };
+        use fidius_core::package::PackageRuntime;
+        let runtime = match manifest.package.runtime() {
+            PackageRuntime::Python => PluginRuntimeKind::Python,
+            PackageRuntime::Wasm => PluginRuntimeKind::Wasm,
+            // The cdylib is the loadable artifact for a Rust package; the
+            // source directory isn't discovered.
+            PackageRuntime::Rust => return,
+        };
+        plugins.push(PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: manifest.package.interface.clone(),
+            // Hash is unknown until load (the host validates against the
+            // descriptor at load time, not discovery). Surface 0 so callers
+            // know discovery alone hasn't validated the package.
+            interface_hash: 0,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: BufferStrategyKind::PluginAllocated,
+            runtime,
+        });
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load"></span>`load`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load (& self , name : & str) -> Result < LoadedPlugin , LoadError >
+```
+
+Load a specific plugin by name.
+
+Searches all configured paths for a dylib containing a plugin
+with the given name. Returns the loaded plugin ready for calling.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load(&self, name: &str) -> Result<LoadedPlugin, LoadError> {
+        #[cfg(feature = "tracing")]
+        tracing::info!(plugin_name = name, "loading plugin");
+
+        for search_path in &self.search_paths {
+            if !search_path.is_dir() {
+                continue;
+            }
+
+            let entries = std::fs::read_dir(search_path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+
+                if !is_dylib(&path) {
+                    continue;
+                }
+
+                // Verify signature if required — always enforced regardless of LoadPolicy
+                if self.require_signature {
+                    signing::verify_signature(&path, &self.trusted_keys)?;
+                }
+
+                match loader::load_library(&path) {
+                    Ok(loaded) => {
+                        for plugin in loaded.plugins {
+                            if plugin.info.name == name {
+                                loader::validate_against_interface(
+                                    &plugin,
+                                    self.expected_hash,
+                                    self.expected_strategy,
+                                )?;
+                                return Ok(plugin);
+                            }
+                        }
+                    }
+                    Err(_) => continue,
+                }
+            }
+        }
+
+        Err(LoadError::PluginNotFound {
+            name: name.to_string(),
+        })
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.find_python_package"></span>`find_python_package`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn find_python_package (& self , name : & str) -> Result < PathBuf , LoadError >
+```
+
+Find a python plugin package directory by name across the configured search paths. The plugin name is matched against `package.toml`'s `[package].name`. Returns the directory path on success.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn find_python_package(&self, name: &str) -> Result<PathBuf, LoadError> {
+        for search_path in &self.search_paths {
+            if !search_path.is_dir() {
+                continue;
+            }
+            let entries = std::fs::read_dir(search_path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                if !path.join("package.toml").exists() {
+                    continue;
+                }
+                let Ok(manifest) = fidius_core::package::load_manifest_untyped(&path) else {
+                    continue;
+                };
+                if matches!(
+                    manifest.package.runtime(),
+                    fidius_core::package::PackageRuntime::Python
+                ) && manifest.package.name == name
+                {
+                    return Ok(path);
+                }
+            }
+        }
+        Err(LoadError::PluginNotFound {
+            name: name.to_string(),
+        })
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load_python"></span>`load_python`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load_python (& self , name : & str , descriptor : & 'static fidius_core :: python_descriptor :: PythonInterfaceDescriptor ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a Python plugin package by name and validate it against the supplied interface descriptor.
+
+The caller passes the static `<TraitName>_PYTHON_DESCRIPTOR` emitted
+by the interface crate's `#[plugin_interface]` macro — that's the
+out-of-band hint the loader needs to map method names to vtable
+indices and to check the interface hash.
+Available only when fidius-host is built with the `python` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_python(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let dir = self.find_python_package(name)?;
+        // Signature policy — enforced identically to cdylib/WASM loads.
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let py = fidius_python::load_python_plugin(&dir, descriptor)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        // Build the host-facing metadata from the manifest header + the
+        // interface descriptor. `capabilities`/`buffer_strategy` are cdylib
+        // concepts and take their no-op defaults for Python.
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Python,
+        };
+        Ok(crate::handle::PluginHandle::from_python(py, info))
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load_python_configured"></span>`load_python_configured`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load_python_configured < C : serde :: Serialize > (& self , name : & str , descriptor : & 'static fidius_core :: python_descriptor :: PythonInterfaceDescriptor , config : & C ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a **configured** Python plugin (FIDIUS-A-0006 / CI.4): serialize `config` and bind it once via the module's `__fidius_configure__(config) -> instance`; methods then run on the configured instance. N differently-configured instances coexist. Available only with the `python` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_python_configured<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::python_descriptor::PythonInterfaceDescriptor,
+        config: &C,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let dir = self.find_python_package(name)?;
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let cfg = serde_json::to_value(config)
+            .map_err(|e| LoadError::PythonLoad(format!("config serialize: {e}")))?;
+        let py = fidius_python::load_python_plugin_configured(&dir, descriptor, &cfg)
+            .map_err(|e| LoadError::PythonLoad(e.to_string()))?;
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Python,
+        };
+        Ok(crate::handle::PluginHandle::from_python(py, info))
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.find_wasm_package"></span>`find_wasm_package`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn find_wasm_package (& self , name : & str) -> Result < PathBuf , LoadError >
+```
+
+Find a WASM package directory by name across the search paths (matches `package.toml` `[package].name` with `runtime = "wasm"`).
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn find_wasm_package(&self, name: &str) -> Result<PathBuf, LoadError> {
+        for search_path in &self.search_paths {
+            if !search_path.is_dir() {
+                continue;
+            }
+            for entry in std::fs::read_dir(search_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if !path.is_dir() || !path.join("package.toml").exists() {
+                    continue;
+                }
+                let Ok(manifest) = fidius_core::package::load_manifest_untyped(&path) else {
+                    continue;
+                };
+                if matches!(
+                    manifest.package.runtime(),
+                    fidius_core::package::PackageRuntime::Wasm
+                ) && manifest.package.name == name
+                {
+                    return Ok(path);
+                }
+            }
+        }
+        Err(LoadError::PluginNotFound {
+            name: name.to_string(),
+        })
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load_wasm"></span>`load_wasm`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load_wasm (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a WASM component plugin package by name and validate it against the supplied interface descriptor (the `<TraitName>_WASM_DESCRIPTOR` the interface crate emits). Returns a unified [`crate::handle::PluginHandle`].
+
+The component is sandboxed: WASI is wired into the `Linker` but the guest
+gets a zero-grant `WasiCtx` (no FS preopens, no env, no sockets). The
+capability allow-list in `[wasm].capabilities` is applied in T-0104.
+Outbound HTTP is governed by the host's egress policy: a guest that
+declares the `http` capability gets `wasi:http` only when the host was
+given a policy (via [`PluginHostBuilder::egress`] or
+[`Self::load_wasm_with_egress`]) — otherwise it fails closed.
+Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), None, None)
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load_wasm_configured"></span>`load_wasm_configured`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load_wasm_configured < C : serde :: Serialize > (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , config : & C ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a **configured** WASM plugin (FIDIUS-A-0006 / CI.3): serialize `config` and bind it once via the guest's `fidius-configure` export. The component then runs on a persistent store, so methods dispatch on the configured instance and config crosses the sandbox boundary exactly once. Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm_configured<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        config: &C,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::WasmLoad(format!("config serialize: {e}")))?;
+        self.load_wasm_impl(name, descriptor, self.egress.clone(), Some(&cfg), None)
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load_wasm_configured_with_grants"></span>`load_wasm_configured_with_grants`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load_wasm_configured_with_grants < C : serde :: Serialize > (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , config : & C , capabilities : Vec < String > , egress : Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > > ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Load a **configured** WASM plugin with a caller-supplied capability allow-list and egress policy, overriding the package manifest's `[wasm].capabilities` (FIDIUS-I-0033 / cloacina constructor grants).
+
+This is the entry point for embedders that authorize a plugin's host
+access *at load time* rather than trusting the (signed-but-author-chosen)
+manifest caps — e.g. cloacina's tenant-granted constructor capabilities,
+where the filesystem path / env key / http+tcp intent are decided by the
+deploying tenant, not the plugin author. `capabilities` fully **replaces**
+the manifest list (it is not merged): pass exactly what the tenant
+granted. Default-closed falls out naturally — an empty `capabilities`
+builds a zero-grant `WasiCtx`, and `egress: None` denies all brokered
+HTTP/TCP (the two-key gate's host key is absent).
+`capabilities` uses the same vocabulary as `[wasm].capabilities`
+(`http`, `tcp`, `udp`, `network`/`sockets`, `fs:ro:<path>`/`fs:rw:<path>`,
+`env:<NAME>`, …) and is validated identically; an unknown or coarse
+(`env` / `fs`) entry fails the load.
+Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm_configured_with_grants<C: serde::Serialize>(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        config: &C,
+        capabilities: Vec<String>,
+        egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        let cfg = fidius_core::wire::serialize(config)
+            .map_err(|e| LoadError::WasmLoad(format!("config serialize: {e}")))?;
+        self.load_wasm_impl(name, descriptor, egress, Some(&cfg), Some(capabilities))
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load_wasm_with_egress"></span>`load_wasm_with_egress`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load_wasm_with_egress (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , egress : impl crate :: executor :: wasm :: EgressPolicy ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+Like [`Self::load_wasm`] but with a **per-plugin** `wasi:http` egress policy that overrides any host-wide default (FIDIUS-I-0027). This is the right primitive for isolating connectors: a host-wide policy only sees the outbound *request*, not which plugin issued it, so per-plugin policies are how you bound connector A to one set of hosts and connector B to another.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_wasm_with_egress(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        egress: impl crate::executor::wasm::EgressPolicy,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        self.load_wasm_impl(name, descriptor, Some(Arc::new(egress)), None, None)
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHost.load_wasm_impl"></span>`load_wasm_impl`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn load_wasm_impl (& self , name : & str , descriptor : & 'static fidius_core :: wasm_descriptor :: WasmInterfaceDescriptor , egress : Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > > , config : Option < & [u8] > , caps_override : Option < Vec < String > > ,) -> Result < crate :: handle :: PluginHandle , LoadError >
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn load_wasm_impl(
+        &self,
+        name: &str,
+        descriptor: &'static fidius_core::wasm_descriptor::WasmInterfaceDescriptor,
+        egress: Option<Arc<dyn crate::executor::wasm::EgressPolicy>>,
+        config: Option<&[u8]>,
+        caps_override: Option<Vec<String>>,
+    ) -> Result<crate::handle::PluginHandle, LoadError> {
+        use crate::executor::wasm::{WasmComponentExecutor, WasmMethod};
+
+        let dir = self.find_wasm_package(name)?;
+        // Signature policy — enforced identically to cdylib/Python loads.
+        if self.require_signature {
+            signing::verify_package_signature(&dir, &self.trusted_keys)?;
+        }
+        let manifest = fidius_core::package::load_manifest_untyped(&dir)
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        let wasm_meta = manifest
+            .wasm
+            .as_ref()
+            .ok_or_else(|| LoadError::WasmLoad("manifest is missing the [wasm] section".into()))?;
+
+        let methods: Vec<WasmMethod> = descriptor
+            .methods
+            .iter()
+            .map(|m| WasmMethod {
+                name: m.name.to_string(),
+                wire_raw: m.wire_raw,
+                streaming: m.streaming,
+            })
+            .collect();
+        let info = crate::types::PluginInfo {
+            name: manifest.package.name.clone(),
+            interface_name: descriptor.interface_name.to_string(),
+            interface_hash: descriptor.interface_hash,
+            interface_version: manifest.package.interface_version,
+            capabilities: 0,
+            buffer_strategy: fidius_core::descriptor::BufferStrategyKind::PluginAllocated,
+            runtime: crate::types::PluginRuntimeKind::Wasm,
+        };
+        let interface = descriptor.interface_export.to_string();
+        // A caller-supplied allow-list (e.g. tenant-granted constructor caps)
+        // fully replaces the manifest's author-chosen `[wasm].capabilities`;
+        // absent an override we honor the manifest as before.
+        let capabilities = caps_override.unwrap_or_else(|| wasm_meta.capabilities.clone());
+
+        // Resolve a precompiled .cwasm: explicit `[wasm].precompiled`, or an
+        // auto-detected sibling `<component-stem>.cwasm`. The AOT path is purely
+        // a load-latency optimization, so a stale/mismatched .cwasm (built by a
+        // different wasmtime) is non-fatal — we log and JIT-compile the
+        // component instead (FIDIUS-T-0107).
+        let cwasm_path = wasm_meta
+            .precompiled
+            .as_ref()
+            .map(|p| dir.join(p))
+            .or_else(|| {
+                let sibling = dir.join(&wasm_meta.component).with_extension("cwasm");
+                sibling.exists().then_some(sibling)
+            });
+
+        let jit = |interface: String, methods, capabilities, info| -> Result<_, LoadError> {
+            let bytes = std::fs::read(dir.join(&wasm_meta.component))?;
+            WasmComponentExecutor::from_component_bytes_with_egress(
+                &bytes,
+                interface,
+                methods,
+                capabilities,
+                egress.clone(),
+                info,
+            )
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))
+        };
+
+        let executor = match cwasm_path {
+            Some(cwasm) if cwasm.exists() => {
+                let bytes = std::fs::read(&cwasm)?;
+                // SAFETY: .cwasm is produced by `fidius pack`
+                // (Engine::precompile_component); wasmtime validates the header
+                // and refuses a mismatched engine/version (→ Err → JIT fallback).
+                let aot = unsafe {
+                    WasmComponentExecutor::from_cwasm_with_egress(
+                        &bytes,
+                        interface.clone(),
+                        methods.clone(),
+                        capabilities.clone(),
+                        egress.clone(),
+                        info.clone(),
+                    )
+                };
+                match aot {
+                    Ok(e) => e,
+                    Err(_err) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!(
+                            cwasm = %cwasm.display(),
+                            error = %_err,
+                            "precompiled .cwasm rejected (likely engine/version mismatch); falling back to JIT"
+                        );
+                        jit(interface, methods, capabilities, info)?
+                    }
+                }
+            }
+            _ => jit(interface, methods, capabilities, info)?,
+        };
+
+        // Interface-hash integrity check (parity with cdylib/Python).
+        let got = executor
+            .interface_hash()
+            .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        if got != descriptor.interface_hash {
+            return Err(LoadError::InterfaceHashMismatch {
+                got,
+                expected: descriptor.interface_hash,
+            });
+        }
+
+        // FIDIUS-A-0006 / CI.3: bind config once via the guest `fidius-configure`
+        // export, retaining a persistent store for subsequent method calls.
+        let mut executor = executor;
+        if let Some(cfg) = config {
+            executor
+                .configure(cfg)
+                .map_err(|e| LoadError::WasmLoad(e.to_string()))?;
+        }
+        Ok(crate::handle::PluginHandle::from_wasm(executor))
+    }
+```
+
+</details>
+
+
+
+
+
+### <span id="struct.PluginHostBuilder"></span>`struct PluginHostBuilder`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+Builder for configuring a PluginHost.
+
+#### Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+| `search_paths` | `Vec < PathBuf >` |  |
+| `load_policy` | `LoadPolicy` |  |
+| `require_signature` | `bool` |  |
+| `trusted_keys` | `Vec < VerifyingKey >` |  |
+| `expected_hash` | `Option < u64 >` |  |
+| `expected_strategy` | `Option < BufferStrategyKind >` |  |
+| `egress` | `Option < Arc < dyn crate :: executor :: wasm :: EgressPolicy > >` |  |
+
+#### Methods
+
+##### <span id="PluginHostBuilder.new"></span>`new`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn new () -> Self
+```
+
+<details>
+<summary>Source</summary>
+
+```rust
+    fn new() -> Self {
+        Self {
+            search_paths: Vec::new(),
+            load_policy: LoadPolicy::Strict,
+            require_signature: false,
+            trusted_keys: Vec::new(),
+            expected_hash: None,
+            expected_strategy: None,
+            #[cfg(feature = "wasm")]
+            egress: None,
+        }
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.egress"></span>`egress`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn egress (mut self , policy : impl crate :: executor :: wasm :: EgressPolicy) -> Self
+```
+
+Set a host-wide default `wasi:http` egress policy (FIDIUS-I-0027). Every `load_wasm` then enables outbound HTTP for a guest that declares the `http` capability, routing each request through `policy`. Without this (and without a per-load policy), `wasi:http` is never linked and a guest that imports it fails closed. Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn egress(mut self, policy: impl crate::executor::wasm::EgressPolicy) -> Self {
+        self.egress = Some(Arc::new(policy));
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.egress_policy"></span>`egress_policy`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn egress_policy (mut self , policy : Arc < dyn crate :: executor :: wasm :: EgressPolicy >) -> Self
+```
+
+Like [`Self::egress`] but accepts an already-erased `Arc<dyn EgressPolicy>` — for a policy that is shared across hosts, or selected/constructed at runtime (where the concrete type isn't known at the call site). Threads through `load_wasm` exactly like `egress`. Available only with the `wasm` feature.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn egress_policy(mut self, policy: Arc<dyn crate::executor::wasm::EgressPolicy>) -> Self {
+        self.egress = Some(policy);
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.search_path"></span>`search_path`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn search_path (mut self , path : impl Into < PathBuf >) -> Self
+```
+
+Add a directory to search for plugin dylibs.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn search_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.search_paths.push(path.into());
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.load_policy"></span>`load_policy`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn load_policy (mut self , policy : LoadPolicy) -> Self
+```
+
+Set the load policy (Strict or Lenient).
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn load_policy(mut self, policy: LoadPolicy) -> Self {
+        self.load_policy = policy;
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.require_signature"></span>`require_signature`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn require_signature (mut self , require : bool) -> Self
+```
+
+Require plugins to have valid signatures.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn require_signature(mut self, require: bool) -> Self {
+        self.require_signature = require;
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.trusted_keys"></span>`trusted_keys`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn trusted_keys (mut self , keys : & [VerifyingKey]) -> Self
+```
+
+Set trusted Ed25519 public keys for signature verification.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn trusted_keys(mut self, keys: &[VerifyingKey]) -> Self {
+        self.trusted_keys = keys.to_vec();
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.interface_hash"></span>`interface_hash`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn interface_hash (mut self , hash : u64) -> Self
+```
+
+Set the expected interface hash for validation.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn interface_hash(mut self, hash: u64) -> Self {
+        self.expected_hash = Some(hash);
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.buffer_strategy"></span>`buffer_strategy`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn buffer_strategy (mut self , strategy : BufferStrategyKind) -> Self
+```
+
+Set the expected buffer strategy for validation.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn buffer_strategy(mut self, strategy: BufferStrategyKind) -> Self {
+        self.expected_strategy = Some(strategy);
+        self
+    }
+```
+
+</details>
+
+
+
+##### <span id="PluginHostBuilder.build"></span>`build`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
+
+
+```rust
+fn build (self) -> Result < PluginHost , LoadError >
+```
+
+Build the PluginHost.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn build(self) -> Result<PluginHost, LoadError> {
+        Ok(PluginHost {
+            search_paths: self.search_paths,
+            load_policy: self.load_policy,
+            require_signature: self.require_signature,
+            trusted_keys: self.trusted_keys,
+            expected_hash: self.expected_hash,
+            expected_strategy: self.expected_strategy,
+            #[cfg(feature = "wasm")]
+            egress: self.egress,
+        })
+    }
+```
+
+</details>
+
+
+
+
+
+## Functions
+
+### <span id="fn.is_dylib"></span>`fn is_dylib`
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
+
+
+```rust
+fn is_dylib (path : & Path) -> bool
+```
+
+Check if a path has a platform-appropriate dylib extension.
+
+<details>
+<summary>Source</summary>
+
+```rust
+fn is_dylib(path: &Path) -> bool {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if cfg!(target_os = "macos") {
+        ext == "dylib"
+    } else if cfg!(target_os = "windows") {
+        ext == "dll"
+    } else {
+        ext == "so"
+    }
+}
+```
+
+</details>
+
+
+

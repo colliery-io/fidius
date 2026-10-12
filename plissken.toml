@@ -4,8 +4,8 @@ version_from = "cargo"
 
 [output]
 format = "markdown"
-path = "docs/api"
-template = "mkdocs-material"
+path = "docs/src/content/docs/reference/api"
+template = "starlight"
 
 [rust]
 crates = [
@@ -15,4 +15,5 @@ crates = [
     "crates/fidius-cli",
     "crates/fidius",
     "crates/fidius-test",
+    "crates/fidius-guest",
 ]

@@ -15,7 +15,7 @@
 //! WIT generation for the Fidius WASM backend (FIDIUS-I-0023).
 //!
 //! Maps the Rust types in a `#[plugin_interface]` to WIT, per
-//! `docs/explanation/wasm-component-abi.md`. Primitives, `String`, `Vec<T>`,
+//! `docs/src/content/docs/explanation/wasm-component-abi.md`. Primitives, `String`, `Vec<T>`,
 //! `Option<T>`, and `Result<T, PluginError>` map directly; user types that
 //! carry `#[derive(WitType)]` map to WIT `record`s (structs) and `variant`s
 //! (enums), referenced by their kebab-case name.
