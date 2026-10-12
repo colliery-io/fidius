@@ -1,13 +1,13 @@
 ---
 title: "fidius-host::host_import"
 description: "Host-import discovery and binding (plugin → host callback channel)."
+editUrl: false
 sidebar:
-  order: 40
+  order: 39
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 Host-import discovery and binding (plugin → host callback channel).
 
@@ -15,20 +15,20 @@ A plugin dylib may export the optional `fidius_get_host_imports` symbol
 (emitted by `fidius_plugin_registry!()`) advertising which
 `#[fidius::host_interface]` surfaces it can consume, each with the
 version and signature hash it was **built against**. This module reads
-that registry and implements the load-time gate: [`bind_host_interface`]
-refuses to install a [`HostFunctionTable`] whose version or hash differs
-from the plugin's expectation, returning a typed [`LoadError`] instead of
+that registry and implements the load-time gate: [`bind_host_interface`](../../../rust/fidius-host/host_import/#fn.bind_host_interface)
+refuses to install a [`HostFunctionTable`](../../../rust/fidius-guest/host_ffi/#struct.HostFunctionTable) whose version or hash differs
+from the plugin's expectation, returning a typed [`LoadError`](../../../rust/fidius-host/error/#enum.LoadError) instead of
 letting positional bincode mis-dispatch at call time.
+
 Host applications normally don't call this module directly — the
 `#[host_interface]` macro generates a typed `<Trait>Binding::bind` that
-feeds the interface's own constants through [`bind_host_interface`].
+feeds the interface's own constants through [`bind_host_interface`](../../../rust/fidius-host/host_import/#fn.bind_host_interface).
 
 ## Structs
 
-### <span id="struct.HostImportInfo"></span>`struct HostImportInfo`
+### <span id="struct.HostImportInfo"></span><code style="font-size: 0.85em">struct HostImportInfo</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`
 
@@ -42,96 +42,16 @@ Owned metadata about one host interface a plugin declares it can consume.
 | `interface_hash` | `u64` | FNV-1a signature hash the plugin was built against. |
 | `interface_version` | `u32` | `#[host_interface(version = N)]` the plugin was built against. |
 
-
-
 ## Functions
 
-### <span id="fn.read_registry"></span>`fn read_registry`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn read_registry (library : & Library) -> Result < Option < & 'static HostImportRegistry > , LoadError >
-```
-
-Read and validate a library's host-import registry. Returns `None` when the library exports no `fidius_get_host_imports` symbol (a plugin built before the host-callback channel existed, or a non-fidius dylib) — the caller treats that as "no imports".
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn read_registry(library: &Library) -> Result<Option<&'static HostImportRegistry>, LoadError> {
-    let get_imports: libloading::Symbol<GetHostImportsFn> =
-        match unsafe { library.get(b"fidius_get_host_imports") } {
-            Ok(sym) => sym,
-            Err(_) => return Ok(None),
-        };
-
-    let registry = unsafe { &*get_imports() };
-    if registry.magic != FIDIUS_MAGIC {
-        return Err(LoadError::HostImportRegistryInvalid {
-            reason: "bad magic bytes".into(),
-        });
-    }
-    if registry.registry_version != HOST_IMPORTS_VERSION {
-        return Err(LoadError::HostImportRegistryInvalid {
-            reason: format!(
-                "unsupported registry version {} (host supports {})",
-                registry.registry_version, HOST_IMPORTS_VERSION
-            ),
-        });
-    }
-    if registry.import_count > 0 && registry.imports.is_null() {
-        return Err(LoadError::HostImportRegistryInvalid {
-            reason: "null imports array with nonzero count".into(),
-        });
-    }
-    Ok(Some(registry))
-}
-```
-
-</details>
-
-
-
-### <span id="fn.descriptors"></span>`fn descriptors`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn descriptors (registry : & 'static HostImportRegistry ,) -> impl Iterator < Item = & 'static HostImportDescriptor >
-```
-
-Iterate a validated registry's descriptors.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn descriptors(
-    registry: &'static HostImportRegistry,
-) -> impl Iterator<Item = &'static HostImportDescriptor> {
-    (0..registry.import_count as usize).map(move |i| {
-        // SAFETY: read_registry validated count/array; descriptors are static
-        // data in the loaded library.
-        unsafe { &**registry.imports.add(i) }
-    })
-}
-```
-
-</details>
-
-
-
-### <span id="fn.list_host_imports"></span>`fn list_host_imports`
+### <span id="fn.list_host_imports"></span><code style="font-size: 0.85em">fn list_​host_​imports</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn list_host_imports (library : & Library) -> Result < Vec < HostImportInfo > , LoadError >
+fn list_host_imports(
+    library: &Library,
+) -> Result<Vec<HostImportInfo>, LoadError>
 ```
 
 List the host interfaces a loaded library declares it can consume.
@@ -170,15 +90,18 @@ pub fn list_host_imports(library: &Library) -> Result<Vec<HostImportInfo>, LoadE
 
 </details>
 
-
-
-### <span id="fn.bind_host_interface"></span>`fn bind_host_interface`
+### <span id="fn.bind_host_interface"></span><code style="font-size: 0.85em">fn bind_​host_​interface</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn bind_host_interface (library : & Library , expected_name : & str , expected_hash : u64 , expected_version : u32 , build_table : impl FnOnce () -> * const HostFunctionTable ,) -> Result < bool , LoadError >
+fn bind_host_interface(
+    library: &Library,
+    expected_name: &str,
+    expected_hash: u64,
+    expected_version: u32,
+    build_table: impl FnOnce() -> *const HostFunctionTable,
+) -> Result<bool, LoadError>
 ```
 
 Install a host-function table into a loaded plugin library, gating on the version and signature hash the plugin was built against.
@@ -187,17 +110,18 @@ Install a host-function table into a loaded plugin library, gating on the versio
 surface the **host** provides (the interface's generated constants);
 `build_table` is called lazily, only once the plugin's matching import
 has passed the gate, and must return a process-lifetime table.
+
 Returns:
 - `Ok(true)` — the plugin imports this interface and the table was
-installed;
+  installed;
 - `Ok(false)` — the plugin does not declare this import (older plugin,
-or one that doesn't use host functions): nothing to do;
+  or one that doesn't use host functions): nothing to do;
 - `Err(LoadError::HostInterfaceVersionMismatch | HostInterfaceHashMismatch)`
-— the plugin was built against a **different revision** of this
-interface. The table is not installed; any plugin-side call would
-surface as a typed `NotBound` error, never a mis-dispatch;
+  — the plugin was built against a **different revision** of this
+  interface. The table is not installed; any plugin-side call would
+  surface as a typed `NotBound` error, never a mis-dispatch;
 - `Err(LoadError::HostBindFailed)` — the plugin's bind shim rejected the
-table (e.g. already bound by an earlier call).
+  table (e.g. already bound by an earlier call).
 
 <details>
 <summary>Source</summary>
@@ -274,6 +198,3 @@ pub fn bind_host_interface(
 ```
 
 </details>
-
-
-

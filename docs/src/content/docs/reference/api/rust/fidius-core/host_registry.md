@@ -1,17 +1,17 @@
 ---
 title: "fidius-core::host_registry"
 description: "Host-import registry assembly (plugin → host callback channel)."
+editUrl: false
 sidebar:
-  order: 7
+  order: 6
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 Host-import registry assembly (plugin → host callback channel).
 
-Each `#[fidius::host_interface]` trait submits a [`HostImportDescriptor`]
+Each `#[fidius::host_interface]` trait submits a [`HostImportDescriptor`](../../../rust/fidius-guest/host_ffi/#struct.HostImportDescriptor)
 pointer via `inventory::submit!` (from the interface crate, gated to
 non-wasm builds). `fidius_plugin_registry!()` emits the optional
 `fidius_get_host_imports` export that collects them, so a plugin dylib
@@ -22,10 +22,9 @@ identically (nothing to bind).
 
 ## Structs
 
-### <span id="struct.HostImportEntry"></span>`struct HostImportEntry`
+### <span id="struct.HostImportEntry"></span><code style="font-size: 0.85em">struct HostImportEntry</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 A submitted host-import descriptor pointer, collected via `inventory`.
 
@@ -33,56 +32,16 @@ A submitted host-import descriptor pointer, collected via `inventory`.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `descriptor` | `& 'static HostImportDescriptor` |  |
-
-
+| `descriptor` | `&'static HostImportDescriptor` |  |
 
 ## Functions
 
-### <span id="fn.build_host_import_registry"></span>`fn build_host_import_registry`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn build_host_import_registry () -> HostImportRegistry
-```
-
-Build the host-import registry from all submitted descriptors.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn build_host_import_registry() -> HostImportRegistry {
-    let entries: Vec<*const HostImportDescriptor> = inventory::iter::<HostImportEntry>()
-        .map(|e| e.descriptor as *const HostImportDescriptor)
-        .collect();
-
-    let count = entries.len() as u32;
-    let ptr = entries.as_ptr();
-    std::mem::forget(entries);
-
-    HostImportRegistry {
-        magic: FIDIUS_MAGIC,
-        registry_version: HOST_IMPORTS_VERSION,
-        import_count: count,
-        imports: ptr,
-    }
-}
-```
-
-</details>
-
-
-
-### <span id="fn.get_host_import_registry"></span>`fn get_host_import_registry`
+### <span id="fn.get_host_import_registry"></span><code style="font-size: 0.85em">fn get_​host_​import_​registry</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn get_host_import_registry () -> & 'static HostImportRegistry
+fn get_host_import_registry() -> &'static HostImportRegistry
 ```
 
 Get or build the host-import registry (cached after first call).
@@ -98,6 +57,3 @@ pub fn get_host_import_registry() -> &'static HostImportRegistry {
 ```
 
 </details>
-
-
-

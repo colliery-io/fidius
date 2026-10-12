@@ -1,13 +1,13 @@
 ---
 title: "fidius-core::package"
 description: "Source package manifest types and parsing."
+editUrl: false
 sidebar:
-  order: 8
+  order: 7
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 Source package manifest types and parsing.
 
@@ -18,10 +18,9 @@ host-defined schema type.
 
 ## Structs
 
-### <span id="struct.PackageManifest"></span>`struct PackageManifest<M>`
+### <span id="struct.PackageManifest"></span><code style="font-size: 0.85em">struct PackageManifest&lt;M&gt;</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`, `Serialize`, `Deserialize`
 
@@ -37,19 +36,82 @@ this is how schema validation works.
 |------|------|-------------|
 | `package` | `PackageHeader` | Fixed header fields required by fidius. |
 | `metadata` | `M` | Host-defined metadata. Must deserialize from the `[metadata]` section. |
-| `python` | `Option < PythonPackageMeta >` | Python-runtime fields. Required when `package.runtime == "python"`,
-rejected otherwise. Validated by [`PackageManifest::validate_runtime`]
-after deserialization, since serde alone can't enforce cross-section
-invariants. |
-| `wasm` | `Option < WasmPackageMeta >` | WASM-component fields. Required when `package.runtime == "wasm"`,
-rejected otherwise. Validated by [`PackageManifest::validate_runtime`]. |
+| `python` | `Option<PythonPackageMeta>` | Python-runtime fields. Required when `package.runtime == "python"`, rejected otherwise. Validated by [`PackageManifest::validate_runtime`](../../../rust/fidius-core/package/#PackageManifest.validate_runtime) after deserialization, since serde alone can't enforce cross-section invariants. |
+| `wasm` | `Option<WasmPackageMeta>` | WASM-component fields. Required when `package.runtime == "wasm"`, rejected otherwise. Validated by [`PackageManifest::validate_runtime`](../../../rust/fidius-core/package/#PackageManifest.validate_runtime). |
 
+#### Methods
 
-
-### <span id="struct.PackageHeader"></span>`struct PackageHeader`
+##### <span id="PackageManifest.validate_runtime"></span><code>validate_​runtime</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
+```rust
+fn validate_runtime(&self) -> Result<(), PackageError>
+```
+
+Cross-section validation: runtime + python section must agree.
+
+- `runtime = "rust"` (or absent → "rust") with a `[python]` section is rejected.
+- `runtime = "python"` without a `[python]` section is rejected.
+- Unknown runtime values are rejected (forward compat: a future
+  `runtime = "node"` package shouldn't silently fall back to rust).
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn validate_runtime(&self) -> Result<(), PackageError> {
+        let runtime = self.package.runtime();
+        match runtime {
+            PackageRuntime::Rust => {
+                if self.python.is_some() {
+                    return Err(PackageError::InvalidManifest(
+                        "[python] section is only valid when runtime = \"python\"".into(),
+                    ));
+                }
+                if self.wasm.is_some() {
+                    return Err(PackageError::InvalidManifest(
+                        "[wasm] section is only valid when runtime = \"wasm\"".into(),
+                    ));
+                }
+                Ok(())
+            }
+            PackageRuntime::Python => {
+                if self.python.is_none() {
+                    return Err(PackageError::InvalidManifest(
+                        "runtime = \"python\" requires a [python] section with `entry_module`"
+                            .into(),
+                    ));
+                }
+                if self.wasm.is_some() {
+                    return Err(PackageError::InvalidManifest(
+                        "[wasm] section is only valid when runtime = \"wasm\"".into(),
+                    ));
+                }
+                Ok(())
+            }
+            PackageRuntime::Wasm => {
+                if self.python.is_some() {
+                    return Err(PackageError::InvalidManifest(
+                        "[python] section is only valid when runtime = \"python\"".into(),
+                    ));
+                }
+                if self.wasm.is_none() {
+                    return Err(PackageError::InvalidManifest(
+                        "runtime = \"wasm\" requires a [wasm] section with `component`".into(),
+                    ));
+                }
+                Ok(())
+            }
+        }
+    }
+```
+
+</details>
+
+### <span id="struct.PackageHeader"></span><code style="font-size: 0.85em">struct PackageHeader</code>
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
 **Derives:** `Debug`, `Clone`, `Serialize`, `Deserialize`
 
@@ -63,21 +125,17 @@ Fixed header fields that every package manifest must have.
 | `version` | `String` | Package version (e.g., `"1.2.0"`). |
 | `interface` | `String` | Name of the interface crate this package implements. |
 | `interface_version` | `u32` | Expected interface version. |
-| `extension` | `Option < String >` | Custom file extension for `.fid` archives (e.g., `"cloacina"`).
-Defaults to `"fid"` when absent. |
-| `runtime` | `Option < String >` | Plugin runtime. `"rust"` (default) → cdylib; `"python"` → Python package
-loaded by `fidius-python`. Unknown values are rejected at validation
-time (see [`PackageManifest::validate_runtime`]). |
+| `extension` | `Option<String>` | Custom file extension for `.fid` archives (e.g., `"cloacina"`). Defaults to `"fid"` when absent. |
+| `runtime` | `Option<String>` | Plugin runtime. `"rust"` (default) → cdylib; `"python"` → Python package loaded by `fidius-python`. Unknown values are rejected at validation time (see [`PackageManifest::validate_runtime`](../../../rust/fidius-core/package/#PackageManifest.validate_runtime)). |
 
 #### Methods
 
-##### <span id="PackageHeader.extension"></span>`extension`
+##### <span id="PackageHeader.extension"></span><code>extension</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn extension (& self) -> & str
+fn extension(&self) -> &str
 ```
 
 Returns the package extension, defaulting to `"fid"`.
@@ -93,18 +151,15 @@ Returns the package extension, defaulting to `"fid"`.
 
 </details>
 
-
-
-##### <span id="PackageHeader.runtime"></span>`runtime`
+##### <span id="PackageHeader.runtime"></span><code>runtime</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn runtime (& self) -> PackageRuntime
+fn runtime(&self) -> PackageRuntime
 ```
 
-Returns the runtime kind, defaulting to `Rust` when absent. Returns `PackageRuntime::Rust` for unknown values; callers that need to reject unknown runtimes should use [`Self::runtime_strict`].
+Returns the runtime kind, defaulting to `Rust` when absent. Returns `PackageRuntime::Rust` for unknown values; callers that need to reject unknown runtimes should use `Self::runtime_strict`.
 
 <details>
 <summary>Source</summary>
@@ -125,15 +180,12 @@ Returns the runtime kind, defaulting to `Rust` when absent. Returns `PackageRunt
 
 </details>
 
-
-
-##### <span id="PackageHeader.runtime_strict"></span>`runtime_strict`
+##### <span id="PackageHeader.runtime_strict"></span><code>runtime_​strict</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn runtime_strict (& self) -> Result < PackageRuntime , PackageError >
+fn runtime_strict(&self) -> Result<PackageRuntime, PackageError>
 ```
 
 Returns the runtime kind, erroring on unknown values.
@@ -156,14 +208,9 @@ Returns the runtime kind, erroring on unknown values.
 
 </details>
 
-
-
-
-
-### <span id="struct.PythonPackageMeta"></span>`struct PythonPackageMeta`
+### <span id="struct.PythonPackageMeta"></span><code style="font-size: 0.85em">struct PythonPackageMeta</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`, `Serialize`, `Deserialize`
 
@@ -173,21 +220,17 @@ Fields under the `[python]` section of `package.toml`. Required when `package.ru
 
 | Name | Type | Description |
 |------|------|-------------|
-| `entry_module` | `String` | Python module the loader imports first. Dotted-path form (e.g.
-`"my_plugin.entry"`) corresponding to a file inside the package
-directory or its `vendor/` tree. |
-| `requirements` | `Option < String >` | Path to the requirements file consumed by `fidius pack` to vendor
-dependencies into `vendor/`. Defaults to `"requirements.txt"`. |
+| `entry_module` | `String` | Python module the loader imports first. Dotted-path form (e.g. `"my_plugin.entry"`) corresponding to a file inside the package directory or its `vendor/` tree. |
+| `requirements` | `Option<String>` | Path to the requirements file consumed by `fidius pack` to vendor dependencies into `vendor/`. Defaults to `"requirements.txt"`. |
 
 #### Methods
 
-##### <span id="PythonPackageMeta.requirements_path"></span>`requirements_path`
+##### <span id="PythonPackageMeta.requirements_path"></span><code>requirements_​path</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn requirements_path (& self) -> & str
+fn requirements_path(&self) -> &str
 ```
 
 Returns the requirements file path, defaulting to `"requirements.txt"`.
@@ -203,14 +246,9 @@ Returns the requirements file path, defaulting to `"requirements.txt"`.
 
 </details>
 
-
-
-
-
-### <span id="struct.WasmPackageMeta"></span>`struct WasmPackageMeta`
+### <span id="struct.WasmPackageMeta"></span><code style="font-size: 0.85em">struct WasmPackageMeta</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`, `Serialize`, `Deserialize`
 
@@ -220,21 +258,13 @@ Fields under the `[wasm]` section of `package.toml`. Required when `package.runt
 
 | Name | Type | Description |
 |------|------|-------------|
-| `component` | `String` | Component filename inside the package directory (e.g. `"plugin.wasm"`).
-A WIT component, not a core module. |
-| `precompiled` | `Option < String >` | Optional precompiled `.cwasm` (produced at pack time by the wasmtime
-engine; engine/version-specific). When present and valid, the loader
-uses the AOT fast path instead of JIT-compiling `component`. |
-| `capabilities` | `Vec < String >` | WASI capability allow-list (e.g. `["clocks", "random", "sockets"]`).
-Empty = deny-all sandbox. Consumed by the capability policy (T-0104);
-filesystem is never granted in v1. |
+| `component` | `String` | Component filename inside the package directory (e.g. `"plugin.wasm"`). A WIT component, not a core module. |
+| `precompiled` | `Option<String>` | Optional precompiled `.cwasm` (produced at pack time by the wasmtime engine; engine/version-specific). When present and valid, the loader uses the AOT fast path instead of JIT-compiling `component`. |
+| `capabilities` | `Vec<String>` | WASI capability allow-list (e.g. `["clocks", "random", "sockets"]`). Empty = deny-all sandbox. Consumed by the capability policy (T-0104); filesystem is never granted in v1. |
 
-
-
-### <span id="struct.UnpackOptions"></span>`struct UnpackOptions`
+### <span id="struct.UnpackOptions"></span><code style="font-size: 0.85em">struct UnpackOptions</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`
 
@@ -249,19 +279,13 @@ native dependencies).
 
 | Name | Type | Description |
 |------|------|-------------|
-| `max_decompressed` | `u64` | Maximum total declared uncompressed size of all entries, in bytes.
-Archives exceeding this are rejected as potential decompression bombs. |
-| `max_ratio` | `u64` | Maximum ratio of total declared uncompressed size to compressed
-archive size. Archives exceeding this are rejected. |
-| `max_entries` | `u32` | Maximum number of entries in the archive. Guards against archives
-that exhaust inodes or directory-entry limits via tiny-file spam. |
+| `max_decompressed` | `u64` | Maximum total declared uncompressed size of all entries, in bytes. Archives exceeding this are rejected as potential decompression bombs. |
+| `max_ratio` | `u64` | Maximum ratio of total declared uncompressed size to compressed archive size. Archives exceeding this are rejected. |
+| `max_entries` | `u32` | Maximum number of entries in the archive. Guards against archives that exhaust inodes or directory-entry limits via tiny-file spam. |
 
-
-
-### <span id="struct.PackResult"></span>`struct PackResult`
+### <span id="struct.PackResult"></span><code style="font-size: 0.85em">struct PackResult</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`
 
@@ -274,35 +298,56 @@ Result of packing a package, including any warnings.
 | `path` | `PathBuf` | Path to the created `.fid` archive. |
 | `unsigned` | `bool` | Whether the package was unsigned (no `package.sig` found). |
 
-
-
 ## Enums
 
-### <span id="enum.PackageRuntime"></span>`enum PackageRuntime`
+### <span id="enum.PackageRuntime"></span><code style="font-size: 0.85em">enum PackageRuntime</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Plugin runtime kind. Determines which loader the host's `PluginHost` dispatches to.
 
 #### Variants
 
 - **`Rust`** - Default. Plugin is a cdylib + `PluginRegistry`. Loaded by the existing
-dylib loader in `fidius-host`.
+  dylib loader in `fidius-host`.
 - **`Python`** - Plugin is a directory of `.py` files (+ optional `vendor/`) loaded by
-`fidius-python` via an embedded interpreter. Requires the host crate
-to enable the `python` feature.
+  `fidius-python` via an embedded interpreter. Requires the host crate
+  to enable the `python` feature.
 - **`Wasm`** - Plugin is a signed `.wasm` **component** (Component Model + WIT),
-loaded by the `WasmComponentExecutor`. Reserved by FIDIUS-I-0021 Phase 1;
-the loader lands in Phase 2 (until then, loading a wasm package errors
-clearly rather than silently falling back to rust).
+  loaded by the `WasmComponentExecutor`. Reserved by FIDIUS-I-0021 Phase 1;
+  the loader lands in Phase 2 (until then, loading a wasm package errors
+  clearly rather than silently falling back to rust).
 
+#### Methods
 
-
-### <span id="enum.PackageError"></span>`enum PackageError`
+##### <span id="PackageRuntime.as_str"></span><code>as_​str</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
+```rust
+fn as_str(&self) -> &'static str
+```
+
+Returns the canonical string form used in `package.toml`.
+
+<details>
+<summary>Source</summary>
+
+```rust
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PackageRuntime::Rust => "rust",
+            PackageRuntime::Python => "python",
+            PackageRuntime::Wasm => "wasm",
+        }
+    }
+```
+
+</details>
+
+### <span id="enum.PackageError"></span><code style="font-size: 0.85em">enum PackageError</code>
+
+<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
 Errors that can occur when loading a package manifest.
 
@@ -310,7 +355,7 @@ Errors that can occur when loading a package manifest.
 
 - **`ManifestNotFound`** - The `package.toml` file was not found in the given directory.
 - **`ParseError`** - The manifest file could not be parsed as valid TOML or failed
-schema validation (the `[metadata]` section didn't match `M`).
+  schema validation (the `[metadata]` section didn't match `M`).
 - **`Io`** - An I/O error occurred reading the manifest file.
 - **`BuildFailed`** - Build failed.
 - **`SignatureNotFound`** - Package signature file not found.
@@ -318,27 +363,26 @@ schema validation (the `[metadata]` section didn't match `M`).
 - **`ArchiveError`** - An error occurred creating or reading an archive.
 - **`InvalidArchive`** - The archive does not contain a valid package.
 - **`InvalidManifest`** - Manifest passed serde parsing but failed cross-section validation
-(e.g. `runtime = "python"` without a `[python]` section, or unknown
-runtime value).
+  (e.g. `runtime = "python"` without a `[python]` section, or unknown
+  runtime value).
 - **`PathTraversal`** - Archive entry contains a `..` component that would escape `dest`.
 - **`AbsolutePath`** - Archive entry has an absolute path (root or drive prefix).
 - **`SymlinkRejected`** - Archive contains a symlink entry, which could be used to overwrite
-arbitrary files outside `dest` on a follow-up write.
+  arbitrary files outside `dest` on a follow-up write.
 - **`HardlinkRejected`** - Archive contains a hardlink entry, same threat model as symlinks.
 - **`SizeLimitExceeded`** - Cumulative decompressed size exceeded the configured cap.
 - **`TooManyEntries`** - Archive contains more entries than the configured cap allows.
 
-
-
 ## Functions
 
-### <span id="fn.load_manifest"></span>`fn load_manifest`
+### <span id="fn.load_manifest"></span><code style="font-size: 0.85em">fn load_​manifest</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn load_manifest < M : DeserializeOwned > (dir : & Path) -> Result < PackageManifest < M > , PackageError >
+fn load_manifest<M: DeserializeOwned>(
+    dir: &Path,
+) -> Result<PackageManifest<M>, PackageError>
 ```
 
 Load and parse a `package.toml` manifest from a package directory.
@@ -386,15 +430,14 @@ pub fn load_manifest<M: DeserializeOwned>(dir: &Path) -> Result<PackageManifest<
 
 </details>
 
-
-
-### <span id="fn.load_manifest_untyped"></span>`fn load_manifest_untyped`
+### <span id="fn.load_manifest_untyped"></span><code style="font-size: 0.85em">fn load_​manifest_​untyped</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn load_manifest_untyped (dir : & Path) -> Result < PackageManifest < toml :: Value > , PackageError >
+fn load_manifest_untyped(
+    dir: &Path,
+) -> Result<PackageManifest<toml::Value>, PackageError>
 ```
 
 Load a manifest validating only the fixed header (accepting any metadata).
@@ -413,15 +456,12 @@ pub fn load_manifest_untyped(dir: &Path) -> Result<PackageManifest<toml::Value>,
 
 </details>
 
-
-
-### <span id="fn.package_digest"></span>`fn package_digest`
+### <span id="fn.package_digest"></span><code style="font-size: 0.85em">fn package_​digest</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_digest (dir : & Path) -> Result < [u8 ; 32] , PackageError >
+fn package_digest(dir: &Path) -> Result<[u8; 32], PackageError>
 ```
 
 Compute a deterministic SHA-256 digest over all package source files.
@@ -429,6 +469,7 @@ Compute a deterministic SHA-256 digest over all package source files.
 Walks the package directory, collects all files (excluding `target/`,
 `.git/`, and `*.sig` files), sorts by relative path, and feeds each
 file's relative path and contents into a SHA-256 hasher.
+
 The resulting 32-byte digest covers the entire package contents.
 Sign this digest to protect against tampering.
 
@@ -462,202 +503,15 @@ pub fn package_digest(dir: &Path) -> Result<[u8; 32], PackageError> {
 
 </details>
 
-
-
-### <span id="fn.collect_files"></span>`fn collect_files`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn collect_files (root : & Path , dir : & Path , out : & mut Vec < String >) -> Result < () , PackageError >
-```
-
-Recursively collect file paths relative to `root`, skipping excluded dirs/files.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn collect_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), PackageError> {
-    let entries = std::fs::read_dir(dir)?;
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        // Skip excluded directories
-        if path.is_dir() {
-            if name_str == "target" || name_str == ".git" {
-                continue;
-            }
-            collect_files(root, &path, out)?;
-            continue;
-        }
-
-        // Skip signature files
-        if name_str.ends_with(".sig") {
-            continue;
-        }
-
-        // Store relative path using forward slashes for cross-platform determinism
-        let rel = path
-            .strip_prefix(root)
-            .expect("path is under root")
-            .to_string_lossy()
-            .replace('\\', "/");
-        out.push(rel);
-    }
-    Ok(())
-}
-```
-
-</details>
-
-
-
-### <span id="fn.collect_archive_files"></span>`fn collect_archive_files`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn collect_archive_files (root : & Path , dir : & Path , out : & mut Vec < String > ,) -> Result < () , PackageError >
-```
-
-Recursively collect file paths for archiving (includes `.sig` files).
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn collect_archive_files(
-    root: &Path,
-    dir: &Path,
-    out: &mut Vec<String>,
-) -> Result<(), PackageError> {
-    let entries = std::fs::read_dir(dir)?;
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        if path.is_dir() {
-            if name_str == "target" || name_str == ".git" {
-                continue;
-            }
-            collect_archive_files(root, &path, out)?;
-            continue;
-        }
-
-        let rel = path
-            .strip_prefix(root)
-            .expect("path is under root")
-            .to_string_lossy()
-            .replace('\\', "/");
-        out.push(rel);
-    }
-    Ok(())
-}
-```
-
-</details>
-
-
-
-### <span id="fn.vendor_python_deps"></span>`fn vendor_python_deps`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn vendor_python_deps (dir : & Path , py : & PythonPackageMeta) -> Result < () , PackageError >
-```
-
-Vendor Python dependencies into `<dir>/vendor/` by invoking `python3 -m pip install -r <requirements> --target ./vendor/`.
-
-- If `vendor/` already exists, leave it alone — the plugin author may have
-pre-vendored deliberately for reproducibility.
-- If the declared requirements file is missing AND `vendor/` is missing,
-emit a tracing warning and proceed (zero-dep python plugin).
-- If pip fails, surface its stderr as `PackageError::ArchiveError` so the
-user sees the resolver/build error directly.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn vendor_python_deps(dir: &Path, py: &PythonPackageMeta) -> Result<(), PackageError> {
-    let vendor_dir = dir.join("vendor");
-    if vendor_dir.exists() {
-        tracing::debug!(
-            vendor = %vendor_dir.display(),
-            "pre-existing vendor/ directory — using as-is, skipping pip"
-        );
-        return Ok(());
-    }
-
-    let req_path = dir.join(py.requirements_path());
-    if !req_path.exists() {
-        tracing::warn!(
-            package = %dir.display(),
-            requirements = %req_path.display(),
-            "python package has no requirements file and no vendor/ — packaging without deps"
-        );
-        return Ok(());
-    }
-
-    tracing::info!(
-        requirements = %req_path.display(),
-        vendor = %vendor_dir.display(),
-        "vendoring python deps via pip"
-    );
-
-    // `python3 -m pip` rather than bare `pip` so we use whichever interpreter
-    // happens to be on PATH and avoid relying on a separately-installed pip
-    // shim. `Command` invokes the binary directly, bypassing shell aliases.
-    let output = std::process::Command::new("python3")
-        .arg("-m")
-        .arg("pip")
-        .arg("install")
-        .arg("-r")
-        .arg(&req_path)
-        .arg("--target")
-        .arg(&vendor_dir)
-        .arg("--quiet")
-        .output()
-        .map_err(|e| {
-            PackageError::ArchiveError(format!(
-                "failed to invoke `python3 -m pip` (is python3 on PATH?): {e}"
-            ))
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(PackageError::ArchiveError(format!(
-            "pip install failed (exit {}):\n{}",
-            output.status.code().unwrap_or(-1),
-            stderr.trim()
-        )));
-    }
-
-    Ok(())
-}
-```
-
-</details>
-
-
-
-### <span id="fn.pack_package"></span>`fn pack_package`
+### <span id="fn.pack_package"></span><code style="font-size: 0.85em">fn pack_​package</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn pack_package (dir : & Path , output : Option < & Path >) -> Result < PackResult , PackageError >
+fn pack_package(
+    dir: &Path,
+    output: Option<&Path>,
+) -> Result<PackResult, PackageError>
 ```
 
 Create a `.fid` archive (tar + bzip2) from a package directory.
@@ -665,10 +519,12 @@ Create a `.fid` archive (tar + bzip2) from a package directory.
 The archive contains a single top-level directory `{name}-{version}/`
 with all source files. Excludes `target/` and `.git/` directories.
 Includes `package.sig` if present.
+
 For Python packages (`runtime = "python"`), if a `requirements.txt` is
 declared and a `vendor/` directory does not yet exist, `pip install -r
 <requirements> --target ./vendor/` runs first and the result is included
 in the archive. Pre-existing `vendor/` is respected and used as-is.
+
 If `output` is `None`, the archive is written to the current directory
 as `{name}-{version}.fid`.
 
@@ -734,30 +590,33 @@ pub fn pack_package(dir: &Path, output: Option<&Path>) -> Result<PackResult, Pac
 
 </details>
 
-
-
-### <span id="fn.unpack_package"></span>`fn unpack_package`
+### <span id="fn.unpack_package"></span><code style="font-size: 0.85em">fn unpack_​package</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn unpack_package (archive : & Path , dest : & Path) -> Result < PathBuf , PackageError >
+fn unpack_package(
+    archive: &Path,
+    dest: &Path,
+) -> Result<PathBuf, PackageError>
 ```
 
 Extract a `.fid` archive (tar + bzip2) to a destination directory using strict safety defaults.
 
 Returns the path to the extracted top-level package directory, which is
 guaranteed to exist inside `dest` and contain a `package.toml`.
+
 This function validates every archive entry before extracting and rejects
 archives containing: path-traversal components (`..`), absolute paths,
 symlinks, hardlinks, more than 10,000 entries, or a cumulative declared
 decompressed size exceeding 500 MB or 10× the compressed archive size.
+
 Extraction is staged inside a temporary directory under `dest` and the
 package directory is moved into place atomically on success. If validation
 fails mid-archive, no files are left in `dest`.
+
 For archives that legitimately exceed the default caps, use
-[`unpack_package_with_options`].
+[`unpack_package_with_options`](../../../rust/fidius-core/package/#fn.unpack_package_with_options).
 
 <details>
 <summary>Source</summary>
@@ -770,20 +629,21 @@ pub fn unpack_package(archive: &Path, dest: &Path) -> Result<PathBuf, PackageErr
 
 </details>
 
-
-
-### <span id="fn.unpack_package_with_options"></span>`fn unpack_package_with_options`
+### <span id="fn.unpack_package_with_options"></span><code style="font-size: 0.85em">fn unpack_​package_​with_​options</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn unpack_package_with_options (archive : & Path , dest : & Path , options : & UnpackOptions ,) -> Result < PathBuf , PackageError >
+fn unpack_package_with_options(
+    archive: &Path,
+    dest: &Path,
+    options: &UnpackOptions,
+) -> Result<PathBuf, PackageError>
 ```
 
 Extract a `.fid` archive with caller-provided safety limits.
 
-See [`unpack_package`] for the default-strict variant. Use this when the
+See [`unpack_package`](../../../rust/fidius-core/package/#fn.unpack_package) for the default-strict variant. Use this when the
 archive's size or entry count legitimately exceeds the defaults.
 
 <details>
@@ -931,6 +791,3 @@ pub fn unpack_package_with_options(
 ```
 
 </details>
-
-
-

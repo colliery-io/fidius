@@ -1,13 +1,13 @@
 ---
 title: "fidius-macro::ir"
 description: "Intermediate representation for parsed plugin interface traits."
+editUrl: false
 sidebar:
-  order: 50
+  order: 49
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 Intermediate representation for parsed plugin interface traits.
 
@@ -15,10 +15,9 @@ Both `#[plugin_interface]` and `#[plugin_impl]` consume this IR.
 
 ## Structs
 
-### <span id="struct.InterfaceAttrs"></span>`struct InterfaceAttrs`
+### <span id="struct.InterfaceAttrs"></span><code style="font-size: 0.85em">struct InterfaceAttrs</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`
 
@@ -30,15 +29,11 @@ Parsed attributes from `#[plugin_interface(version = N, buffer = Strategy)]`.
 |------|------|-------------|
 | `version` | `u32` |  |
 | `buffer_strategy` | `BufferStrategyAttr` |  |
-| `crate_path` | `Path` | The path to the fidius crate. Defaults to `fidius` when not specified.
-Set via `crate = "my_crate::fidius"` in the attribute. |
+| `crate_path` | `Path` | The path to the fidius crate. Defaults to `fidius` when not specified. Set via `crate = "my_crate::fidius"` in the attribute. |
 
-
-
-### <span id="struct.MetaKvAttr"></span>`struct MetaKvAttr`
+### <span id="struct.MetaKvAttr"></span><code style="font-size: 0.85em">struct MetaKvAttr</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`
 
@@ -51,12 +46,9 @@ A static metadata key/value pair parsed from a `#[method_meta(...)]` or `#[trait
 | `key` | `String` |  |
 | `value` | `String` |  |
 
-
-
-### <span id="struct.InterfaceIR"></span>`struct InterfaceIR`
+### <span id="struct.InterfaceIR"></span><code style="font-size: 0.85em">struct InterfaceIR</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`
 
@@ -68,16 +60,13 @@ Full IR for a parsed interface trait.
 |------|------|-------------|
 | `trait_name` | `Ident` |  |
 | `attrs` | `InterfaceAttrs` |  |
-| `methods` | `Vec < MethodIR >` |  |
-| `trait_metas` | `Vec < MetaKvAttr >` | Trait-level metadata from `#[trait_meta(...)]` attributes on the trait. |
+| `methods` | `Vec<MethodIR>` |  |
+| `trait_metas` | `Vec<MetaKvAttr>` | Trait-level metadata from `#[trait_meta(...)]` attributes on the trait. |
 | `original_trait` | `ItemTrait` | The original trait item, for re-emission. |
 
-
-
-### <span id="struct.MethodIR"></span>`struct MethodIR`
+### <span id="struct.MethodIR"></span><code style="font-size: 0.85em">struct MethodIR</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`
 
@@ -88,43 +77,26 @@ IR for a single trait method.
 | Name | Type | Description |
 |------|------|-------------|
 | `name` | `Ident` |  |
-| `arg_types` | `Vec < Type >` | Argument types (excluding `self`). |
-| `arg_names` | `Vec < Ident >` | Argument names (excluding `self`). |
-| `return_type` | `Option < Type >` | Return type (the inner type, not `ReturnType`). |
+| `arg_types` | `Vec<Type>` | Argument types (excluding `self`). |
+| `arg_names` | `Vec<Ident>` | Argument names (excluding `self`). |
+| `return_type` | `Option<Type>` | Return type (the inner type, not `ReturnType`). |
 | `is_async` | `bool` | Whether the method is `async fn`. |
-| `optional_since` | `Option < u32 >` | If `#[optional(since = N)]`, the version it was added. |
-| `signature_string` | `String` | Canonical signature string for interface hashing.
-Format: `"name:arg_type_1,arg_type_2->return_type"`, with a trailing
-`!raw` marker for methods opted into raw wire mode so the interface
-hash diverges between raw and bincode-typed versions. |
-| `method_metas` | `Vec < MetaKvAttr >` | Metadata from `#[method_meta("k", "v")]` attributes. Preserves declaration order. |
-| `wire_raw` | `bool` | Whether this method is opted into raw (byte-passthrough) wire mode
-via `#[wire(raw)]`. When true, the macro skips bincode on the
-success path — the single `Vec<u8>` argument crosses the FFI
-boundary as raw bytes, and the `Vec<u8>` return value is handed to
-the host unchanged. Error-path payloads (for `Result<Vec<u8>, E>`
-returns) continue to go through bincode. |
-| `streaming` | `bool` | Whether this is a server-streaming method — its return type is
-`fidius::Stream<T>` (FIDIUS-I-0026, D4). When true, [`Self::stream_item_type`]
-holds the per-item type `T`, the signature string carries a `!stream`
-marker (so it hashes distinctly from a unary `-> T`), and the host-side
-client (ST.3) returns a `ChunkStream` instead of a `Result<T, _>`. |
-| `stream_item_type` | `Option < Type >` | The per-item type `T` for a `streaming` method (the `T` in
-`fidius::Stream<T>`). `None` for non-streaming methods. |
-| `client_stream_item` | `Option < Type >` | The per-item type `T` for a **client-streaming** method — a `Stream<T>` in
-argument position (FIDIUS-I-0030). The signature string carries a `<stream`
-marker so it hashes distinctly. `None` for non-client-streaming methods.
-(Codegen is wired per backend in CS2.2–CS2.4.) |
+| `optional_since` | `Option<u32>` | If `#[optional(since = N)]`, the version it was added. |
+| `signature_string` | `String` | Canonical signature string for interface hashing. Format: `"name:arg_type_1,arg_type_2->return_type"`, with a trailing `!raw` marker for methods opted into raw wire mode so the interface hash diverges between raw and bincode-typed versions. |
+| `method_metas` | `Vec<MetaKvAttr>` | Metadata from `#[method_meta("k", "v")]` attributes. Preserves declaration order. |
+| `wire_raw` | `bool` | Whether this method is opted into raw (byte-passthrough) wire mode via `#[wire(raw)]`. When true, the macro skips bincode on the success path — the single `Vec<u8>` argument crosses the FFI boundary as raw bytes, and the `Vec<u8>` return value is handed to the host unchanged. Error-path payloads (for `Result<Vec<u8>, E>` returns) continue to go through bincode. |
+| `streaming` | `bool` | Whether this is a server-streaming method — its return type is `fidius::Stream<T>` (FIDIUS-I-0026, D4). When true, `Self::stream_item_type` holds the per-item type `T`, the signature string carries a `!stream` marker (so it hashes distinctly from a unary `-> T`), and the host-side client (ST.3) returns a `ChunkStream` instead of a `Result<T, _>`. |
+| `stream_item_type` | `Option<Type>` | The per-item type `T` for a `streaming` method (the `T` in `fidius::Stream<T>`). `None` for non-streaming methods. |
+| `client_stream_item` | `Option<Type>` | The per-item type `T` for a **client-streaming** method — a `Stream<T>` in argument position (FIDIUS-I-0030). The signature string carries a `<stream` marker so it hashes distinctly. `None` for non-client-streaming methods. (Codegen is wired per backend in CS2.2–CS2.4.) |
 
 #### Methods
 
-##### <span id="MethodIR.is_required"></span>`is_required`
+##### <span id="MethodIR.is_required"></span><code>is_​required</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn is_required (& self) -> bool
+fn is_required(&self) -> bool
 ```
 
 Whether this is a required (non-optional) method.
@@ -140,16 +112,11 @@ Whether this is a required (non-optional) method.
 
 </details>
 
-
-
-
-
 ## Enums
 
-### <span id="enum.BufferStrategyAttr"></span>`enum BufferStrategyAttr`
+### <span id="enum.BufferStrategyAttr"></span><code style="font-size: 0.85em">enum BufferStrategyAttr</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Discriminants match `fidius_core::descriptor::BufferStrategyKind` — values `1` (PluginAllocated) and `2` (Arena). `0` is reserved for the removed `CallerAllocated` strategy.
 
@@ -158,518 +125,17 @@ Discriminants match `fidius_core::descriptor::BufferStrategyKind` — values `1`
 - **`PluginAllocated`**
 - **`Arena`**
 
-
-
 ## Functions
 
-### <span id="fn.parse_meta_attrs"></span>`fn parse_meta_attrs`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn parse_meta_attrs (attrs : & [Attribute] , ident : & str) -> syn :: Result < Vec < MetaKvAttr > >
-```
-
-Parse all `#[method_meta("k", "v")]` or `#[trait_meta("k", "v")]` attributes with the given name from an attribute list into a `Vec<MetaKvAttr>`. Validates string-literal only, non-empty keys, no duplicate keys, and rejects keys in the reserved `fidius.*` namespace.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn parse_meta_attrs(attrs: &[Attribute], ident: &str) -> syn::Result<Vec<MetaKvAttr>> {
-    let mut out = Vec::new();
-    for attr in attrs {
-        if !attr.path().is_ident(ident) {
-            continue;
-        }
-        // Parse two comma-separated string literals: #[attr("key", "value")]
-        let (key_lit, value_lit): (LitStr, LitStr) =
-            attr.parse_args_with(|input: syn::parse::ParseStream| {
-                let k: LitStr = input.parse()?;
-                let _: Token![,] = input.parse()?;
-                let v: LitStr = input.parse()?;
-                Ok((k, v))
-            })?;
-        let key = key_lit.value();
-        let value = value_lit.value();
-
-        if key.is_empty() {
-            return Err(syn::Error::new(
-                key_lit.span(),
-                format!("#[{ident}(key, value)] key must not be empty"),
-            ));
-        }
-        if key.trim() != key {
-            return Err(syn::Error::new(
-                key_lit.span(),
-                format!("#[{ident}(key, value)] key must not have leading or trailing whitespace"),
-            ));
-        }
-        if key.starts_with("fidius.") {
-            return Err(syn::Error::new(
-                key_lit.span(),
-                format!("the `fidius.*` key namespace is reserved for framework use; got `{key}`"),
-            ));
-        }
-        if out.iter().any(|existing: &MetaKvAttr| existing.key == key) {
-            return Err(syn::Error::new(
-                key_lit.span(),
-                format!("duplicate #[{ident}] key `{key}`"),
-            ));
-        }
-        out.push(MetaKvAttr { key, value });
-    }
-    Ok(out)
-}
-```
-
-</details>
-
-
-
-### <span id="fn.parse_optional_attr"></span>`fn parse_optional_attr`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn parse_optional_attr (attrs : & [Attribute]) -> syn :: Result < Option < u32 > >
-```
-
-Parse an `#[optional(since = N)]` attribute, if present.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn parse_optional_attr(attrs: &[Attribute]) -> syn::Result<Option<u32>> {
-    for attr in attrs {
-        if attr.path().is_ident("optional") {
-            let mut since = None;
-            attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("since") {
-                    let _eq: Token![=] = meta.input.parse()?;
-                    let lit: LitInt = meta.input.parse()?;
-                    since = Some(lit.base10_parse::<u32>()?);
-                    Ok(())
-                } else {
-                    Err(meta.error("expected `since`"))
-                }
-            })?;
-            return Ok(since);
-        }
-    }
-    Ok(None)
-}
-```
-
-</details>
-
-
-
-### <span id="fn.parse_wire_attr"></span>`fn parse_wire_attr`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn parse_wire_attr (attrs : & [Attribute]) -> syn :: Result < bool >
-```
-
-Parse a `#[wire(raw)]` attribute, if present. Returns `true` when raw wire mode is opted in, `false` otherwise. Any other `wire(...)` form is a compile-time error.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn parse_wire_attr(attrs: &[Attribute]) -> syn::Result<bool> {
-    for attr in attrs {
-        if !attr.path().is_ident("wire") {
-            continue;
-        }
-        let mut raw = false;
-        attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("raw") {
-                raw = true;
-                Ok(())
-            } else {
-                Err(meta.error("expected `raw` — only `#[wire(raw)]` is supported"))
-            }
-        })?;
-        return Ok(raw);
-    }
-    Ok(false)
-}
-```
-
-</details>
-
-
-
-### <span id="fn.is_vec_u8"></span>`fn is_vec_u8`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn is_vec_u8 (ty : & Type) -> bool
-```
-
-Return `true` if the given type is `Vec<u8>`.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn is_vec_u8(ty: &Type) -> bool {
-    let Type::Path(type_path) = ty else {
-        return false;
-    };
-    let Some(last) = type_path.path.segments.last() else {
-        return false;
-    };
-    if last.ident != "Vec" {
-        return false;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
-        return false;
-    };
-    if args.args.len() != 1 {
-        return false;
-    }
-    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
-        return false;
-    };
-    let Type::Path(inner_path) = inner else {
-        return false;
-    };
-    inner_path
-        .path
-        .get_ident()
-        .map(|id| id == "u8")
-        .unwrap_or(false)
-}
-```
-
-</details>
-
-
-
-### <span id="fn.result_ok_type"></span>`fn result_ok_type`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn result_ok_type (ty : & Type) -> Option < & Type >
-```
-
-Extract the first type parameter of `Result<_, _>`, if `ty` is a Result.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn result_ok_type(ty: &Type) -> Option<&Type> {
-    let Type::Path(type_path) = ty else {
-        return None;
-    };
-    let last = type_path.path.segments.last()?;
-    if last.ident != "Result" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
-        return None;
-    };
-    let first = args.args.first()?;
-    match first {
-        syn::GenericArgument::Type(t) => Some(t),
-        _ => None,
-    }
-}
-```
-
-</details>
-
-
-
-### <span id="fn.validate_raw_method_signature"></span>`fn validate_raw_method_signature`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn validate_raw_method_signature (method : & TraitItemFn , arg_types : & [Type] , return_type : Option < & Type > ,) -> syn :: Result < () >
-```
-
-Validate that a method flagged `#[wire(raw)]` has a supported signature: exactly one `Vec<u8>` argument, and returns either `Vec<u8>` or `Result<Vec<u8>, _>`. Returns a helpful error otherwise.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn validate_raw_method_signature(
-    method: &TraitItemFn,
-    arg_types: &[Type],
-    return_type: Option<&Type>,
-) -> syn::Result<()> {
-    let span = method.sig.ident.span();
-    if arg_types.len() != 1 {
-        return Err(syn::Error::new(
-            span,
-            "#[wire(raw)] methods must take exactly one argument of type `Vec<u8>` (excluding `&self`)",
-        ));
-    }
-    if !is_vec_u8(&arg_types[0]) {
-        return Err(syn::Error::new(
-            arg_types[0].span(),
-            "#[wire(raw)] argument must be `Vec<u8>`",
-        ));
-    }
-    let Some(ret) = return_type else {
-        return Err(syn::Error::new(
-            span,
-            "#[wire(raw)] methods must return `Vec<u8>` or `Result<Vec<u8>, E>`",
-        ));
-    };
-    // Return is either Vec<u8> directly, or Result<Vec<u8>, _>.
-    if is_vec_u8(ret) {
-        return Ok(());
-    }
-    if let Some(ok) = result_ok_type(ret) {
-        if is_vec_u8(ok) {
-            return Ok(());
-        }
-    }
-    Err(syn::Error::new(
-        ret.span(),
-        "#[wire(raw)] methods must return `Vec<u8>` or `Result<Vec<u8>, E>`",
-    ))
-}
-```
-
-</details>
-
-
-
-### <span id="fn.stream_item_type"></span>`fn stream_item_type`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn stream_item_type (ty : & Type) -> Option < Type >
-```
-
-Return the per-item type `T` if `ty` is a `Stream<T>` (i.e. its final path segment is `Stream` with exactly one angle-bracketed type argument). Matches `fidius::Stream<T>`, `crate::fidius::Stream<T>`, or a bare `Stream<T>` — the detection keys on the segment name, since the marker is written explicitly (FIDIUS-I-0026, D4). Returns `None` for any other type.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn stream_item_type(ty: &Type) -> Option<Type> {
-    let Type::Path(type_path) = ty else {
-        return None;
-    };
-    let last = type_path.path.segments.last()?;
-    if last.ident != "Stream" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
-        return None;
-    };
-    if args.args.len() != 1 {
-        return None;
-    }
-    match args.args.first()? {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    }
-}
-```
-
-</details>
-
-
-
-### <span id="fn.build_signature_string"></span>`fn build_signature_string`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn build_signature_string (method : & TraitItemFn , wire_raw : bool , stream_item : Option < & Type > , client_streaming : bool ,) -> String
-```
-
-Build the canonical signature string for a method.
-
-Delegates the format to `fidius_core::hash::signature_string` so the
-proc macro and any other tooling (e.g. `fidius python-stub`) share one
-source of truth. The `!raw` (raw-wire) and `!stream` (server-streaming)
-markers are part of that shared format.
-For a streaming method (`-> fidius::Stream<T>`) the canonical return type is
-the per-item type `T` (passed in `stream_item`), plus the `!stream` marker —
-so `read:->Row!stream` hashes distinctly from a unary `read:->Row`.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn build_signature_string(
-    method: &TraitItemFn,
-    wire_raw: bool,
-    stream_item: Option<&Type>,
-    client_streaming: bool,
-) -> String {
-    let name = method.sig.ident.to_string();
-
-    let arg_types: Vec<String> = method
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|arg| match arg {
-            FnArg::Receiver(_) => None,
-            // Client-streaming: hash the item type `T`, not the `Stream<T>` wrapper —
-            // its crate path differs host (`fidius_core`) vs guest (`fidius_guest`),
-            // matching how a server-streaming return hashes its item (the `<stream`
-            // marker keeps it distinct from a unary `T` arg).
-            FnArg::Typed(pat_type) => Some(match stream_item_type(&pat_type.ty) {
-                Some(item) => item.to_token_stream().to_string(),
-                None => pat_type.ty.to_token_stream().to_string(),
-            }),
-        })
-        .collect();
-
-    let ret = match stream_item {
-        // Streaming: the canonical return is the per-item type `T`.
-        Some(item) => item.to_token_stream().to_string(),
-        None => match &method.sig.output {
-            ReturnType::Default => String::new(),
-            ReturnType::Type(_, ty) => ty.to_token_stream().to_string(),
-        },
-    };
-
-    fidius_core::hash::signature_string(
-        &name,
-        &arg_types,
-        &ret,
-        wire_raw,
-        stream_item.is_some(),
-        client_streaming,
-    )
-}
-```
-
-</details>
-
-
-
-### <span id="fn.extract_arg_names"></span>`fn extract_arg_names`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn extract_arg_names (method : & TraitItemFn) -> Vec < Ident >
-```
-
-Extract argument names from a method signature (excluding `self`).
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn extract_arg_names(method: &TraitItemFn) -> Vec<Ident> {
-    method
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|arg| match arg {
-            FnArg::Receiver(_) => None,
-            FnArg::Typed(pat_type) => {
-                if let Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
-                    Some(pat_ident.ident.clone())
-                } else {
-                    // Fallback for patterns like `_`
-                    Some(Ident::new("_arg", pat_type.span()))
-                }
-            }
-        })
-        .collect()
-}
-```
-
-</details>
-
-
-
-### <span id="fn.extract_arg_types"></span>`fn extract_arg_types`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn extract_arg_types (method : & TraitItemFn) -> Vec < Type >
-```
-
-Extract argument types from a method signature (excluding `self`).
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn extract_arg_types(method: &TraitItemFn) -> Vec<Type> {
-    method
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|arg| match arg {
-            FnArg::Receiver(_) => None,
-            FnArg::Typed(pat_type) => Some((*pat_type.ty).clone()),
-        })
-        .collect()
-}
-```
-
-</details>
-
-
-
-### <span id="fn.extract_return_type"></span>`fn extract_return_type`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn extract_return_type (method : & TraitItemFn) -> Option < Type >
-```
-
-Extract the return type (unwrapped from `-> Type`).
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn extract_return_type(method: &TraitItemFn) -> Option<Type> {
-    match &method.sig.output {
-        ReturnType::Default => None,
-        ReturnType::Type(_, ty) => Some((**ty).clone()),
-    }
-}
-```
-
-</details>
-
-
-
-### <span id="fn.parse_interface"></span>`fn parse_interface`
+### <span id="fn.parse_interface"></span><code style="font-size: 0.85em">fn parse_​interface</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn parse_interface (attrs : InterfaceAttrs , item : & ItemTrait) -> syn :: Result < InterfaceIR >
+fn parse_interface(
+    attrs: InterfaceAttrs,
+    item: &ItemTrait,
+) -> syn::Result<InterfaceIR>
 ```
 
 Parse an `ItemTrait` into an `InterfaceIR`.
@@ -778,6 +244,3 @@ pub fn parse_interface(attrs: InterfaceAttrs, item: &ItemTrait) -> syn::Result<I
 ```
 
 </details>
-
-
-

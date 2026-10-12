@@ -9,7 +9,6 @@ const API = 'reference/api/';
 // The old API pages that keep their module path.
 const SAME = [
 	'fidius',
-	'fidius-cli',
 	'fidius-cli/commands',
 	'fidius-cli/python_stub',
 	'fidius-core',
@@ -55,5 +54,9 @@ export default function apiRedirects() {
 	return pageRedirects({
 		...Object.fromEntries(SAME.map((m) => [`api/rust/${m}/`, `${API}rust/${m}/`])),
 		...Object.fromEntries(MOVED.map((m) => [`api/rust/fidius-core/${m}/`, `${API}rust/fidius-guest/${m}/`])),
+		// The fidius-cli crate page held only private items. plissken 0.2.0
+		// leaves them out, so the page is gone: send it to the API overview.
+		'api/rust/fidius-cli/': API,
+		[`${API}rust/fidius-cli/`]: API,
 	});
 }

@@ -17,7 +17,7 @@
 //! A `PluginHandle` is backend-agnostic: callers use the same
 //! `call_method` / `call_method_raw` API whether the plugin is a cdylib, a
 //! Python package, or (Phase 2) a WASM component. The backend lives in the
-//! private [`Backend`] enum.
+//! private `Backend` enum.
 //!
 //! ## Why an enum backend (FIDIUS-I-0021)
 //!

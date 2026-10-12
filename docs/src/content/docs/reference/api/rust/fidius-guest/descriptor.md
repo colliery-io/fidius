@@ -1,13 +1,13 @@
 ---
 title: "fidius-guest::descriptor"
 description: "FFI descriptor and registry types for the Fidius plugin framework."
+editUrl: false
 sidebar:
-  order: 12
+  order: 11
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 FFI descriptor and registry types for the Fidius plugin framework.
 
@@ -16,10 +16,9 @@ All types use `#[repr(C)]` layout and are read directly from dylib memory.
 
 ## Structs
 
-### <span id="struct.MetaKv"></span>`struct MetaKv`
+### <span id="struct.MetaKv"></span><code style="font-size: 0.85em">struct MetaKv</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Static key/value pair for method-level or trait-level metadata.
 
@@ -33,15 +32,12 @@ reserved namespace.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `key` | `* const c_char` | Null-terminated UTF-8 key. Never null. |
-| `value` | `* const c_char` | Null-terminated UTF-8 value. Never null (may be empty string). |
+| `key` | `*const c_char` | Null-terminated UTF-8 key. Never null. |
+| `value` | `*const c_char` | Null-terminated UTF-8 value. Never null (may be empty string). |
 
-
-
-### <span id="struct.MethodMetaEntry"></span>`struct MethodMetaEntry`
+### <span id="struct.MethodMetaEntry"></span><code style="font-size: 0.85em">struct MethodMetaEntry</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Per-method metadata entry. One entry per method in declaration order, stored in the array referenced by `PluginDescriptor::method_metadata`.
 
@@ -53,16 +49,12 @@ uniformly by method index.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `kvs` | `* const MetaKv` | Pointer to an array of `kv_count` `MetaKv` entries, or null if this
-method has no metadata. |
+| `kvs` | `*const MetaKv` | Pointer to an array of `kv_count` `MetaKv` entries, or null if this method has no metadata. |
 | `kv_count` | `u32` | Number of key/value pairs for this method. Zero when `kvs` is null. |
 
-
-
-### <span id="struct.PluginRegistry"></span>`struct PluginRegistry`
+### <span id="struct.PluginRegistry"></span><code style="font-size: 0.85em">struct PluginRegistry</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Top-level registry exported by every Fidius plugin dylib.
 
@@ -70,24 +62,24 @@ Each dylib exports exactly one `FIDIUS_PLUGIN_REGISTRY` static symbol
 pointing to this struct. The registry contains pointers to one or more
 `PluginDescriptor`s (supporting multiple plugins per dylib).
 
-# Safety
-- `descriptors` must point to a valid array of `plugin_count` pointers. - Each pointer in the array must point to a valid `PluginDescriptor`. - All pointed-to data must have `'static` lifetime (typically link-time constants).
+**Safety**
+
+- `descriptors` must point to a valid array of `plugin_count` pointers.
+- Each pointer in the array must point to a valid `PluginDescriptor`.
+- All pointed-to data must have `'static` lifetime (typically link-time constants).
 
 #### Fields
 
 | Name | Type | Description |
 |------|------|-------------|
-| `magic` | `[u8 ; 8]` | Magic bytes — must equal `FIDIUS_MAGIC` (`b"FIDIUS\0\0"`). |
+| `magic` | `[u8; 8]` | Magic bytes — must equal `FIDIUS_MAGIC` (`b"FIDIUS\0\0"`). |
 | `registry_version` | `u32` | Layout version of this struct. Must equal `REGISTRY_VERSION`. |
 | `plugin_count` | `u32` | Number of plugin descriptors in this registry. |
-| `descriptors` | `* const * const PluginDescriptor` | Pointer to an array of `plugin_count` descriptor pointers. |
+| `descriptors` | `*const *const PluginDescriptor` | Pointer to an array of `plugin_count` descriptor pointers. |
 
-
-
-### <span id="struct.PluginDescriptor"></span>`struct PluginDescriptor`
+### <span id="struct.PluginDescriptor"></span><code style="font-size: 0.85em">struct PluginDescriptor</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Metadata descriptor for a single plugin within a dylib.
 
@@ -95,72 +87,53 @@ Contains all information the host needs to validate and call the plugin
 without executing any plugin code. All string fields are pointers to
 static, null-terminated C strings embedded in the dylib.
 
-# Safety
-- `interface_name` and `plugin_name` must point to valid, null-terminated, UTF-8 C strings with `'static` lifetime. - `vtable` must point to a valid `#[repr(C)]` vtable struct matching the interface identified by `interface_name` and `interface_hash`. - When `buffer_strategy == PluginAllocated`, `free_buffer` must be `Some`. - All pointed-to data must outlive any `PluginHandle` derived from this descriptor.
+**Safety**
+
+- `interface_name` and `plugin_name` must point to valid, null-terminated,
+  UTF-8 C strings with `'static` lifetime.
+- `vtable` must point to a valid `#[repr(C)]` vtable struct matching the
+  interface identified by `interface_name` and `interface_hash`.
+- When `buffer_strategy == PluginAllocated`, `free_buffer` must be `Some`.
+- All pointed-to data must outlive any `PluginHandle` derived from this descriptor.
 
 #### Fields
 
 | Name | Type | Description |
 |------|------|-------------|
-| `descriptor_size` | `u32` | Size in bytes of this descriptor struct at plugin build time.
-
-The host reads this field FIRST (it's at offset 0) before trusting any
-other offset calculation. Any field whose offset is >= `descriptor_size`
-is not present in this plugin's build — the plugin was compiled against
-an older fidius version that didn't have that field yet.
-
-Enables post-1.0 minor releases to add new fields at the end of this
-struct without breaking older plugins. See ADR-0002. |
+| `descriptor_size` | `u32` | Size in bytes of this descriptor struct at plugin build time.<br>The host reads this field FIRST (it's at offset 0) before trusting any other offset calculation. Any field whose offset is >= `descriptor_size` is not present in this plugin's build — the plugin was compiled against an older fidius version that didn't have that field yet.<br>Enables post-1.0 minor releases to add new fields at the end of this struct without breaking older plugins. See ADR-0002. |
 | `abi_version` | `u32` | Descriptor struct layout version. Must equal `ABI_VERSION`. |
-| `interface_name` | `* const c_char` | Null-terminated name of the trait this plugin implements (e.g., `"ImageFilter"`). |
+| `interface_name` | `*const c_char` | Null-terminated name of the trait this plugin implements (e.g., `"ImageFilter"`). |
 | `interface_hash` | `u64` | FNV-1a hash of the required method signatures. Detects ABI drift. |
 | `interface_version` | `u32` | User-specified interface version from `#[plugin_interface(version = N)]`. |
-| `capabilities` | `u64` | Bitfield where bit N indicates optional method N is implemented.
-Supports up to 64 optional methods per interface. |
+| `capabilities` | `u64` | Bitfield where bit N indicates optional method N is implemented. Supports up to 64 optional methods per interface. |
 | `buffer_strategy` | `u8` | Buffer management strategy this plugin's vtable expects. |
-| `plugin_name` | `* const c_char` | Null-terminated human-readable name for this plugin implementation. |
-| `vtable` | `* const c_void` | Opaque pointer to the interface-specific `#[repr(C)]` vtable struct. |
-| `free_buffer` | `Option < unsafe extern "C" fn (* mut u8 , usize) >` | Deallocation function for plugin-allocated buffers.
-Must be `Some` when `buffer_strategy == PluginAllocated`.
-The host calls this after reading output data to free the plugin's allocation. |
-| `method_count` | `u32` | Total number of methods in the vtable (required + optional).
-Used for bounds checking in `call_method`. |
-| `method_metadata` | `* const MethodMetaEntry` | Pointer to an array of `method_count` `MethodMetaEntry` structs,
-one per method in declaration order. Each entry may be empty
-(kvs=null, kv_count=0) if the method declared no metadata.
-
-Null if the interface used no `#[method_meta(...)]` annotations
-at all (optimization for the common case). |
-| `trait_metadata` | `* const MetaKv` | Pointer to an array of `trait_metadata_count` `MetaKv` entries for
-trait-level metadata (declared via `#[trait_meta(...)]`).
-
-Null if no trait-level metadata was declared. |
-| `trait_metadata_count` | `u32` | Number of entries in `trait_metadata`. Zero when `trait_metadata`
-is null. |
-| `construct` | `Option < unsafe extern "C" fn (* const u8 , u32) -> * mut c_void >` | Construct a plugin instance from serialized config bytes (FIDIUS-A-0006).
-`cfg_ptr`/`cfg_len` carry bincode of the plugin's config type, or an empty
-slice for a zero-config plugin (singleton = construct-with-`()`). Returns
-an opaque, owning instance pointer the host passes to **every** vtable
-method and releases via [`destroy`](Self::destroy). Null = construction
-failed (e.g. a config deserialize error). |
-| `destroy` | `Option < unsafe extern "C" fn (* mut c_void) >` | Release an instance previously returned by [`construct`](Self::construct). |
+| `plugin_name` | `*const c_char` | Null-terminated human-readable name for this plugin implementation. |
+| `vtable` | `*const c_void` | Opaque pointer to the interface-specific `#[repr(C)]` vtable struct. |
+| `free_buffer` | `Option<unsafe extern "C" fn(*mut u8, usize)>` | Deallocation function for plugin-allocated buffers. Must be `Some` when `buffer_strategy == PluginAllocated`. The host calls this after reading output data to free the plugin's allocation. |
+| `method_count` | `u32` | Total number of methods in the vtable (required + optional). Used for bounds checking in `call_method`. |
+| `method_metadata` | `*const MethodMetaEntry` | Pointer to an array of `method_count` `MethodMetaEntry` structs, one per method in declaration order. Each entry may be empty (kvs=null, kv_count=0) if the method declared no metadata.<br>Null if the interface used no `#[method_meta(...)]` annotations at all (optimization for the common case). |
+| `trait_metadata` | `*const MetaKv` | Pointer to an array of `trait_metadata_count` `MetaKv` entries for trait-level metadata (declared via `#[trait_meta(...)]`).<br>Null if no trait-level metadata was declared. |
+| `trait_metadata_count` | `u32` | Number of entries in `trait_metadata`. Zero when `trait_metadata` is null. |
+| `construct` | `Option<unsafe extern "C" fn(*const u8, u32) -> *mut c_void>` | Construct a plugin instance from serialized config bytes (FIDIUS-A-0006). `cfg_ptr`/`cfg_len` carry bincode of the plugin's config type, or an empty slice for a zero-config plugin (singleton = construct-with-`()`). Returns an opaque, owning instance pointer the host passes to **every** vtable method and releases via `destroy`. Null = construction failed (e.g. a config deserialize error). |
+| `destroy` | `Option<unsafe extern "C" fn(*mut c_void)>` | Release an instance previously returned by `construct`. |
 
 #### Methods
 
-##### <span id="PluginDescriptor.interface_name_str"></span>`interface_name_str`
+##### <span id="PluginDescriptor.interface_name_str"></span><code>interface_​name_​str</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
  <span class="plissken-badge plissken-badge-unsafe" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-red-low); color: var(--sl-color-red-high);">unsafe</span>
 
-
 ```rust
-unsafe fn interface_name_str (& self) -> & str
+unsafe fn interface_name_str(&self) -> &str
 ```
 
 Read the `interface_name` field as a Rust `&str`.
 
-# Safety
-`interface_name` must point to a valid, null-terminated, UTF-8 C string that outlives the returned reference.
+**Safety**
+
+`interface_name` must point to a valid, null-terminated, UTF-8 C string
+that outlives the returned reference.
 
 <details>
 <summary>Source</summary>
@@ -174,22 +147,21 @@ Read the `interface_name` field as a Rust `&str`.
 
 </details>
 
-
-
-##### <span id="PluginDescriptor.plugin_name_str"></span>`plugin_name_str`
+##### <span id="PluginDescriptor.plugin_name_str"></span><code>plugin_​name_​str</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
  <span class="plissken-badge plissken-badge-unsafe" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-red-low); color: var(--sl-color-red-high);">unsafe</span>
 
-
 ```rust
-unsafe fn plugin_name_str (& self) -> & str
+unsafe fn plugin_name_str(&self) -> &str
 ```
 
 Read the `plugin_name` field as a Rust `&str`.
 
-# Safety
-`plugin_name` must point to a valid, null-terminated, UTF-8 C string that outlives the returned reference.
+**Safety**
+
+`plugin_name` must point to a valid, null-terminated, UTF-8 C string
+that outlives the returned reference.
 
 <details>
 <summary>Source</summary>
@@ -203,15 +175,12 @@ Read the `plugin_name` field as a Rust `&str`.
 
 </details>
 
-
-
-##### <span id="PluginDescriptor.buffer_strategy_kind"></span>`buffer_strategy_kind`
+##### <span id="PluginDescriptor.buffer_strategy_kind"></span><code>buffer_​strategy_​kind</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn buffer_strategy_kind (& self) -> Result < BufferStrategyKind , u8 >
+fn buffer_strategy_kind(&self) -> Result<BufferStrategyKind, u8>
 ```
 
 Returns the `buffer_strategy` field as a `BufferStrategyKind`.
@@ -234,15 +203,12 @@ with malformed plugins — callers should reject rather than panic.
 
 </details>
 
-
-
-##### <span id="PluginDescriptor.has_capability"></span>`has_capability`
+##### <span id="PluginDescriptor.has_capability"></span><code>has_​capability</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn has_capability (& self , bit : u32) -> bool
+fn has_capability(&self, bit: u32) -> bool
 ```
 
 Check if the given optional method capability bit is set.
@@ -263,14 +229,9 @@ Returns `false` for bit indices >= 64 rather than panicking.
 
 </details>
 
-
-
-
-
-### <span id="struct.DescriptorPtr"></span>`struct DescriptorPtr`
+### <span id="struct.DescriptorPtr"></span><code style="font-size: 0.85em">struct DescriptorPtr</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 A `Sync` wrapper for a raw pointer to a `PluginDescriptor`.
 
@@ -282,73 +243,45 @@ must have `'static` lifetime.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `0` | `* const PluginDescriptor` |  |
-
-
+| `0` | `*const PluginDescriptor` |  |
 
 ## Enums
 
-### <span id="enum.BufferStrategyKind"></span>`enum BufferStrategyKind`
+### <span id="enum.BufferStrategyKind"></span><code style="font-size: 0.85em">enum BufferStrategyKind</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Buffer management strategy for an interface.
 
 Selected per-trait via `#[plugin_interface(buffer = ...)]`.
 Determines the FFI function pointer signatures in the vtable.
+
 Discriminant value `0` is reserved (previously `CallerAllocated`, removed
 in 0.1.0 — its value proposition was subsumed by `PluginAllocated`).
 
 #### Variants
 
 - **`PluginAllocated`** - Plugin allocates output; host frees via `PluginDescriptor::free_buffer`.
-VTable fns: `(in_ptr, in_len, out_ptr, out_len) -> i32`.
+  VTable fns: `(in_ptr, in_len, out_ptr, out_len) -> i32`.
 - **`Arena`** - Host provides a pre-allocated arena buffer; plugin writes its serialized
-output into the buffer. Returns `STATUS_BUFFER_TOO_SMALL` (with needed
-size written to `out_len`) if the arena is too small; host grows and
-retries. Data is valid only until the next call.
+  output into the buffer. Returns `STATUS_BUFFER_TOO_SMALL` (with needed
+  size written to `out_len`) if the arena is too small; host grows and
+  retries. Data is valid only until the next call.
 
-VTable fns: `(in_ptr, in_len, arena_ptr, arena_cap, out_offset, out_len) -> i32`.
+  VTable fns: `(in_ptr, in_len, arena_ptr, arena_cap, out_offset, out_len) -> i32`.
 
-**Arena is allocation-avoidance, not zero-copy.** The plugin still
-serializes its output (bincode-encoded by default) and copies the
-bytes into the host-provided buffer; what Arena saves is the per-call
-`Box<[u8]>` allocation that PluginAllocated incurs. For true byte
-passthrough — the bytes themselves cross the boundary without an
-encoding step — annotate the trait method with `#[wire(raw)]`. Raw
-wire mode composes with both buffer strategies.
+  **Arena is allocation-avoidance, not zero-copy.** The plugin still
+  serializes its output (bincode-encoded by default) and copies the
+  bytes into the host-provided buffer; what Arena saves is the per-call
+  `Box<[u8]>` allocation that PluginAllocated incurs. For true byte
+  passthrough — the bytes themselves cross the boundary without an
+  encoding step — annotate the trait method with `#[wire(raw)]`. Raw
+  wire mode composes with both buffer strategies.
 
+## Constants
 
-
-## Functions
-
-### <span id="fn.parse_u32_const"></span>`fn parse_u32_const`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-const fn parse_u32_const (s : & str) -> u32
-```
-
-<details>
-<summary>Source</summary>
-
-```rust
-const fn parse_u32_const(s: &str) -> u32 {
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    let mut n = 0u32;
-    while i < bytes.len() {
-        n = n * 10 + (bytes[i] - b'0') as u32;
-        i += 1;
-    }
-    n
-}
-```
-
-</details>
-
-
-
+| Name | Type | Value | Description |
+|------|------|-------|-------------|
+| <span id="const.FIDIUS_MAGIC"></span>`FIDIUS_MAGIC` | `[u8; 8]` | `*b"FIDIUS\0\0"` | Magic bytes identifying a Fidius plugin registry. |
+| <span id="const.REGISTRY_VERSION"></span>`REGISTRY_VERSION` | `u32` | `1` | Current version of the `PluginRegistry` struct layout. |
+| <span id="const.ABI_VERSION"></span>`ABI_VERSION` | `u32` | `if CRATE_MAJOR == 0 { CRATE_MAJOR * 10000 + CRATE_MINOR *...` | Current version of the `PluginDescriptor` struct layout. Derived from the `fidius-core` crate version per ADR-0002. |

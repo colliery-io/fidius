@@ -1,22 +1,21 @@
 ---
 title: "fidius-host::loader"
 description: "Core plugin loading and descriptor validation."
+editUrl: false
 sidebar:
-  order: 41
+  order: 40
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 Core plugin loading and descriptor validation.
 
 ## Structs
 
-### <span id="struct.LoadedLibrary"></span>`struct LoadedLibrary`
+### <span id="struct.LoadedLibrary"></span><code style="font-size: 0.85em">struct LoadedLibrary</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 A loaded plugin library with validated descriptors.
 
@@ -24,15 +23,12 @@ A loaded plugin library with validated descriptors.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `library` | `Arc < Library >` | The dynamically loaded library. Must stay alive while any PluginHandle exists. |
-| `plugins` | `Vec < LoadedPlugin >` | Validated plugin descriptors with owned metadata. |
+| `library` | `Arc<Library>` | The dynamically loaded library. Must stay alive while any PluginHandle exists. |
+| `plugins` | `Vec<LoadedPlugin>` | Validated plugin descriptors with owned metadata. |
 
-
-
-### <span id="struct.LoadedPlugin"></span>`struct LoadedPlugin`
+### <span id="struct.LoadedPlugin"></span><code style="font-size: 0.85em">struct LoadedPlugin</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 A single validated plugin from a loaded library.
 
@@ -41,25 +37,20 @@ A single validated plugin from a loaded library.
 | Name | Type | Description |
 |------|------|-------------|
 | `info` | `PluginInfo` | Owned metadata copied from the FFI descriptor. |
-| `vtable` | `* const c_void` | Raw vtable pointer (points into the loaded library's memory). |
-| `free_buffer` | `Option < unsafe extern "C" fn (* mut u8 , usize) >` | Free function for plugin-allocated buffers. |
+| `vtable` | `*const c_void` | Raw vtable pointer (points into the loaded library's memory). |
+| `free_buffer` | `Option<unsafe extern "C" fn(*mut u8, usize)>` | Free function for plugin-allocated buffers. |
 | `method_count` | `u32` | Total number of methods in the vtable. |
-| `descriptor` | `* const PluginDescriptor` | Raw pointer to the plugin's descriptor in library memory. Kept so the
-host can read metadata fields (`method_metadata`, `trait_metadata`)
-without re-walking the registry. Valid for the lifetime of `library`. |
-| `library` | `Arc < Library >` | Reference to the library to keep it alive. |
-
-
+| `descriptor` | `*const PluginDescriptor` | Raw pointer to the plugin's descriptor in library memory. Kept so the host can read metadata fields (`method_metadata`, `trait_metadata`) without re-walking the registry. Valid for the lifetime of `library`. |
+| `library` | `Arc<Library>` | Reference to the library to keep it alive. |
 
 ## Functions
 
-### <span id="fn.load_library"></span>`fn load_library`
+### <span id="fn.load_library"></span><code style="font-size: 0.85em">fn load_​library</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn load_library (path : & Path) -> Result < LoadedLibrary , LoadError >
+fn load_library(path: &Path) -> Result<LoadedLibrary, LoadError>
 ```
 
 Load a plugin library from a path.
@@ -129,69 +120,16 @@ pub fn load_library(path: &Path) -> Result<LoadedLibrary, LoadError> {
 
 </details>
 
-
-
-### <span id="fn.validate_descriptor"></span>`fn validate_descriptor`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn validate_descriptor (desc : & PluginDescriptor , library : & Arc < Library > ,) -> Result < LoadedPlugin , LoadError >
-```
-
-Validate a single descriptor and copy to owned types.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn validate_descriptor(
-    desc: &PluginDescriptor,
-    library: &Arc<Library>,
-) -> Result<LoadedPlugin, LoadError> {
-    // Check ABI version (a plugin built against a different fidius ABI is rejected
-    // at load — pre-1.0, every minor is an ABI break; see ADR-0002).
-    check_abi_version(desc.abi_version)?;
-
-    // Copy FFI strings to owned
-    let interface_name = unsafe { desc.interface_name_str() }.to_string();
-    let plugin_name = unsafe { desc.plugin_name_str() }.to_string();
-
-    let info = PluginInfo {
-        name: plugin_name,
-        interface_name,
-        interface_hash: desc.interface_hash,
-        interface_version: desc.interface_version,
-        capabilities: desc.capabilities,
-        buffer_strategy: desc
-            .buffer_strategy_kind()
-            .map_err(|v| LoadError::UnknownBufferStrategy { value: v })?,
-        runtime: crate::types::PluginRuntimeKind::Cdylib,
-    };
-
-    Ok(LoadedPlugin {
-        info,
-        vtable: desc.vtable,
-        free_buffer: desc.free_buffer,
-        method_count: desc.method_count,
-        descriptor: desc as *const PluginDescriptor,
-        library: Arc::clone(library),
-    })
-}
-```
-
-</details>
-
-
-
-### <span id="fn.validate_against_interface"></span>`fn validate_against_interface`
+### <span id="fn.validate_against_interface"></span><code style="font-size: 0.85em">fn validate_​against_​interface</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn validate_against_interface (plugin : & LoadedPlugin , expected_hash : Option < u64 > , expected_strategy : Option < BufferStrategyKind > ,) -> Result < () , LoadError >
+fn validate_against_interface(
+    plugin: &LoadedPlugin,
+    expected_hash: Option<u64>,
+    expected_strategy: Option<BufferStrategyKind>,
+) -> Result<(), LoadError>
 ```
 
 Validate a loaded plugin against expected interface parameters.
@@ -228,36 +166,3 @@ pub fn validate_against_interface(
 ```
 
 </details>
-
-
-
-### <span id="fn.check_abi_version"></span>`fn check_abi_version`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn check_abi_version (got : u32) -> Result < () , LoadError >
-```
-
-Reject a plugin whose descriptor was built against a different fidius ABI. Extracted from [`validate_descriptor`] so the rejection is unit-testable without a real (mismatched) dylib — the macro derives `abi_version` from the crate version, so a wrong value can't be produced by a normal build.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn check_abi_version(got: u32) -> Result<(), LoadError> {
-    if got != ABI_VERSION {
-        return Err(LoadError::IncompatibleAbiVersion {
-            got,
-            expected: ABI_VERSION,
-        });
-    }
-    Ok(())
-}
-```
-
-</details>
-
-
-
