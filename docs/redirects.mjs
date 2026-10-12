@@ -1,45 +1,59 @@
 // The old MkDocs site served the API reference at api/rust/<module>/. It is
-// now at reference/api/rust/<module>/. After the build, this writes a page at
-// each old address that sends the reader to the new one. Each target is
-// relative, so the pages work under any base path. fidius-guest is new in the
-// API reference: it has no old address.
-import { existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { redirectPage } from 'starlight-aurora/mdbook-redirects';
+// now at reference/api/rust/<module>/. After the build, pageRedirects writes
+// a page at each old address that sends the reader to the new one.
+// fidius-guest is new in the API reference: it has no old address.
+import pageRedirects from 'starlight-aurora/redirects';
 
-const API = 'reference/api/rust/';
+const API = 'reference/api/';
+
+// The old API pages that keep their module path.
+const SAME = [
+	'fidius',
+	'fidius-cli',
+	'fidius-cli/commands',
+	'fidius-cli/python_stub',
+	'fidius-core',
+	'fidius-core/async_runtime',
+	'fidius-core/host_registry',
+	'fidius-core/package',
+	'fidius-core/registry',
+	'fidius-host',
+	'fidius-host/arch',
+	'fidius-host/arena',
+	'fidius-host/client_stream',
+	'fidius-host/error',
+	'fidius-host/executor',
+	'fidius-host/executor/body_tee',
+	'fidius-host/executor/cdylib',
+	'fidius-host/executor/name_lookup',
+	'fidius-host/executor/python',
+	'fidius-host/executor/wasm',
+	'fidius-host/handle',
+	'fidius-host/host',
+	'fidius-host/host_import',
+	'fidius-host/loader',
+	'fidius-host/package',
+	'fidius-host/signing',
+	'fidius-host/stream',
+	'fidius-host/types',
+	'fidius-macro',
+	'fidius-macro/host_interface',
+	'fidius-macro/impl_macro',
+	'fidius-macro/interface',
+	'fidius-macro/ir',
+	'fidius-macro/wit',
+	'fidius-test',
+	'fidius-test/dylib',
+	'fidius-test/signing',
+	'fidius-test/stream',
+];
 
 // Modules that moved from fidius-core to fidius-guest.
-const MOVED = Object.fromEntries(
-	['descriptor', 'error', 'hash', 'status', 'wire'].map((m) => [
-		`api/rust/fidius-core/${m}/`,
-		`${API}fidius-guest/${m}/`,
-	]),
-);
+const MOVED = ['descriptor', 'error', 'hash', 'status', 'wire'];
 
 export default function apiRedirects() {
-	return {
-		name: 'fidius-api-redirects',
-		hooks: {
-			'astro:build:done': async ({ dir, pages, logger }) => {
-				const out = fileURLToPath(dir);
-				const map = { ...MOVED };
-				for (const { pathname } of pages) {
-					if (pathname.startsWith(API) && !pathname.startsWith(`${API}fidius-guest/`)) map[pathname.slice('reference/'.length)] = pathname;
-				}
-				let written = 0;
-				for (const [from, to] of Object.entries(map)) {
-					const file = join(out, from, 'index.html');
-					if (existsSync(file)) continue;
-					const up = '../'.repeat(from.split('/').length - 1);
-					await mkdir(join(out, from), { recursive: true });
-					await writeFile(file, redirectPage(up + to));
-					written++;
-				}
-				logger.info(`${written} redirects from the old API addresses`);
-			},
-		},
-	};
+	return pageRedirects({
+		...Object.fromEntries(SAME.map((m) => [`api/rust/${m}/`, `${API}rust/${m}/`])),
+		...Object.fromEntries(MOVED.map((m) => [`api/rust/fidius-core/${m}/`, `${API}rust/fidius-guest/${m}/`])),
+	});
 }
