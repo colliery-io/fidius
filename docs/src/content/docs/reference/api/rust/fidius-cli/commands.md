@@ -1,114 +1,28 @@
 ---
 title: "fidius-cli::commands"
 description: "API reference of the Rust module fidius-cli::commands."
+editUrl: false
 sidebar:
-  order: 3
+  order: 2
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 ## Functions
 
-### <span id="fn.resolve_dep"></span>`fn resolve_dep`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn resolve_dep (value : & str , version_override : Option < & str >) -> String
-```
-
-Resolve a dependency string to a Cargo.toml dependency value.
-
-Logic:
-1. If `value` is a path that exists on disk → `{ path = "..." }`
-2. If `version_override` is set → `"<version>"`
-3. Check crates.io for `value` → if found, use latest version
-4. Warn and fall back to `{ path = "<value>" }`
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn resolve_dep(value: &str, version_override: Option<&str>) -> String {
-    // Check if it's a filesystem path
-    if Path::new(value).exists() {
-        // Canonicalize so the path works from any crate directory
-        if let Ok(abs) = std::fs::canonicalize(value) {
-            return format!("{{ path = \"{}\" }}", abs.display());
-        }
-        return format!("{{ path = \"{}\" }}", value);
-    }
-
-    // If version explicitly pinned, use it
-    if let Some(ver) = version_override {
-        return format!("\"{}\"", ver);
-    }
-
-    // Try crates.io
-    if let Some(ver) = check_crates_io(value) {
-        return format!("\"{}\"", ver);
-    }
-
-    // Warn and fall back to path dep
-    eprintln!(
-        "warning: could not find '{}' as a local path or on crates.io, using path dep",
-        value
-    );
-    format!("{{ path = \"{}\" }}", value)
-}
-```
-
-</details>
-
-
-
-### <span id="fn.check_crates_io"></span>`fn check_crates_io`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn check_crates_io (name : & str) -> Option < String >
-```
-
-Check crates.io for a crate and return its latest version, if found.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn check_crates_io(name: &str) -> Option<String> {
-    let url = format!("https://crates.io/api/v1/crates/{}", name);
-    let mut response = ureq::get(&url)
-        .header(
-            "User-Agent",
-            "fidius-cli (https://github.com/colliery-io/fidius)",
-        )
-        .call()
-        .ok()?;
-
-    let body_str = response.body_mut().read_to_string().ok()?;
-    let body: serde_json::Value = serde_json::from_str(&body_str).ok()?;
-    body["crate"]["max_stable_version"]
-        .as_str()
-        .map(String::from)
-}
-```
-
-</details>
-
-
-
-### <span id="fn.init_interface"></span>`fn init_interface`
+### <span id="fn.init_interface"></span><code style="font-size: 0.85em">fn init_​interface</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn init_interface (name : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > , extension : Option < & str > ,) -> Result
+fn init_interface(
+    name: &str,
+    trait_name: &str,
+    path: Option<&Path>,
+    version: Option<&str>,
+    extension: Option<&str>,
+) -> Result
 ```
 
 <details>
@@ -180,15 +94,18 @@ pub trait {trait_name}: Send + Sync {{
 
 </details>
 
-
-
-### <span id="fn.init_plugin"></span>`fn init_plugin`
+### <span id="fn.init_plugin"></span><code style="font-size: 0.85em">fn init_​plugin</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn init_plugin (name : & str , interface : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > ,) -> Result
+fn init_plugin(
+    name: &str,
+    interface: &str,
+    trait_name: &str,
+    path: Option<&Path>,
+    version: Option<&str>,
+) -> Result
 ```
 
 <details>
@@ -338,15 +255,18 @@ interface_version = 1{ext_line}
 
 </details>
 
-
-
-### <span id="fn.init_host"></span>`fn init_host`
+### <span id="fn.init_host"></span><code style="font-size: 0.85em">fn init_​host</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn init_host (name : & str , interface : & str , trait_name : & str , path : Option < & Path > , version : Option < & str > ,) -> Result
+fn init_host(
+    name: &str,
+    interface: &str,
+    trait_name: &str,
+    path: Option<&Path>,
+    version: Option<&str>,
+) -> Result
 ```
 
 <details>
@@ -466,15 +386,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{
 
 </details>
 
-
-
-### <span id="fn.keygen"></span>`fn keygen`
+### <span id="fn.keygen"></span><code style="font-size: 0.85em">fn keygen</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn keygen (out : & str) -> Result
+fn keygen(out: &str) -> Result
 ```
 
 <details>
@@ -507,15 +424,12 @@ pub fn keygen(out: &str) -> Result {
 
 </details>
 
-
-
-### <span id="fn.sign"></span>`fn sign`
+### <span id="fn.sign"></span><code style="font-size: 0.85em">fn sign</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn sign (key_path : & Path , dylib_path : & Path) -> Result
+fn sign(key_path: &Path, dylib_path: &Path) -> Result
 ```
 
 <details>
@@ -547,15 +461,12 @@ pub fn sign(key_path: &Path, dylib_path: &Path) -> Result {
 
 </details>
 
-
-
-### <span id="fn.verify"></span>`fn verify`
+### <span id="fn.verify"></span><code style="font-size: 0.85em">fn verify</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn verify (key_path : & Path , dylib_path : & Path) -> Result
+fn verify(key_path: &Path, dylib_path: &Path) -> Result
 ```
 
 <details>
@@ -599,15 +510,12 @@ pub fn verify(key_path: &Path, dylib_path: &Path) -> Result {
 
 </details>
 
-
-
-### <span id="fn.inspect"></span>`fn inspect`
+### <span id="fn.inspect"></span><code style="font-size: 0.85em">fn inspect</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn inspect (dylib_path : & Path) -> Result
+fn inspect(dylib_path: &Path) -> Result
 ```
 
 <details>
@@ -665,15 +573,12 @@ pub fn inspect(dylib_path: &Path) -> Result {
 
 </details>
 
-
-
-### <span id="fn.test"></span>`fn test`
+### <span id="fn.test"></span><code style="font-size: 0.85em">fn test</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn test (dir : & Path , release : bool) -> Result
+fn test(dir: &Path, release: bool) -> Result
 ```
 
 <details>
@@ -766,15 +671,12 @@ pub fn test(dir: &Path, release: bool) -> Result {
 
 </details>
 
-
-
-### <span id="fn.package_validate"></span>`fn package_validate`
+### <span id="fn.package_validate"></span><code style="font-size: 0.85em">fn package_​validate</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_validate (dir : & Path) -> Result
+fn package_validate(dir: &Path) -> Result
 ```
 
 <details>
@@ -801,15 +703,12 @@ pub fn package_validate(dir: &Path) -> Result {
 
 </details>
 
-
-
-### <span id="fn.package_build"></span>`fn package_build`
+### <span id="fn.package_build"></span><code style="font-size: 0.85em">fn package_​build</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_build (dir : & Path , release : bool) -> Result
+fn package_build(dir: &Path, release: bool) -> Result
 ```
 
 <details>
@@ -852,15 +751,12 @@ pub fn package_build(dir: &Path, release: bool) -> Result {
 
 </details>
 
-
-
-### <span id="fn.package_inspect"></span>`fn package_inspect`
+### <span id="fn.package_inspect"></span><code style="font-size: 0.85em">fn package_​inspect</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_inspect (dir : & Path) -> Result
+fn package_inspect(dir: &Path) -> Result
 ```
 
 <details>
@@ -909,15 +805,12 @@ pub fn package_inspect(dir: &Path) -> Result {
 
 </details>
 
-
-
-### <span id="fn.package_sign"></span>`fn package_sign`
+### <span id="fn.package_sign"></span><code style="font-size: 0.85em">fn package_​sign</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_sign (key_path : & Path , dir : & Path) -> Result
+fn package_sign(key_path: &Path, dir: &Path) -> Result
 ```
 
 <details>
@@ -950,15 +843,12 @@ pub fn package_sign(key_path: &Path, dir: &Path) -> Result {
 
 </details>
 
-
-
-### <span id="fn.package_verify"></span>`fn package_verify`
+### <span id="fn.package_verify"></span><code style="font-size: 0.85em">fn package_​verify</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_verify (key_path : & Path , dir : & Path) -> Result
+fn package_verify(key_path: &Path, dir: &Path) -> Result
 ```
 
 <details>
@@ -998,15 +888,16 @@ pub fn package_verify(key_path: &Path, dir: &Path) -> Result {
 
 </details>
 
-
-
-### <span id="fn.package_pack"></span>`fn package_pack`
+### <span id="fn.package_pack"></span><code style="font-size: 0.85em">fn package_​pack</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_pack (dir : & Path , output : Option < & Path > , precompile : bool) -> Result
+fn package_pack(
+    dir: &Path,
+    output: Option<&Path>,
+    precompile: bool,
+) -> Result
 ```
 
 <details>
@@ -1057,133 +948,12 @@ pub fn package_pack(dir: &Path, output: Option<&Path>, precompile: bool) -> Resu
 
 </details>
 
-
-
-### <span id="fn.prepare_wasm_pack"></span>`fn prepare_wasm_pack`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn prepare_wasm_pack (dir : & Path , component : & str , precompile : bool) -> Result
-```
-
-Validate (and optionally precompile) a wasm component at pack time. Requires the CLI built with `--features wasm` (pulls wasmtime via `fidius-host/wasm`).
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn prepare_wasm_pack(dir: &Path, component: &str, precompile: bool) -> Result {
-    let component_path = dir.join(component);
-    let bytes = std::fs::read(&component_path)?;
-    fidius_host::executor::validate_component(&bytes)
-        .map_err(|e| format!("component validation failed: {e}"))?;
-    println!("Validated wasm component: {component}");
-
-    if precompile {
-        let cwasm = fidius_host::executor::precompile_component(&bytes)
-            .map_err(|e| format!("precompile failed: {e}"))?;
-        let cwasm_path = component_path.with_extension("cwasm");
-        let cwasm_name = cwasm_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or("invalid component filename")?
-            .to_string();
-        std::fs::write(&cwasm_path, &cwasm)?;
-        record_precompiled(dir, &cwasm_name)?;
-        println!(
-            "Precompiled: {cwasm_name} ({:.1} KB)",
-            cwasm.len() as f64 / 1024.0
-        );
-    }
-    Ok(())
-}
-```
-
-</details>
-
-
-
-### <span id="fn.prepare_wasm_pack"></span>`fn prepare_wasm_pack`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn prepare_wasm_pack (_dir : & Path , component : & str , precompile : bool) -> Result
-```
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn prepare_wasm_pack(_dir: &Path, component: &str, precompile: bool) -> Result {
-    if precompile {
-        return Err("--precompile requires the CLI built with --features wasm".into());
-    }
-    eprintln!(
-        "warning: CLI built without wasm support — component `{component}` was not validated \
-         (rebuild with --features wasm to validate/precompile)"
-    );
-    Ok(())
-}
-```
-
-</details>
-
-
-
-### <span id="fn.record_precompiled"></span>`fn record_precompiled`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn record_precompiled (dir : & Path , cwasm_name : & str) -> Result
-```
-
-Record `precompiled = "<name>"` under the `[wasm]` table in package.toml, preserving the rest of the file (string-insert; skips if already present).
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn record_precompiled(dir: &Path, cwasm_name: &str) -> Result {
-    let manifest_path = dir.join("package.toml");
-    let content = std::fs::read_to_string(&manifest_path)?;
-    if content.contains("precompiled") {
-        return Ok(()); // already recorded (re-pack)
-    }
-    let header = "[wasm]";
-    let pos = content
-        .find(header)
-        .ok_or("package.toml missing [wasm] section")?;
-    let after_header = pos + header.len();
-    let line_end = content[after_header..]
-        .find('\n')
-        .map(|i| after_header + i + 1)
-        .unwrap_or(content.len());
-    let mut out = String::with_capacity(content.len() + 48);
-    out.push_str(&content[..line_end]);
-    out.push_str(&format!("precompiled = \"{cwasm_name}\"\n"));
-    out.push_str(&content[line_end..]);
-    std::fs::write(&manifest_path, out)?;
-    Ok(())
-}
-```
-
-</details>
-
-
-
-### <span id="fn.wit"></span>`fn wit`
+### <span id="fn.wit"></span><code style="font-size: 0.85em">fn wit</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn wit (dir : Option < & Path >) -> Result
+fn wit(dir: Option<&Path>) -> Result
 ```
 
 Generate `<dir>/wit/<interface>.wit` from `<dir>/src/lib.rs` (the `#[plugin_interface]` trait + `#[derive(WitType)]` types). The `build.rs` helper (`fidius_build::emit_wit`) does this automatically on every build; this subcommand is for CI / manual inspection.
@@ -1212,15 +982,12 @@ pub fn wit(dir: Option<&Path>) -> Result {
 
 </details>
 
-
-
-### <span id="fn.package_unpack"></span>`fn package_unpack`
+### <span id="fn.package_unpack"></span><code style="font-size: 0.85em">fn package_​unpack</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn package_unpack (archive : & Path , dest : Option < & Path >) -> Result
+fn package_unpack(archive: &Path, dest: Option<&Path>) -> Result
 ```
 
 <details>
@@ -1237,15 +1004,16 @@ pub fn package_unpack(archive: &Path, dest: Option<&Path>) -> Result {
 
 </details>
 
-
-
-### <span id="fn.python_stub"></span>`fn python_stub`
+### <span id="fn.python_stub"></span><code style="font-size: 0.85em">fn python_​stub</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn python_stub (interface_src : & Path , out : & Path , trait_name : Option < & str >) -> Result
+fn python_stub(
+    interface_src: &Path,
+    out: &Path,
+    trait_name: Option<&str>,
+) -> Result
 ```
 
 <details>
@@ -1258,6 +1026,3 @@ pub fn python_stub(interface_src: &Path, out: &Path, trait_name: Option<&str>) -
 ```
 
 </details>
-
-
-

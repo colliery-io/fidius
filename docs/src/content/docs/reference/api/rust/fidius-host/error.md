@@ -1,22 +1,21 @@
 ---
 title: "fidius-host::error"
 description: "Error types for fidius-host plugin loading and calling."
+editUrl: false
 sidebar:
-  order: 31
+  order: 30
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 Error types for fidius-host plugin loading and calling.
 
 ## Enums
 
-### <span id="enum.LoadError"></span>`enum LoadError`
+### <span id="enum.LoadError"></span><code style="font-size: 0.85em">enum LoadError</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Errors that can occur when loading a plugin.
 
@@ -37,31 +36,28 @@ Errors that can occur when loading a plugin.
 - **`LibLoading`**
 - **`Io`**
 - **`PythonLoad`** - Python loader failed (only produced with the `python` feature on).
-Wraps `fidius_python::PythonLoadError` as a string to keep the
-fidius-host public error enum type-clean across feature gates.
+  Wraps `fidius_python::PythonLoadError` as a string to keep the
+  fidius-host public error enum type-clean across feature gates.
 - **`WasmLoad`** - WASM component loader failed (only produced with the `wasm` feature on).
-Wraps wasmtime/instantiation errors as a string to keep the public enum
-type-clean across feature gates.
+  Wraps wasmtime/instantiation errors as a string to keep the public enum
+  type-clean across feature gates.
 - **`ConfigSerialization`** - Failed to serialize a plugin's config for construction (FIDIUS-A-0006 /
-CI.2). Practically never happens for a well-formed config type.
+  CI.2). Practically never happens for a well-formed config type.
 - **`HostInterfaceVersionMismatch`** - The plugin was built against a different **version** of a host
-interface than the host provides (plugin → host callback channel).
-Raised at bind (load) time; the host-function table is never
-installed, so a mismatched surface cannot mis-dispatch.
+  interface than the host provides (plugin → host callback channel).
+  Raised at bind (load) time; the host-function table is never
+  installed, so a mismatched surface cannot mis-dispatch.
 - **`HostInterfaceHashMismatch`** - The plugin was built against a different **signature set** of a host
-interface than the host provides (same declared version, drifted
-methods). Raised at bind (load) time; nothing is installed.
+  interface than the host provides (same declared version, drifted
+  methods). Raised at bind (load) time; nothing is installed.
 - **`HostImportRegistryInvalid`** - The plugin's `fidius_get_host_imports` registry was malformed (bad
-magic, unsupported layout version, or invalid pointers).
+  magic, unsupported layout version, or invalid pointers).
 - **`HostBindFailed`** - The plugin's bind shim rejected an offered host-function table (e.g.
-the interface was already bound for this library).
+  the interface was already bound for this library).
 
-
-
-### <span id="enum.CallError"></span>`enum CallError`
+### <span id="enum.CallError"></span><code style="font-size: 0.85em">enum CallError</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Errors that can occur when calling a plugin method.
 
@@ -73,26 +69,23 @@ Errors that can occur when calling a plugin method.
 - **`Panic`**
 - **`BufferTooSmall`**
 - **`NotImplemented`** - Optional method is not implemented by this plugin — its capability bit is unset.
-Returned when a method marked `#[optional]` is called on a plugin that chose not
-to implement it. Not returned for out-of-range method indices; see `InvalidMethodIndex`.
+  Returned when a method marked `#[optional]` is called on a plugin that chose not
+  to implement it. Not returned for out-of-range method indices; see `InvalidMethodIndex`.
 - **`InvalidMethodIndex`**
 - **`UnknownStatus`**
 - **`WireModeMismatch`** - A method was dispatched through the wrong wire path — a `#[wire(raw)]`
-method called via the typed path, or vice versa. Backend-agnostic: the
-Python and (future) WASM executors both enforce the raw/typed split.
+  method called via the typed path, or vice versa. Backend-agnostic: the
+  Python and (future) WASM executors both enforce the raw/typed split.
 - **`Backend`** - A runtime-level fault originating inside an execution backend that is
-*not* a plugin-raised [`PluginError`] — e.g. a future WASM trap
-(unreachable, out-of-bounds) or an interpreter-level failure. Carries
-the backend's runtime name and a message. Plugin-raised errors (Python
-exceptions included) stay in [`CallError::Plugin`] so their structured
-`code`/`message`/`details` (including tracebacks) round-trip.
+  *not* a plugin-raised `PluginError` — e.g. a future WASM trap
+  (unreachable, out-of-bounds) or an interpreter-level failure. Carries
+  the backend's runtime name and a message. Plugin-raised errors (Python
+  exceptions included) stay in [`CallError::Plugin`](../../../rust/fidius-host/error/#enum.CallError) so their structured
+  `code`/`message`/`details` (including tracebacks) round-trip.
 - **`MalformedFrame`** - A streaming backend produced bytes that did not decode as a valid
-[`fidius_core::frame::Frame`] (bad tag, truncated, malformed payload).
-Distinct from [`CallError::Deserialization`], which is about an item's
-*contents*; this is about the framing around items. (FIDIUS-I-0026.)
+  [`fidius_core::frame::Frame`](../../../rust/fidius-guest/frame/#enum.Frame) (bad tag, truncated, malformed payload).
+  Distinct from [`CallError::Deserialization`](../../../rust/fidius-host/error/#enum.CallError), which is about an item's
+  *contents*; this is about the framing around items. (FIDIUS-I-0026.)
 - **`StreamAborted`** - A stream ended without a terminal `END`/`ERROR` frame — the producer
-went away mid-stream (e.g. a dropped backend task, a crashed
-interpreter, a closed channel). (FIDIUS-I-0026.)
-
-
-
+  went away mid-stream (e.g. a dropped backend task, a crashed
+  interpreter, a closed channel). (FIDIUS-I-0026.)

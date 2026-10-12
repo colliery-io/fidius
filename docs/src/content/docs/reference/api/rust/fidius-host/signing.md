@@ -1,25 +1,24 @@
 ---
 title: "fidius-host::signing"
 description: "Ed25519 signature verification for plugins: dylibs (sign the file bytes) and packages (sign the runtime-agnostic `package_digest`, used by Python/WASM)."
+editUrl: false
 sidebar:
-  order: 43
+  order: 42
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 Ed25519 signature verification for plugins: dylibs (sign the file bytes) and packages (sign the runtime-agnostic `package_digest`, used by Python/WASM).
 
 ## Functions
 
-### <span id="fn.sig_path_for"></span>`fn sig_path_for`
+### <span id="fn.sig_path_for"></span><code style="font-size: 0.85em">fn sig_​path_​for</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn sig_path_for (path : & Path) -> std :: path :: PathBuf
+fn sig_path_for(path: &Path) -> std::path::PathBuf
 ```
 
 Compute the detached signature file path for a given file.
@@ -40,15 +39,15 @@ pub fn sig_path_for(path: &Path) -> std::path::PathBuf {
 
 </details>
 
-
-
-### <span id="fn.verify_signature"></span>`fn verify_signature`
+### <span id="fn.verify_signature"></span><code style="font-size: 0.85em">fn verify_​signature</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn verify_signature (dylib_path : & Path , trusted_keys : & [VerifyingKey]) -> Result < () , LoadError >
+fn verify_signature(
+    dylib_path: &Path,
+    trusted_keys: &[VerifyingKey],
+) -> Result<(), LoadError>
 ```
 
 Verify a plugin dylib's signature against trusted public keys.
@@ -56,13 +55,10 @@ Verify a plugin dylib's signature against trusted public keys.
 Reads the dylib bytes and the detached `.sig` file, then verifies
 the Ed25519 signature against each trusted key until one matches.
 
-**Raises:**
+**Errors:**
 
-| Exception | Description |
-|-----------|-------------|
-| `LoadError::SignatureRequired` | — if the `.sig` file doesn't exist |
-| `LoadError::SignatureInvalid` | — if no trusted key verifies the signature |
-
+- `LoadError::SignatureRequired` — if the `.sig` file doesn't exist
+- `LoadError::SignatureInvalid` — if no trusted key verifies the signature
 
 <details>
 <summary>Source</summary>
@@ -104,15 +100,15 @@ pub fn verify_signature(dylib_path: &Path, trusted_keys: &[VerifyingKey]) -> Res
 
 </details>
 
-
-
-### <span id="fn.verify_package_signature"></span>`fn verify_package_signature`
+### <span id="fn.verify_package_signature"></span><code style="font-size: 0.85em">fn verify_​package_​signature</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn verify_package_signature (dir : & Path , trusted_keys : & [VerifyingKey] ,) -> Result < () , LoadError >
+fn verify_package_signature(
+    dir: &Path,
+    trusted_keys: &[VerifyingKey],
+) -> Result<(), LoadError>
 ```
 
 Verify a **package** signature: `package.sig` in `dir`, an Ed25519 signature over `package_digest(dir)` (the runtime-agnostic content hash), against any trusted key. Used for package-based runtimes (Python, WASM) where the signed artifact is the whole package directory, not a single dylib file.
@@ -162,6 +158,3 @@ pub fn verify_package_signature(
 ```
 
 </details>
-
-
-

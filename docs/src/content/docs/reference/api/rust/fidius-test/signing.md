@@ -1,13 +1,13 @@
 ---
 title: "fidius-test::signing"
 description: "Deterministic signing fixtures for tests that exercise Fidius signature verification flows."
+editUrl: false
 sidebar:
-  order: 54
+  order: 53
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 Deterministic signing fixtures for tests that exercise Fidius signature verification flows.
 
@@ -17,13 +17,12 @@ without generating fresh random keys each run.
 
 ## Functions
 
-### <span id="fn.fixture_keypair_with_seed"></span>`fn fixture_keypair_with_seed`
+### <span id="fn.fixture_keypair_with_seed"></span><code style="font-size: 0.85em">fn fixture_​keypair_​with_​seed</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn fixture_keypair_with_seed (seed : u8) -> (SigningKey , VerifyingKey)
+fn fixture_keypair_with_seed(seed: u8) -> (SigningKey, VerifyingKey)
 ```
 
 Deterministic Ed25519 keypair derived from `seed` repeated 32 times.
@@ -44,18 +43,15 @@ pub fn fixture_keypair_with_seed(seed: u8) -> (SigningKey, VerifyingKey) {
 
 </details>
 
-
-
-### <span id="fn.fixture_keypair"></span>`fn fixture_keypair`
+### <span id="fn.fixture_keypair"></span><code style="font-size: 0.85em">fn fixture_​keypair</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn fixture_keypair () -> (SigningKey , VerifyingKey)
+fn fixture_keypair() -> (SigningKey, VerifyingKey)
 ```
 
-Convenience: [`fixture_keypair_with_seed`] with seed `1`.
+Convenience: [`fixture_keypair_with_seed(1)`](../../../rust/fidius-test/signing/#fn.fixture_keypair_with_seed).
 
 <details>
 <summary>Source</summary>
@@ -68,15 +64,12 @@ pub fn fixture_keypair() -> (SigningKey, VerifyingKey) {
 
 </details>
 
-
-
-### <span id="fn.sign_dylib"></span>`fn sign_dylib`
+### <span id="fn.sign_dylib"></span><code style="font-size: 0.85em">fn sign_​dylib</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn sign_dylib (dylib : & Path , key : & SigningKey) -> std :: io :: Result < () >
+fn sign_dylib(dylib: &Path, key: &SigningKey) -> std::io::Result<()>
 ```
 
 Sign a plugin dylib in place by writing a detached `.sig` file alongside it.
@@ -101,6 +94,3 @@ pub fn sign_dylib(dylib: &Path, key: &SigningKey) -> std::io::Result<()> {
 ```
 
 </details>
-
-
-

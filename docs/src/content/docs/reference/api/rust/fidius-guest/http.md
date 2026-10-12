@@ -1,42 +1,43 @@
 ---
 title: "fidius-guest::http"
 description: "`fidius::http` — the brokered outbound HTTP client for sandboxed WASM connectors (FIDIUS-I-0028)."
+editUrl: false
 sidebar:
-  order: 18
+  order: 17
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 `fidius::http` — the brokered outbound HTTP client for sandboxed WASM connectors (FIDIUS-I-0028).
 
-A connector's `read()` calls [`get`]/[`post`]/[`send`]; the call crosses the
+A connector's `read()` calls [`get`](../../../rust/fidius-guest/http/#fn.get)/[`post`](../../../rust/fidius-guest/http/#fn.post)/[`send`](../../../rust/fidius-guest/http/#fn.send); the call crosses the
 sandbox via `wasi:http/outgoing-handler`, where the **host's `EgressPolicy`**
 decides allow/deny/decorate before the request leaves the process. There is
 no ambient network: the request only succeeds when the package declares the
 `http` capability **and** the host supplied a policy (the two-key gate).
+
 This module is `#[cfg(target_family = "wasm")]` and exists only in components
 built for `wasm32-wasip2`. It is **the one place** the `wasi:http` version is
 pinned (vendored WIT at `crates/fidius-guest/wit`, matched to the host's
 `wasmtime-wasi-http`); see [[FIDIUS-A-0005]] for the stability contract.
+
 ```rust
 fn read(&self, cfg: Config) -> fidius::Stream<Record> {
-let resp = fidius::http::get(&cfg.url).expect("fetch");
-// … parse resp.body into records …
+    let resp = fidius::http::get(&cfg.url).expect("fetch");
+    // … parse resp.body into records …
 }
 ```
 
 ## Structs
 
-### <span id="struct.Request"></span>`struct Request`
+### <span id="struct.Request"></span><code style="font-size: 0.85em">struct Request</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 **Derives:** `Debug`, `Clone`
 
-An outbound request. Build with [`Request::get`]/[`Request::post`] or the struct literal, then [`send`].
+An outbound request. Build with [`Request::get`](../../../rust/fidius-guest/http/#Request.get)/[`Request::post`](../../../rust/fidius-guest/http/#Request.post) or the struct literal, then [`send`](../../../rust/fidius-guest/http/#fn.send).
 
 #### Fields
 
@@ -44,22 +45,18 @@ An outbound request. Build with [`Request::get`]/[`Request::post`] or the struct
 |------|------|-------------|
 | `method` | `String` | HTTP method (uppercase, e.g. `"GET"`, `"POST"`). |
 | `url` | `String` | Full URL: `http://host[:port]/path?query` or `https://…`. |
-| `headers` | `Vec < (String , String) >` | Request headers (name, value) pairs. |
-| `body` | `Vec < u8 >` | Request body (empty for GET). |
-| `timeout` | `Option < core :: time :: Duration >` | Optional request timeout. When set, it bounds connect, first-byte, and
-between-bytes waits (wasi:http `request-options`); a slow upstream then
-fails with an [`HttpError`] instead of hanging the call. `None` = no
-fidius-imposed timeout (the host/runtime default applies). |
+| `headers` | `Vec<(String, String)>` | Request headers (name, value) pairs. |
+| `body` | `Vec<u8>` | Request body (empty for GET). |
+| `timeout` | `Option<core::time::Duration>` | Optional request timeout. When set, it bounds connect, first-byte, and between-bytes waits (wasi:http `request-options`); a slow upstream then fails with an [`HttpError`](../../../rust/fidius-guest/http/#struct.HttpError) instead of hanging the call. `None` = no fidius-imposed timeout (the host/runtime default applies). |
 
 #### Methods
 
-##### <span id="Request.get"></span>`get`
+##### <span id="Request.get"></span><code>get</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn get (url : impl Into < String >) -> Self
+fn get(url: impl Into<String>) -> Self
 ```
 
 A GET request for `url`.
@@ -81,15 +78,12 @@ A GET request for `url`.
 
 </details>
 
-
-
-##### <span id="Request.post"></span>`post`
+##### <span id="Request.post"></span><code>post</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn post (url : impl Into < String > , body : impl Into < Vec < u8 > >) -> Self
+fn post(url: impl Into<String>, body: impl Into<Vec<u8>>) -> Self
 ```
 
 A POST request for `url` with `body`.
@@ -111,15 +105,16 @@ A POST request for `url` with `body`.
 
 </details>
 
-
-
-##### <span id="Request.header"></span>`header`
+##### <span id="Request.header"></span><code>header</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn header (mut self , name : impl Into < String > , value : impl Into < String >) -> Self
+fn header(
+    mut self,
+    name: impl Into<String>,
+    value: impl Into<String>,
+) -> Self
 ```
 
 Add a header (builder style).
@@ -136,15 +131,12 @@ Add a header (builder style).
 
 </details>
 
-
-
-##### <span id="Request.timeout"></span>`timeout`
+##### <span id="Request.timeout"></span><code>timeout</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn timeout (mut self , dur : core :: time :: Duration) -> Self
+fn timeout(mut self, dur: core::time::Duration) -> Self
 ```
 
 Set a request timeout (builder style). Bounds connect / first-byte / between-bytes waits so a slow upstream fails fast instead of hanging.
@@ -161,14 +153,9 @@ Set a request timeout (builder style). Bounds connect / first-byte / between-byt
 
 </details>
 
-
-
-
-
-### <span id="struct.Response"></span>`struct Response`
+### <span id="struct.Response"></span><code style="font-size: 0.85em">struct Response</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`
 
@@ -179,18 +166,17 @@ A response. `body` is the fully-read response body.
 | Name | Type | Description |
 |------|------|-------------|
 | `status` | `u16` | HTTP status code. |
-| `headers` | `Vec < (String , String) >` | Response headers (name, value) pairs. |
-| `body` | `Vec < u8 >` | The response body, fully read. |
+| `headers` | `Vec<(String, String)>` | Response headers (name, value) pairs. |
+| `body` | `Vec<u8>` | The response body, fully read. |
 
 #### Methods
 
-##### <span id="Response.is_success"></span>`is_success`
+##### <span id="Response.is_success"></span><code>is_​success</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn is_success (& self) -> bool
+fn is_success(&self) -> bool
 ```
 
 `true` for a 2xx status.
@@ -206,15 +192,12 @@ fn is_success (& self) -> bool
 
 </details>
 
-
-
-##### <span id="Response.text"></span>`text`
+##### <span id="Response.text"></span><code>text</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn text (& self) -> String
+fn text(&self) -> String
 ```
 
 The body as UTF-8 (lossy).
@@ -230,14 +213,9 @@ The body as UTF-8 (lossy).
 
 </details>
 
-
-
-
-
-### <span id="struct.HttpError"></span>`struct HttpError`
+### <span id="struct.HttpError"></span><code style="font-size: 0.85em">struct HttpError</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`, `PartialEq`, `Eq`
 
@@ -249,43 +227,14 @@ A failed request. The most common cause in a sandbox is a **denied egress**: the
 |------|------|-------------|
 | `message` | `String` | A short, guest-visible description. |
 
-#### Methods
-
-##### <span id="HttpError.new"></span>`new`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn new (msg : impl Into < String >) -> Self
-```
-
-<details>
-<summary>Source</summary>
-
-```rust
-    fn new(msg: impl Into<String>) -> Self {
-        Self {
-            message: msg.into(),
-        }
-    }
-```
-
-</details>
-
-
-
-
-
 ## Functions
 
-### <span id="fn.get"></span>`fn get`
+### <span id="fn.get"></span><code style="font-size: 0.85em">fn get</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn get (url : & str) -> Result < Response , HttpError >
+fn get(url: &str) -> Result<Response, HttpError>
 ```
 
 GET `url`.
@@ -301,15 +250,12 @@ pub fn get(url: &str) -> Result<Response, HttpError> {
 
 </details>
 
-
-
-### <span id="fn.post"></span>`fn post`
+### <span id="fn.post"></span><code style="font-size: 0.85em">fn post</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn post (url : & str , body : & [u8]) -> Result < Response , HttpError >
+fn post(url: &str, body: &[u8]) -> Result<Response, HttpError>
 ```
 
 POST `body` to `url`.
@@ -325,18 +271,15 @@ pub fn post(url: &str, body: &[u8]) -> Result<Response, HttpError> {
 
 </details>
 
-
-
-### <span id="fn.send"></span>`fn send`
+### <span id="fn.send"></span><code style="font-size: 0.85em">fn send</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn send (req : Request) -> Result < Response , HttpError >
+fn send(req: Request) -> Result<Response, HttpError>
 ```
 
-Send an arbitrary [`Request`], blocking until the response is read. The host `EgressPolicy` is consulted before dispatch.
+Send an arbitrary [`Request`](../../../rust/fidius-guest/http/#struct.Request), blocking until the response is read. The host `EgressPolicy` is consulted before dispatch.
 
 <details>
 <summary>Source</summary>
@@ -453,6 +396,3 @@ pub fn send(req: Request) -> Result<Response, HttpError> {
 ```
 
 </details>
-
-
-

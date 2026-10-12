@@ -1,25 +1,26 @@
 ---
 title: "fidius-host::package"
 description: "Host-side package integration: manifest loading, discovery, and building."
+editUrl: false
 sidebar:
-  order: 42
+  order: 41
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 Host-side package integration: manifest loading, discovery, and building.
 
 ## Functions
 
-### <span id="fn.load_package_manifest"></span>`fn load_package_manifest`
+### <span id="fn.load_package_manifest"></span><code style="font-size: 0.85em">fn load_​package_​manifest</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn load_package_manifest < M : DeserializeOwned > (dir : & Path ,) -> Result < PackageManifest < M > , PackageError >
+fn load_package_manifest<M: DeserializeOwned>(
+    dir: &Path,
+) -> Result<PackageManifest<M>, PackageError>
 ```
 
 Load and validate a package manifest against a host-defined schema.
@@ -54,15 +55,12 @@ pub fn load_package_manifest<M: DeserializeOwned>(
 
 </details>
 
-
-
-### <span id="fn.discover_packages"></span>`fn discover_packages`
+### <span id="fn.discover_packages"></span><code style="font-size: 0.85em">fn discover_​packages</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn discover_packages (dir : & Path) -> Result < Vec < PathBuf > , PackageError >
+fn discover_packages(dir: &Path) -> Result<Vec<PathBuf>, PackageError>
 ```
 
 Discover packages in a directory.
@@ -98,15 +96,15 @@ pub fn discover_packages(dir: &Path) -> Result<Vec<PathBuf>, PackageError> {
 
 </details>
 
-
-
-### <span id="fn.verify_package"></span>`fn verify_package`
+### <span id="fn.verify_package"></span><code style="font-size: 0.85em">fn verify_​package</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn verify_package (dir : & Path , trusted_keys : & [VerifyingKey]) -> Result < () , PackageError >
+fn verify_package(
+    dir: &Path,
+    trusted_keys: &[VerifyingKey],
+) -> Result<(), PackageError>
 ```
 
 Verify a source package's signature against trusted public keys.
@@ -114,13 +112,10 @@ Verify a source package's signature against trusted public keys.
 Recomputes the package digest from files on disk and verifies the
 `package.sig` signature against the provided trusted keys.
 
-**Raises:**
+**Errors:**
 
-| Exception | Description |
-|-----------|-------------|
-| `PackageError::SignatureNotFound` | — if `package.sig` doesn't exist |
-| `PackageError::SignatureInvalid` | — if no trusted key verifies the signature |
-
+- `PackageError::SignatureNotFound` — if `package.sig` doesn't exist
+- `PackageError::SignatureInvalid` — if no trusted key verifies the signature
 
 <details>
 <summary>Source</summary>
@@ -158,26 +153,27 @@ pub fn verify_package(dir: &Path, trusted_keys: &[VerifyingKey]) -> Result<(), P
 
 </details>
 
-
-
-### <span id="fn.unpack_fid"></span>`fn unpack_fid`
+### <span id="fn.unpack_fid"></span><code style="font-size: 0.85em">fn unpack_​fid</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn unpack_fid (archive : & Path , dest : & Path) -> Result < PathBuf , PackageError >
+fn unpack_fid(
+    archive: &Path,
+    dest: &Path,
+) -> Result<PathBuf, PackageError>
 ```
 
 Extract a `.fid` archive and validate its contents.
 
-Delegates to [`fidius_core::package::unpack_package`], which applies strict
+Delegates to [`fidius_core::package::unpack_package`](../../../rust/fidius-core/package/#fn.unpack_package), which applies strict
 safety defaults: entries with `..` components, absolute paths, symlinks, or
 hardlinks are rejected, and the cumulative decompressed size is capped to
 guard against decompression bombs. Emits a `tracing::warn!` if the unpacked
 package has no `package.sig`.
+
 For archives that legitimately exceed the default caps, call
-[`fidius_core::package::unpack_package_with_options`] directly.
+[`fidius_core::package::unpack_package_with_options`](../../../rust/fidius-core/package/#fn.unpack_package_with_options) directly.
 
 **Examples:**
 
@@ -207,15 +203,15 @@ pub fn unpack_fid(archive: &Path, dest: &Path) -> Result<PathBuf, PackageError> 
 
 </details>
 
-
-
-### <span id="fn.build_package"></span>`fn build_package`
+### <span id="fn.build_package"></span><code style="font-size: 0.85em">fn build_​package</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn build_package (dir : & Path , release : bool) -> Result < PathBuf , PackageError >
+fn build_package(
+    dir: &Path,
+    release: bool,
+) -> Result<PathBuf, PackageError>
 ```
 
 Build a package by running `cargo build` inside the package directory.
@@ -279,6 +275,3 @@ pub fn build_package(dir: &Path, release: bool) -> Result<PathBuf, PackageError>
 ```
 
 </details>
-
-
-

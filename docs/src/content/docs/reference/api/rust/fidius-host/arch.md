@@ -1,13 +1,13 @@
 ---
 title: "fidius-host::arch"
 description: "Architecture detection for dylib files."
+editUrl: false
 sidebar:
-  order: 28
+  order: 27
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 Architecture detection for dylib files.
 
@@ -16,10 +16,9 @@ architecture before attempting to dlopen.
 
 ## Structs
 
-### <span id="struct.BinaryInfo"></span>`struct BinaryInfo`
+### <span id="struct.BinaryInfo"></span><code style="font-size: 0.85em">struct BinaryInfo</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`, `PartialEq`, `Eq`
 
@@ -32,14 +31,11 @@ Detected binary format and architecture.
 | `format` | `BinaryFormat` |  |
 | `arch` | `Arch` |  |
 
-
-
 ## Enums
 
-### <span id="enum.BinaryFormat"></span>`enum BinaryFormat`
+### <span id="enum.BinaryFormat"></span><code style="font-size: 0.85em">enum BinaryFormat</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 #### Variants
 
@@ -48,12 +44,9 @@ Detected binary format and architecture.
 - **`Pe`**
 - **`Unknown`**
 
-
-
-### <span id="enum.Arch"></span>`enum Arch`
+### <span id="enum.Arch"></span><code style="font-size: 0.85em">enum Arch</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 #### Variants
 
@@ -61,17 +54,14 @@ Detected binary format and architecture.
 - **`Aarch64`**
 - **`Unknown`**
 
-
-
 ## Functions
 
-### <span id="fn.detect_architecture"></span>`fn detect_architecture`
+### <span id="fn.detect_architecture"></span><code style="font-size: 0.85em">fn detect_​architecture</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn detect_architecture (path : & Path) -> Result < BinaryInfo , LoadError >
+fn detect_architecture(path: &Path) -> Result<BinaryInfo, LoadError>
 ```
 
 Detect the binary format and architecture of a file.
@@ -164,15 +154,12 @@ pub fn detect_architecture(path: &Path) -> Result<BinaryInfo, LoadError> {
 
 </details>
 
-
-
-### <span id="fn.check_architecture"></span>`fn check_architecture`
+### <span id="fn.check_architecture"></span><code style="font-size: 0.85em">fn check_​architecture</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn check_architecture (path : & Path) -> Result < () , LoadError >
+fn check_architecture(path: &Path) -> Result<(), LoadError>
 ```
 
 Check that a dylib matches the current platform's expected format.
@@ -220,6 +207,3 @@ pub fn check_architecture(path: &Path) -> Result<(), LoadError> {
 ```
 
 </details>
-
-
-

@@ -1,28 +1,30 @@
 ---
 title: "fidius-macro::host_interface"
 description: "Code generation for `#[host_interface]` — the plugin → host callback channel (the reverse direction of `#[plugin_interface]`)."
+editUrl: false
 sidebar:
-  order: 47
+  order: 46
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 Code generation for `#[host_interface]` — the plugin → host callback channel (the reverse direction of `#[plugin_interface]`).
 
 From one trait, generates both ends of the channel:
+
 - **Plugin side** (`<Trait>Client` + companion statics): a once-bindable
-table cell, the `bind` shim the host installs a [`HostFunctionTable`]
-through (with defensive hash/version re-validation), a
-`HostImportDescriptor` registered with the plugin's host-import
-registry, and a typed client whose methods bincode-encode arguments
-and dispatch through the bound table.
+  table cell, the `bind` shim the host installs a [`HostFunctionTable`](../../../rust/fidius-guest/host_ffi/#struct.HostFunctionTable)
+  through (with defensive hash/version re-validation), a
+  `HostImportDescriptor` registered with the plugin's host-import
+  registry, and a typed client whose methods bincode-encode arguments
+  and dispatch through the bound table.
 - **Host side** (`<Trait>Binding`): a dispatch shim that decodes
-arguments, calls an `Arc<dyn Trait>` implementation with a panic
-catch, and encodes results; plus bind entry points for dynamically
-loaded libraries (`bind`, feature `"host"`) and in-process plugins
-(`bind_in_process`).
+  arguments, calls an `Arc<dyn Trait>` implementation with a panic
+  catch, and encodes results; plus bind entry points for dynamically
+  loaded libraries (`bind`, feature `"host"`) and in-process plugins
+  (`bind_in_process`).
+
 Both plugin runtimes are served: **dylib** plugins receive a
 function-pointer table at bind time (gated at load), and **wasm** plugins
 dispatch through the `fidius:host-call` component import (gated on every
@@ -33,10 +35,9 @@ for the threading/reentrancy contract.
 
 ## Structs
 
-### <span id="struct.HostInterfaceAttrs"></span>`struct HostInterfaceAttrs`
+### <span id="struct.HostInterfaceAttrs"></span><code style="font-size: 0.85em">struct HostInterfaceAttrs</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Parsed attributes from `#[host_interface(version = N)]`.
 
@@ -47,272 +48,17 @@ Parsed attributes from `#[host_interface(version = N)]`.
 | `version` | `u32` |  |
 | `crate_path` | `Path` | Path to the fidius crate (`crate = "my_crate::fidius"`); defaults to `fidius`. |
 
-
-
-### <span id="struct.HostMethod"></span>`struct HostMethod`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-IR for a single host-function method.
-
-#### Fields
-
-| Name | Type | Description |
-|------|------|-------------|
-| `name` | `Ident` |  |
-| `arg_names` | `Vec < Ident >` |  |
-| `arg_types` | `Vec < Type >` |  |
-| `return_type` | `Option < Type >` | The full declared return type (`None` for `-> ()`). |
-| `result_ok` | `Option < Type >` | `Some(ok_type)` when the return is `Result<T, PluginError>`. |
-| `signature_string` | `String` |  |
-
-
-
 ## Functions
 
-### <span id="fn.last_segment"></span>`fn last_segment`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn last_segment (ty : & Type) -> Option < & syn :: PathSegment >
-```
-
-Return `Some(&last_segment)` if `ty` is a path type.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn last_segment(ty: &Type) -> Option<&syn::PathSegment> {
-    match ty {
-        Type::Path(p) => p.path.segments.last(),
-        _ => None,
-    }
-}
-```
-
-</details>
-
-
-
-### <span id="fn.result_types"></span>`fn result_types`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn result_types (ty : & Type) -> Option < (& Type , & Type) >
-```
-
-If `ty` is `Result<T, E>`, return `(T, E)`.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn result_types(ty: &Type) -> Option<(&Type, &Type)> {
-    let seg = last_segment(ty)?;
-    if seg.ident != "Result" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-        return None;
-    };
-    let mut types = args.args.iter().filter_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t),
-        _ => None,
-    });
-    Some((types.next()?, types.next()?))
-}
-```
-
-</details>
-
-
-
-### <span id="fn.is_stream_marker"></span>`fn is_stream_marker`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn is_stream_marker (ty : & Type) -> bool
-```
-
-Return `true` if the type's final path segment is `Stream` with one generic argument (the `fidius::Stream<T>` streaming marker).
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn is_stream_marker(ty: &Type) -> bool {
-    match last_segment(ty) {
-        Some(seg) if seg.ident == "Stream" => {
-            matches!(&seg.arguments, syn::PathArguments::AngleBracketed(a) if a.args.len() == 1)
-        }
-        _ => false,
-    }
-}
-```
-
-</details>
-
-
-
-### <span id="fn.parse_method"></span>`fn parse_method`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn parse_method (method : & TraitItemFn) -> syn :: Result < HostMethod >
-```
-
-Parse and validate one trait method into a [`HostMethod`].
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn parse_method(method: &TraitItemFn) -> syn::Result<HostMethod> {
-    let span = method.sig.ident.span();
-
-    if method.sig.asyncness.is_some() {
-        return Err(syn::Error::new(
-            span,
-            "host functions are synchronous at the FFI boundary; a host implementation that \
-             needs to await must bridge to its own runtime internally (e.g. \
-             `tokio::runtime::Handle::block_on`) — see the host_interface threading contract",
-        ));
-    }
-    if !method.sig.generics.params.is_empty() {
-        return Err(syn::Error::new(
-            span,
-            "host interface methods cannot be generic",
-        ));
-    }
-    match method.sig.inputs.first() {
-        Some(FnArg::Receiver(r)) if r.mutability.is_none() && r.reference.is_some() => {}
-        _ => {
-            return Err(syn::Error::new(
-                span,
-                "host interface methods must take `&self` (the host implementation is shared \
-                 across plugin threads)",
-            ))
-        }
-    }
-    for attr in &method.attrs {
-        for unsupported in ["optional", "wire", "method_meta"] {
-            if attr.path().is_ident(unsupported) {
-                return Err(syn::Error::new(
-                    attr.span(),
-                    format!("`#[{unsupported}]` is not supported on host interface methods"),
-                ));
-            }
-        }
-    }
-
-    let mut arg_names = Vec::new();
-    let mut arg_types = Vec::new();
-    for arg in &method.sig.inputs {
-        if let FnArg::Typed(pat_type) = arg {
-            if matches!(pat_type.ty.as_ref(), Type::Reference(_)) {
-                return Err(syn::Error::new(
-                    pat_type.ty.span(),
-                    "host interface arguments must be owned types (String, Vec<u8>, …), not \
-                     references — they are serialized across the FFI boundary",
-                ));
-            }
-            if is_stream_marker(&pat_type.ty) {
-                return Err(syn::Error::new(
-                    pat_type.ty.span(),
-                    "streaming host functions are not supported — host calls are \
-                     request/response only",
-                ));
-            }
-            arg_types.push((*pat_type.ty).clone());
-            arg_names.push(match pat_type.pat.as_ref() {
-                Pat::Ident(p) => p.ident.clone(),
-                _ => Ident::new("_arg", pat_type.span()),
-            });
-        }
-    }
-
-    let return_type = match &method.sig.output {
-        ReturnType::Default => None,
-        ReturnType::Type(_, ty) => Some((**ty).clone()),
-    };
-    if let Some(rt) = &return_type {
-        if is_stream_marker(rt) {
-            return Err(syn::Error::new(
-                rt.span(),
-                "streaming host functions are not supported — host calls are \
-                 request/response only",
-            ));
-        }
-    }
-
-    // A fallible host function must use `PluginError` as its error type: it is
-    // the one typed error currency both sides of the wire agree on. Detected
-    // by final path segment so `fidius::PluginError` and a re-export both work.
-    let result_ok = match return_type.as_ref().and_then(result_types) {
-        Some((ok, err)) => {
-            let is_plugin_error = last_segment(err).map(|s| s.ident == "PluginError") == Some(true);
-            if !is_plugin_error {
-                return Err(syn::Error::new(
-                    err.span(),
-                    "fallible host functions must return `Result<T, fidius::PluginError>` — \
-                     encode domain errors in PluginError's code/message/details so they cross \
-                     the boundary as typed, inspectable errors",
-                ));
-            }
-            Some(ok.clone())
-        }
-        None => None,
-    };
-
-    let arg_type_strs: Vec<String> = arg_types
-        .iter()
-        .map(|t| quote::ToTokens::to_token_stream(t).to_string())
-        .collect();
-    let ret_str = match &return_type {
-        Some(t) => quote::ToTokens::to_token_stream(t).to_string(),
-        None => String::new(),
-    };
-    let signature_string = fidius_core::hash::signature_string(
-        &method.sig.ident.to_string(),
-        &arg_type_strs,
-        &ret_str,
-        false,
-        false,
-        false,
-    );
-
-    Ok(HostMethod {
-        name: method.sig.ident.clone(),
-        arg_names,
-        arg_types,
-        return_type,
-        result_ok,
-        signature_string,
-    })
-}
-```
-
-</details>
-
-
-
-### <span id="fn.generate_host_interface"></span>`fn generate_host_interface`
+### <span id="fn.generate_host_interface"></span><code style="font-size: 0.85em">fn generate_​host_​interface</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn generate_host_interface (attrs : & HostInterfaceAttrs , item : & ItemTrait ,) -> syn :: Result < TokenStream >
+fn generate_host_interface(
+    attrs: &HostInterfaceAttrs,
+    item: &ItemTrait,
+) -> syn::Result<TokenStream>
 ```
 
 Generate all code for a `#[host_interface]` invocation.
@@ -886,38 +632,3 @@ pub fn generate_host_interface(
 ```
 
 </details>
-
-
-
-### <span id="fn.strip_helper_attrs"></span>`fn strip_helper_attrs`
-
-<span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-gray-6); color: var(--sl-color-gray-2);">private</span>
-
-
-```rust
-fn strip_helper_attrs (item : & ItemTrait) -> ItemTrait
-```
-
-Strip fidius helper attributes so the emitted trait compiles bare.
-
-<details>
-<summary>Source</summary>
-
-```rust
-fn strip_helper_attrs(item: &ItemTrait) -> ItemTrait {
-    let mut cleaned = item.clone();
-    for trait_item in &mut cleaned.items {
-        if let TraitItem::Fn(method) = trait_item {
-            method
-                .attrs
-                .retain(|a| !a.path().is_ident("optional") && !a.path().is_ident("wire"));
-        }
-    }
-    cleaned
-}
-```
-
-</details>
-
-
-

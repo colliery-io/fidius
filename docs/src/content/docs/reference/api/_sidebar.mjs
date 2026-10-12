@@ -8,6 +8,7 @@
 export default {
   label: "API reference",
   items: [
+    { label: "Overview", slug: "reference/api" },
     {
       label: "Rust",
       items: [
@@ -16,7 +17,6 @@ export default {
           label: "fidius-cli",
           collapsed: true,
           items: [
-            { label: "Overview", slug: "reference/api/rust/fidius-cli" },
             { label: "commands", slug: "reference/api/rust/fidius-cli/commands" },
             { label: "python_stub", slug: "reference/api/rust/fidius-cli/python_stub" },
           ],

@@ -22,7 +22,6 @@ export default defineConfig({
 			favicon: '/assets/logo.png',
 			social: [{ icon: 'github', label: 'GitHub', href: REPO }],
 			plugins: [starlightAurora({ hyper: true })],
-			expressiveCode: { frames: { extractFileNameFromCode: false } },
 			sidebar: [
 				{ label: 'Home', link: '/' },
 				{

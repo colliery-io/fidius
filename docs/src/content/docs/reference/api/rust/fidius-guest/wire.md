@@ -1,13 +1,13 @@
 ---
 title: "fidius-guest::wire"
 description: "Wire format serialization for Fidius plugin FFI boundary."
+editUrl: false
 sidebar:
-  order: 26
+  order: 25
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 Wire format serialization for Fidius plugin FFI boundary.
 
@@ -19,10 +19,9 @@ benefit to offset them.
 
 ## Enums
 
-### <span id="enum.WireError"></span>`enum WireError`
+### <span id="enum.WireError"></span><code style="font-size: 0.85em">enum WireError</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Errors that can occur during wire serialization or deserialization.
 
@@ -30,17 +29,14 @@ Errors that can occur during wire serialization or deserialization.
 
 - **`Bincode`** - Bincode serialization/deserialization error.
 
-
-
 ## Functions
 
-### <span id="fn.serialize"></span>`fn serialize`
+### <span id="fn.serialize"></span><code style="font-size: 0.85em">fn serialize</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn serialize < T : Serialize > (val : & T) -> Result < Vec < u8 > , WireError >
+fn serialize<T: Serialize>(val: &T) -> Result<Vec<u8>, WireError>
 ```
 
 Serialize a value as bincode for transport across the FFI boundary.
@@ -56,15 +52,14 @@ pub fn serialize<T: Serialize>(val: &T) -> Result<Vec<u8>, WireError> {
 
 </details>
 
-
-
-### <span id="fn.deserialize"></span>`fn deserialize`
+### <span id="fn.deserialize"></span><code style="font-size: 0.85em">fn deserialize</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn deserialize < T : DeserializeOwned > (bytes : & [u8]) -> Result < T , WireError >
+fn deserialize<T: DeserializeOwned>(
+    bytes: &[u8],
+) -> Result<T, WireError>
 ```
 
 Deserialize a value from bincode bytes received across the FFI boundary.
@@ -80,18 +75,15 @@ pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, WireError> {
 
 </details>
 
-
-
-### <span id="fn.serialized_size"></span>`fn serialized_size`
+### <span id="fn.serialized_size"></span><code style="font-size: 0.85em">fn serialized_​size</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn serialized_size < T : Serialize > (val : & T) -> Result < u64 , WireError >
+fn serialized_size<T: Serialize>(val: &T) -> Result<u64, WireError>
 ```
 
-The exact serialized size of `val` in bytes, without allocating. Matches [`serialize`]'s output length. Used to size/validate a buffer before [`serialize_into`] (e.g. the cdylib streaming arena path, FIDIUS-T-0138).
+The exact serialized size of `val` in bytes, without allocating. Matches [`serialize`](../../../rust/fidius-guest/wire/#fn.serialize)'s output length. Used to size/validate a buffer before [`serialize_into`](../../../rust/fidius-guest/wire/#fn.serialize_into) (e.g. the cdylib streaming arena path, FIDIUS-T-0138).
 
 <details>
 <summary>Source</summary>
@@ -104,18 +96,18 @@ pub fn serialized_size<T: Serialize>(val: &T) -> Result<u64, WireError> {
 
 </details>
 
-
-
-### <span id="fn.serialize_into"></span>`fn serialize_into`
+### <span id="fn.serialize_into"></span><code style="font-size: 0.85em">fn serialize_​into</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn serialize_into < T : Serialize > (buf : & mut [u8] , val : & T) -> Result < () , WireError >
+fn serialize_into<T: Serialize>(
+    buf: &mut [u8]) -> Result<(,
+    val: &T) -> Result<(,
+) -> Result<(), WireError>
 ```
 
-Serialize `val` directly into a caller-provided buffer — no intermediate `Vec` allocation. `buf` must be at least [`serialized_size`] bytes (bincode errors otherwise). Byte-identical to [`serialize`].
+Serialize `val` directly into a caller-provided buffer — no intermediate `Vec` allocation. `buf` must be at least [`serialized_size`](../../../rust/fidius-guest/wire/#fn.serialized_size) bytes (bincode errors otherwise). Byte-identical to [`serialize`](../../../rust/fidius-guest/wire/#fn.serialize).
 
 <details>
 <summary>Source</summary>
@@ -127,6 +119,3 @@ pub fn serialize_into<T: Serialize>(buf: &mut [u8], val: &T) -> Result<(), WireE
 ```
 
 </details>
-
-
-

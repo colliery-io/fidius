@@ -1,13 +1,13 @@
 ---
 title: "fidius-guest::hash"
 description: "FNV-1a interface hashing for compile-time ABI drift detection."
+editUrl: false
 sidebar:
-  order: 15
+  order: 14
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 FNV-1a interface hashing for compile-time ABI drift detection.
 
@@ -17,13 +17,12 @@ plugins compiled against a different interface.
 
 ## Functions
 
-### <span id="fn.fnv1a"></span>`fn fnv1a`
+### <span id="fn.fnv1a"></span><code style="font-size: 0.85em">fn fnv1a</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-const fn fnv1a (bytes : & [u8]) -> u64
+const fn fnv1a(bytes: &[u8]) -> u64
 ```
 
 Compute the FNV-1a 64-bit hash of a byte slice.
@@ -46,21 +45,19 @@ pub const fn fnv1a(bytes: &[u8]) -> u64 {
 
 </details>
 
-
-
-### <span id="fn.interface_hash"></span>`fn interface_hash`
+### <span id="fn.interface_hash"></span><code style="font-size: 0.85em">fn interface_​hash</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn interface_hash (signatures : & [& str]) -> u64
+fn interface_hash(signatures: &[&str]) -> u64
 ```
 
 Compute the interface hash from a set of method signatures.
 
 Signatures are sorted lexicographically before hashing to ensure
 order-independence. Each signature is joined with `\n` as a separator.
+
 This function is **not** `const` because it allocates for sorting.
 The proc macro calls this at compile time via a build-script-like pattern,
 or uses `fnv1a` directly on pre-sorted, concatenated signatures.
@@ -79,36 +76,42 @@ pub fn interface_hash(signatures: &[&str]) -> u64 {
 
 </details>
 
-
-
-### <span id="fn.signature_string"></span>`fn signature_string`
+### <span id="fn.signature_string"></span><code style="font-size: 0.85em">fn signature_​string</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn signature_string (name : & str , arg_types : & [String] , ret : & str , wire_raw : bool , streaming : bool , client_streaming : bool ,) -> String
+fn signature_string(
+    name: &str,
+    arg_types: &[String],
+    ret: &str,
+    wire_raw: bool,
+    streaming: bool,
+    client_streaming: bool,
+) -> String
 ```
 
 Build the canonical signature string for one method.
 
 Format: `"{name}:{arg_type_1},{arg_type_2}->{return_type}{!raw?}"`.
+
 - `arg_types` are pre-stringified (typically by `syn::Type` →
-`to_token_stream().to_string()` — the proc macro and any other
-tooling that wants to compute the same hash must use the same
-formatter).
+  `to_token_stream().to_string()` — the proc macro and any other
+  tooling that wants to compute the same hash must use the same
+  formatter).
 - `return_type` is the stringified return type, or empty string for
-methods returning `()`.
+  methods returning `()`.
 - `wire_raw = true` appends a trailing `!raw` marker so methods opted
-into raw wire mode hash differently from bincode-typed methods of
-the same Rust signature. This is the protection that makes a
-wire-mode mismatch surface as a load-time hash mismatch instead of
-silent data corruption.
+  into raw wire mode hash differently from bincode-typed methods of
+  the same Rust signature. This is the protection that makes a
+  wire-mode mismatch surface as a load-time hash mismatch instead of
+  silent data corruption.
 - `streaming = true` appends a trailing `!stream` marker (after any
-`!raw`) so a server-streaming method (`-> fidius::Stream<T>`, where
-`ret` is the per-item type `T`) hashes differently from a unary
-`-> T` method of the same name/args. Same protection as `!raw`, for
-the streaming/unary split (FIDIUS-I-0026, D4).
+  `!raw`) so a server-streaming method (`-> fidius::Stream<T>`, where
+  `ret` is the per-item type `T`) hashes differently from a unary
+  `-> T` method of the same name/args. Same protection as `!raw`, for
+  the streaming/unary split (FIDIUS-I-0026, D4).
+
 This function lives in `fidius-core` (not `fidius-macro`) so the proc
 macro and downstream tooling like `fidius python-stub` share a single
 source of truth for the format. Drift between them = silent hash
@@ -145,6 +148,3 @@ pub fn signature_string(
 ```
 
 </details>
-
-
-

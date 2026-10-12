@@ -1,22 +1,21 @@
 ---
 title: "fidius-host::types"
 description: "Owned metadata types for loaded plugins."
+editUrl: false
 sidebar:
-  order: 45
+  order: 44
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
 
-
 Owned metadata types for loaded plugins.
 
 ## Structs
 
-### <span id="struct.PluginInfo"></span>`struct PluginInfo`
+### <span id="struct.PluginInfo"></span><code style="font-size: 0.85em">struct PluginInfo</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 **Derives:** `Debug`, `Clone`
 
@@ -37,18 +36,16 @@ meaning.
 | `interface_version` | `u32` | User-specified interface version. |
 | `capabilities` | `u64` | Capability bitfield (optional method support). Cdylib only. |
 | `buffer_strategy` | `BufferStrategyKind` | Buffer management strategy. Cdylib only. |
-| `runtime` | `PluginRuntimeKind` | Runtime kind. New in 0.2 — defaults to `Cdylib` for backward
-compatibility with code that constructs `PluginInfo` directly. |
+| `runtime` | `PluginRuntimeKind` | Runtime kind. New in 0.2 — defaults to `Cdylib` for backward compatibility with code that constructs `PluginInfo` directly. |
 
 #### Methods
 
-##### <span id="PluginInfo.is_cdylib"></span>`is_cdylib`
+##### <span id="PluginInfo.is_cdylib"></span><code>is_​cdylib</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn is_cdylib (& self) -> bool
+fn is_cdylib(&self) -> bool
 ```
 
 True if this is a cdylib-backed plugin.
@@ -64,15 +61,12 @@ True if this is a cdylib-backed plugin.
 
 </details>
 
-
-
-##### <span id="PluginInfo.is_python"></span>`is_python`
+##### <span id="PluginInfo.is_python"></span><code>is_​python</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn is_python (& self) -> bool
+fn is_python(&self) -> bool
 ```
 
 True if this is a Python plugin.
@@ -88,15 +82,12 @@ True if this is a Python plugin.
 
 </details>
 
-
-
-##### <span id="PluginInfo.is_wasm"></span>`is_wasm`
+##### <span id="PluginInfo.is_wasm"></span><code>is_​wasm</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn is_wasm (& self) -> bool
+fn is_wasm(&self) -> bool
 ```
 
 True if this is a WASM component plugin.
@@ -112,16 +103,11 @@ True if this is a WASM component plugin.
 
 </details>
 
-
-
-
-
 ## Enums
 
-### <span id="enum.PluginRuntimeKind"></span>`enum PluginRuntimeKind`
+### <span id="enum.PluginRuntimeKind"></span><code style="font-size: 0.85em">enum PluginRuntimeKind</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Plugin runtime kind. Mirrors `fidius_core::package::PackageRuntime` and surfaces it in the host-facing `PluginInfo`. Re-exported here so host callers don't need a transitive `fidius-core` use.
 
@@ -129,18 +115,15 @@ Plugin runtime kind. Mirrors `fidius_core::package::PackageRuntime` and surfaces
 
 - **`Cdylib`** - Cdylib + `PluginRegistry` (the original fidius substrate).
 - **`Python`** - `.py` package loaded via `fidius-python`'s embedded interpreter.
-Only produced when the `python` feature is enabled on `fidius-host`.
+  Only produced when the `python` feature is enabled on `fidius-host`.
 - **`Wasm`** - Signed `.wasm` **component** (Component Model + WIT). Surfaced by
-discovery; the loader (`WasmComponentExecutor`) lands in FIDIUS-I-0021
-Phase 2. Reserved now so routing and `PluginInfo` model all three
-backends.
+  discovery; the loader (`WasmComponentExecutor`) lands in FIDIUS-I-0021
+  Phase 2. Reserved now so routing and `PluginInfo` model all three
+  backends.
 
-
-
-### <span id="enum.LoadPolicy"></span>`enum LoadPolicy`
+### <span id="enum.LoadPolicy"></span><code style="font-size: 0.85em">enum LoadPolicy</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
-
 
 Controls how strictly the host validates plugins.
 
@@ -148,6 +131,3 @@ Controls how strictly the host validates plugins.
 
 - **`Strict`** - Reject any validation failure, require signatures if configured.
 - **`Lenient`** - Warn on unsigned plugins but allow loading.
-
-
-

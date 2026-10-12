@@ -1186,7 +1186,7 @@ impl WasmComponentExecutor {
     ///
     /// # Safety
     /// `table` must be null or a valid, **process-lifetime**
-    /// [`fidius_core::host_ffi::HostFunctionTable`] —
+    /// [`HostFunctionTable`](fidius_core::host_ffi::HostFunctionTable) —
     /// e.g. the leaked table a `#[host_interface]`-generated
     /// `<Trait>Binding::table` builds. The executor retains the pointer and
     /// dispatches through it for its remaining lifetime.

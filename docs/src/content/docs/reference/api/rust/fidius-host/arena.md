@@ -1,13 +1,13 @@
 ---
 title: "fidius-host::arena"
 description: "Thread-local arena pool for Arena-strategy plugin invocations."
+editUrl: false
 sidebar:
-  order: 29
+  order: 28
   hidden: true
 ---
 
 <span class="plissken-badge plissken-badge-source" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-orange-low); color: var(--sl-color-orange-high);">Rust</span>
-
 
 Thread-local arena pool for Arena-strategy plugin invocations.
 
@@ -18,13 +18,12 @@ reuse memory instead of reallocating.
 
 ## Functions
 
-### <span id="fn.acquire_arena"></span>`fn acquire_arena`
+### <span id="fn.acquire_arena"></span><code style="font-size: 0.85em">fn acquire_​arena</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn acquire_arena (min_capacity : usize) -> Vec < u8 >
+fn acquire_arena(min_capacity: usize) -> Vec<u8>
 ```
 
 Acquire an arena buffer with at least `min_capacity` bytes. Prefers to reuse a pooled buffer if one is available; otherwise allocates a fresh `Vec<u8>`. The returned buffer is filled with zero bytes up to its length (which equals its capacity after this call) — callers write into it via raw pointers and track their own output length.
@@ -57,15 +56,12 @@ pub fn acquire_arena(min_capacity: usize) -> Vec<u8> {
 
 </details>
 
-
-
-### <span id="fn.release_arena"></span>`fn release_arena`
+### <span id="fn.release_arena"></span><code style="font-size: 0.85em">fn release_​arena</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn release_arena (buf : Vec < u8 >)
+fn release_arena(buf: Vec<u8>)
 ```
 
 Return an arena buffer to the pool for future reuse. The buffer's capacity is retained; length is irrelevant (callers set length via direct writes, not Vec::extend).
@@ -81,15 +77,12 @@ pub fn release_arena(buf: Vec<u8>) {
 
 </details>
 
-
-
-### <span id="fn.grow_arena"></span>`fn grow_arena`
+### <span id="fn.grow_arena"></span><code style="font-size: 0.85em">fn grow_​arena</code>
 
 <span class="plissken-badge plissken-badge-visibility" style="display: inline-block; padding: 0.05em 0.6em; font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); line-height: 1.6; border-radius: var(--radius-pill, 1rem); vertical-align: middle; background: var(--sl-color-green-low); color: var(--sl-color-green-high);">pub</span>
 
-
 ```rust
-fn grow_arena (buf : & mut Vec < u8 > , needed_capacity : usize)
+fn grow_arena(buf: &mut Vec<u8>, needed_capacity: usize)
 ```
 
 Grow an in-flight arena buffer to hold at least `needed_capacity` bytes. Used by the retry path when a plugin returns `STATUS_BUFFER_TOO_SMALL`.
@@ -111,5 +104,8 @@ pub fn grow_arena(buf: &mut Vec<u8>, needed_capacity: usize) {
 
 </details>
 
+## Constants
 
-
+| Name | Type | Value | Description |
+|------|------|-------|-------------|
+| <span id="const.DEFAULT_ARENA_CAPACITY"></span>`DEFAULT_ARENA_CAPACITY` | `usize` | `4096` | Default initial arena capacity (4 KB) when the pool is empty and a caller hasn't indicated a larger minimum. Most serialized outputs fit comfortably within this; larger ones grow via the retry path. |
